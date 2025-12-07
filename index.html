@@ -799,7 +799,7 @@ color:var(--txt);
     }
 
     const tr = midiObj.tracks[0];
-    const events = tr.events || [];
+    let events = tr.events ? [...tr.events] : [];
 
     const tickPerEighth = ppq / 2;
     if ((ppq % 2) !== 0) {
@@ -813,6 +813,16 @@ color:var(--txt);
     for (const e of events) if ((e.tick|0) > maxTick) maxTick = e.tick|0;
 
     const trackLenTicks = (typeof tr.endTick === "number" && tr.endTick > 0) ? (tr.endTick|0) : maxTick;
+
+    // Dummy anchor si el archivo arranca en silencio: evita cortes y asegura conteo desde la primera corchea.
+    let minTick = Infinity;
+    for (const e of events) if ((e.tick|0) < minTick) minTick = (e.tick|0);
+    const anchors = [];
+    const pushDummyNote = (tick) => {
+      anchors.push({ tick, status: 0x90, d1: 0, d2: 1 });
+      anchors.push({ tick, status: 0x80, d1: 0, d2: 0 });
+    };
+    if (!Number.isFinite(minTick) || minTick > 0) pushDummyNote(0);
 
     if (trackLenTicks < minTicks) {
       throw new Error(`"${qualityKey}": demasiado corto. Debe tener al menos 16 corcheas (2 compases).`);
@@ -832,6 +842,15 @@ color:var(--txt);
 
     const windowsPerFile = totalEighths / WINDOW_EIGHTS;
     const winTicks = WINDOW_EIGHTS * tickPerEighth; // ventana en ticks
+
+    // Dummy anchors en cada ventana para respetar la primera corchea aunque sea silencio.
+    for (let w = 0; w < windowsPerFile; w++) {
+      pushDummyNote(w * winTicks);
+    }
+
+    if (anchors.length) {
+      events = events.concat(anchors).sort((a,b)=> (a.tick - b.tick) || ((a.status&0xF0) - (b.status&0xF0)));
+    }
 
     // Precomputo: evita seleccionar ventanas completamente silenciosas al azar.
     // Guardamos, por ventana de 16 corcheas, el primer NoteOn (vel>0) relativo a la ventana.
@@ -1070,6 +1089,9 @@ color:var(--txt);
 
       const startTickOut = seg.startEighth * tickPerEighth;
       const durTicks = seg.durEighth * tickPerEighth;
+      const windowOffsetTicks = (seg.startEighth % WINDOW_EIGHTS) * tickPerEighth;
+      const remainingWindowTicks = ref.winTicks - windowOffsetTicks;
+      const effectiveSpan = Math.min(durTicks, remainingWindowTicks);
       const endTickOut = startTickOut + durTicks;
 
       const block = Math.floor(seg.startEighth / WINDOW_EIGHTS);
@@ -1086,17 +1108,20 @@ color:var(--txt);
         srcWindow = cand;
 
         // Si la ventana candidata no tiene ningún NoteOn antes de que termine el acorde, buscamos otra.
-        if (!(ref.firstNoteOnRel && ref.firstNoteOnRel[srcWindow] < durTicks)) {
+        const noteHorizon = ref.firstNoteOnRel ? ref.firstNoteOnRel[srcWindow] : Infinity;
+        const withinSpan = noteHorizon < (windowOffsetTicks + effectiveSpan);
+        if (!withinSpan) {
           for (let off = 1; off <= ref.windowsPerFile; off++) {
             const w = (cand + off) % ref.windowsPerFile;
-            if (ref.firstNoteOnRel && ref.firstNoteOnRel[w] < durTicks) { srcWindow = w; break; }
+            const altHorizon = ref.firstNoteOnRel ? ref.firstNoteOnRel[w] : Infinity;
+            if (altHorizon < (windowOffsetTicks + effectiveSpan)) { srcWindow = w; break; }
           }
         }
       }
 
       // Regla: al cambiar de acorde, se debe usar el material desde el INICIO de la ventana elegida.
-      // (No usamos offsets internos por posición dentro del bloque.)
-      const srcStart = (srcWindow * ref.winTicks);
+      // Manteniendo el offset real dentro de la ventana según la posición de la progresión.
+      const srcStart = (srcWindow * ref.winTicks) + windowOffsetTicks;
       const srcEnd = srcStart + durTicks;
 
       // Archivo de referencia con UNA SOLA PISTA
