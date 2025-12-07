@@ -296,6 +296,12 @@ color:var(--txt);
             <div class="mono" style="width:56px; text-align:right" id="densityVal">100%</div>
           </div>
 
+          <div style="height:10px"></div>
+          <label class="row" style="gap:10px; align-items:center">
+            <input type="checkbox" id="densityProgressive" />
+            <span class="mini">Densidad progresiva</span>
+          </label>
+
           <div style="height:12px"></div>
           <div class="label">Límite inferior para subir 8va</div>
           <div class="row" style="gap:14px; align-items:flex-end">
@@ -444,6 +450,7 @@ color:var(--txt);
   const repeatCount = el("repeatCount");
   const density = el("density");
   const densityVal = el("densityVal");
+  const densityProgressive = el("densityProgressive");
   const raiseFloor = el("raiseFloor");
 
   function log(msg, cls="") {
@@ -1120,6 +1127,23 @@ color:var(--txt);
     return cleaned;
   }
 
+  function disableUnsupportedMidiMessages(events) {
+    if (!events?.length) return events;
+
+    const allowed = [];
+    for (const e of events) {
+      const status = e.status & 0xFF;
+      const hi = status & 0xF0;
+      const vel = (e.d2 ?? 0) & 0x7F;
+
+      const isNoteOn = hi === 0x90 && vel > 0;
+      const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+      if (isNoteOn || isNoteOff) allowed.push(e);
+    }
+
+    return allowed;
+  }
+
   let generated = {
     ppq: null,
     events: [],     // channel events, abs ticks, include {tick, status, d1, d2, order}
@@ -1167,12 +1191,27 @@ color:var(--txt);
     return v / 100;
   }
 
-  function applyDensityFilter(events, segments, tickPerEighth, densityFactor) {
+  function getProgressiveDensityProfile(segments) {
+    if (!densityProgressive.checked || !segments?.length) return null;
+    if (segments.length === 1) return [1];
+
+    const last = segments.length - 1;
+    return segments.map((_, idx) => {
+      const ratio = idx / last;
+      return Math.max(0.2, Math.min(1, 0.2 + ratio * 0.8));
+    });
+  }
+
+  function applyDensityFilter(events, segments, tickPerEighth, densityFactor, densityBySegment=null) {
     if (!events?.length) return events;
-    if (densityFactor >= 0.999) return events;
+    if (!segments?.length) return events;
+
+    const clampDensity = (v) => Math.max(0, Math.min(1, v));
+    const hasProfile = Array.isArray(densityBySegment) && densityBySegment.length === segments.length;
+    const minDensity = hasProfile ? Math.min(...densityBySegment.map(clampDensity)) : clampDensity(densityFactor);
+    if (minDensity >= 0.999) return events;
 
     const removal = new Set();
-    const removalStrength = 1 - densityFactor;
     const randUnit = () => randInt(0x100000000) / 0x100000000;
 
     const segSpans = segments.map(s => ({
@@ -1187,6 +1226,12 @@ color:var(--txt);
       }
       return -1;
     };
+
+    const getDensityForSeg = (segIndex) => {
+      if (hasProfile && segIndex >= 0) return clampDensity(densityBySegment[segIndex]);
+      return clampDensity(densityFactor);
+    };
+    const removalStrengthForSeg = (segIndex) => 1 - getDensityForSeg(segIndex);
 
     const sortedIdx = events
       .map((_,i)=>i)
@@ -1234,7 +1279,8 @@ color:var(--txt);
       const next = sortedPairs[i+1];
       const hasPrev = prev && Math.abs(p.onTick - prev.onTick) <= tickPerEighth * 1.25 && Math.abs(prev.dur - tickPerEighth) <= eighthTol;
       const hasNext = next && Math.abs(next.onTick - p.onTick) <= tickPerEighth * 1.25 && Math.abs(next.dur - tickPerEighth) <= eighthTol;
-      if (hasPrev && hasNext && randUnit() < removalStrength) {
+      const removalStrength = removalStrengthForSeg(p.segIndex);
+      if (hasPrev && hasNext && removalStrength > 0 && randUnit() < removalStrength) {
         if (p.onIdx != null) removal.add(p.onIdx);
         if (p.offIdx != null) removal.add(p.offIdx);
       }
@@ -1262,10 +1308,11 @@ color:var(--txt);
 
     for (const arr of groupsBySeg.values()) arr.sort((a,b)=> a.tick - b.tick);
 
-    const chordRemovalProb = Math.max(0, removalStrength - 0.2);
+    const chordRemovalProbForSeg = (segIndex) => Math.max(0, removalStrengthForSeg(segIndex) - 0.2);
     for (const g of groupList) {
       const segGroups = groupsBySeg.get(g.segIndex) || [];
       const mustKeep = segGroups.length <= 1;
+      const chordRemovalProb = chordRemovalProbForSeg(g.segIndex);
       if (!mustKeep && chordRemovalProb > 0 && randUnit() < chordRemovalProb) {
         for (const p of g.pairs) {
           if (p.onIdx != null) removal.add(p.onIdx);
@@ -1276,10 +1323,11 @@ color:var(--txt);
     }
 
     const voiceRemovalThreshold = 0.55;
-    if (removalStrength > voiceRemovalThreshold) {
-      const voiceProb = Math.min(1, (removalStrength - voiceRemovalThreshold) / (1 - voiceRemovalThreshold));
-      for (const g of groupList) {
-        if (g.removed) continue;
+    for (const g of groupList) {
+      if (g.removed) continue;
+      const removalStrength = removalStrengthForSeg(g.segIndex);
+      if (removalStrength > voiceRemovalThreshold) {
+        const voiceProb = Math.min(1, (removalStrength - voiceRemovalThreshold) / (1 - voiceRemovalThreshold));
         const survivors = g.pairs.filter(p => !removal.has(p.onIdx));
         if (survivors.length <= 3) continue; // mantener al menos triada
 
@@ -1525,10 +1573,12 @@ color:var(--txt);
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
 
-    const densityFactor = getDensityFactor();
-    const filtered = applyDensityFilter(out, segments, tickPerEighth, densityFactor);
+    const progressiveProfile = getProgressiveDensityProfile(segments);
+    const densityFactor = densityProgressive.checked ? 1 : getDensityFactor();
+    const filtered = applyDensityFilter(out, segments, tickPerEighth, densityFactor, progressiveProfile);
     const cleaned = sanitizeEvents(filtered);
-    generated = { ppq, events: cleaned, lengthTicks: maxTick, debug: { segmentsForBass } };
+    const noteOnly = disableUnsupportedMidiMessages(cleaned);
+    generated = { ppq, events: noteOnly, lengthTicks: maxTick, debug: { segmentsForBass } };
 
     log(`Listo. Longitud: ${maxTick} ticks (${(maxTick/(ppq))* (60/REF_BPM_EXPORT)} s a 120bpm).`, "OK");
     return generated;
@@ -1678,7 +1728,7 @@ color:var(--txt);
     a.click();
     a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 2000);
-    log("Exportado: generated.mid (tempo fijo 120; swing NO afecta exportación).", "OK");
+    log("Exportado: generated.mid (formato 0: 1 pista, tempo fijo 120; swing NO afecta exportación).", "OK");
   }
 
   // -------------------------
@@ -1726,10 +1776,15 @@ color:var(--txt);
   // -------------------------
   // UI wiring
   // -------------------------
+  function updateDensityLabel() {
+    densityVal.textContent = densityProgressive.checked ? "20→100%" : `${density.value}%`;
+  }
+
   tempo.addEventListener("input", () => tempoVal.textContent = tempo.value);
   // swing desactivado
   bassVel.addEventListener("input", () => bassVelVal.textContent = bassVel.value);
-  density.addEventListener("input", () => densityVal.textContent = `${density.value}%`);
+  density.addEventListener("input", updateDensityLabel);
+  densityProgressive.addEventListener("change", updateDensityLabel);
   repeatCount.addEventListener("input", () => getRepeatTimes());
   setRaiseFloorValue(raiseFloor.value);
   raiseFloor.addEventListener("input", () => setRaiseFloorValue(raiseFloor.value));
@@ -1853,7 +1908,7 @@ color:var(--txt);
   tempoVal.textContent = tempo.value;
   // swing desactivado
   bassVelVal.textContent = bassVel.value;
-  densityVal.textContent = `${density.value}%`;
+  updateDensityLabel();
 
   initMIDI();
 })();
