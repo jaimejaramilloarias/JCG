@@ -308,6 +308,12 @@ color:var(--txt);
             <input id="raiseFloor" type="number" min="0" max="120" value="58" class="inputNumber" title="Notas por debajo de este valor se transportan +12 al generar" />
             <div class="mini">Las notas por debajo de este límite se transportan una octava arriba.</div>
           </div>
+
+          <div style="height:12px"></div>
+          <label class="row" style="gap:10px; align-items:center">
+            <input type="checkbox" id="skip2" />
+            <span class="mini">skip 2</span>
+          </label>
         </details>
       </div>
     </section>
@@ -452,6 +458,7 @@ color:var(--txt);
   const densityVal = el("densityVal");
   const densityProgressive = el("densityProgressive");
   const raiseFloor = el("raiseFloor");
+  const skip2 = el("skip2");
 
   function log(msg, cls="") {
     const line = cls ? `[${cls}] ${msg}` : msg;
@@ -1192,6 +1199,63 @@ color:var(--txt);
     return note;
   }
 
+  function applySkip2Transform(events, enabled) {
+    if (!enabled || !events?.length) return events;
+
+    const sorted = events.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+    const toShift = new Set();
+    const byTickCh = new Map();
+
+    for (const e of sorted) {
+      const status = e.status & 255;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const vel = e.d2 ?? 0;
+      if (!(hi === 0x90 && vel > 0)) continue;
+      const key = `${e.tick}|${ch}`;
+      if (!byTickCh.has(key)) byTickCh.set(key, []);
+      byTickCh.get(key).push(e);
+    }
+
+    for (const group of byTickCh.values()) {
+      if (group.length < 3) continue;
+      const sortedGroup = group.slice().sort((a,b)=> (a.d1 ?? 0) - (b.d1 ?? 0));
+      const target = sortedGroup[1];
+      toShift.add(target);
+    }
+
+    const shiftedActive = new Map(); // ch-noteOriginal -> [noteShifted,...]
+    const keyOf = (ch, note) => ch + "-" + note;
+
+    for (const e of sorted) {
+      const status = e.status & 255;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const vel = e.d2 ?? 0;
+      const note = e.d1 ?? 0;
+
+      if (hi === 0x90 && vel > 0) {
+        if (toShift.has(e)) {
+          const newNote = Math.min(127, note + 12);
+          e.d1 = newNote;
+          const k = keyOf(ch, note);
+          if (!shiftedActive.has(k)) shiftedActive.set(k, []);
+          shiftedActive.get(k).push(newNote);
+        }
+      } else if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
+        const k = keyOf(ch, note);
+        const stack = shiftedActive.get(k);
+        if (stack?.length) {
+          const mapped = stack.shift();
+          e.d1 = mapped;
+          if (!stack.length) shiftedActive.delete(k);
+        }
+      }
+    }
+
+    return events;
+  }
+
   function addPanicAtTick(out, tick, channelsSet, order=2) {
     // Limpieza anti-artefactos: Reset All Controllers (121), Sustain Off (64), All Notes Off (123), All Sound Off (120)
     for (const ch of channelsSet) {
@@ -1594,7 +1658,8 @@ color:var(--txt);
 
     const progressiveProfile = getProgressiveDensityProfile(segments);
     const densityFactor = densityProgressive.checked ? 1 : getDensityFactor();
-    const filtered = applyDensityFilter(out, segments, tickPerEighth, densityFactor, progressiveProfile);
+    const skipAdjusted = applySkip2Transform(out, skip2?.checked);
+    const filtered = applyDensityFilter(skipAdjusted, segments, tickPerEighth, densityFactor, progressiveProfile);
     const cleaned = sanitizeEvents(filtered);
     const noteOnly = disableUnsupportedMidiMessages(cleaned);
     generated = { ppq, events: noteOnly, lengthTicks: maxTick, debug: { segmentsForBass } };
