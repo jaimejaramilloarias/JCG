@@ -79,7 +79,8 @@ color:var(--txt);
     .btn.purple{border-color: rgba(167,139,250,.6); background: rgba(167,139,250,.10)}
     .btn.bad{border-color: rgba(251,113,133,.65); background: rgba(251,113,133,.08)}
     .btn:disabled{opacity:.45; cursor:not-allowed}
-    select{
+    select,
+    input[type="number"]{
       width:100%;
       padding:10px 12px;
       border-radius:14px;
@@ -88,7 +89,8 @@ color:var(--txt);
       color:var(--txt);
       outline:none;
     }
-    select:focus{border-color: rgba(125,211,252,.6); box-shadow:0 0 0 3px rgba(125,211,252,.12)}
+    select:focus,
+    input[type="number"]:focus{border-color: rgba(125,211,252,.6); box-shadow:0 0 0 3px rgba(125,211,252,.12)}
     .label{font-size:12px; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; gap:8px}
     .pill{
       display:inline-flex; align-items:center; gap:8px;
@@ -120,6 +122,10 @@ color:var(--txt);
     .sliderRow{display:flex; align-items:center; gap:12px}
     input[type="range"]{width:100%}
     .mini{font-size:12px; color:var(--muted)}
+    .inputNumber{width:120px}
+    .advancedBox{margin-top:14px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background: rgba(14,22,38,.45);}
+    .advancedBox summary{cursor:pointer; font-weight:700; color:var(--muted); letter-spacing:.2px; text-transform:uppercase; font-size:11px;}
+    .advancedBox[open]{padding-bottom:12px}
     .warn{color: #fbbf24}
     .ok{color: var(--ok)}
     .bad{color: var(--bad)}
@@ -200,7 +206,8 @@ color:var(--txt);
       color:var(--txt);
     }
     html[data-theme="light"] textarea,
-    html[data-theme="light"] select{
+    html[data-theme="light"] select,
+    html[data-theme="light"] input[type="number"]{
       background: rgba(18,24,38,.04);
       color: var(--txt);
       border-color: var(--line);
@@ -257,6 +264,14 @@ color:var(--txt);
         </div>
       </div>
       <div class="bd">
+        <div class="label">Repeticiones</div>
+        <div class="row" style="gap:14px; align-items:flex-end">
+          <input id="repeatCount" type="number" min="1" max="64" value="1" class="inputNumber" title="Número de veces que se repetirá la progresión en el MIDI generado" />
+          <div class="mini">Cuántas veces se repetirá la progresión al reproducir o exportar el MIDI.</div>
+        </div>
+
+        <div style="height:10px"></div>
+
         <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
 
         <div style="height:12px"></div>
@@ -264,11 +279,21 @@ color:var(--txt);
         <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
         <div class="chips" id="qualityChips"></div>
 
-        
+
         <div class="hint">
           <div><b>Calidades:</b> aparecen en la lista después de cargar tus patrones.</div>
           <div style="margin-top:6px">Usa exactamente las calidades que ves (ej: <code>G7alt</code>, <code>F13(b9)</code>).</div>
         </div>
+
+        <details class="advancedBox">
+          <summary>Menú avanzado</summary>
+          <div style="height:8px"></div>
+          <div class="label">Límite inferior para subir 8va</div>
+          <div class="row" style="gap:14px; align-items:flex-end">
+            <input id="raiseFloor" type="number" min="0" max="120" value="48" class="inputNumber" title="Notas por debajo de este valor se transportan +12 al generar" />
+            <div class="mini">Las notas por debajo de este límite se transportan una octava arriba.</div>
+          </div>
+        </details>
       </div>
     </section>
 
@@ -407,6 +432,8 @@ color:var(--txt);
   const swingVal = el("swingVal");
   const bassVel = el("bassVel");
   const bassVelVal = el("bassVelVal");
+  const repeatCount = el("repeatCount");
+  const raiseFloor = el("raiseFloor");
 
   function log(msg, cls="") {
     const line = cls ? `[${cls}] ${msg}` : msg;
@@ -497,15 +524,20 @@ color:var(--txt);
 
     const segments = [];
     let startEighth = 0;
+    let lastBarChords = null;
 
-    // 1) Construimos la progresión "recta" (sin síncopa):
-    for (const bar of parts) {
-      const chords = bar.split(/\s+/).map(s=>s.trim()).filter(Boolean);
-      if (chords.length !== 1 && chords.length !== 2) {
-        throw new Error(`Barra inválida: "${bar}". Solo 1 o 2 acordes por compás.`);
+    const addBar = (barChords, source="") => {
+      if (!barChords || !barChords.length) {
+        throw new Error(`Barra inválida: "${source || ''}". Solo 1 o 2 acordes por compás.`);
       }
-      const each = (chords.length === 1) ? 8 : 4;
-      for (const c of chords) {
+
+      if (barChords.length !== 1 && barChords.length !== 2) {
+        throw new Error(`Barra inválida: "${source || barChords.join(' ')}". Solo 1 o 2 acordes por compás.`);
+      }
+
+      const each = (barChords.length === 1) ? 8 : 4;
+      const stored = [];
+      for (const c of barChords) {
         const parsed = parseChordToken(c);
         segments.push({
           ...parsed,
@@ -514,7 +546,22 @@ color:var(--txt);
           durEighth: each
         });
         startEighth += each;
+        stored.push(c);
       }
+
+      lastBarChords = stored;
+    };
+
+    // 1) Construimos la progresión "recta" (sin síncopa):
+    for (const bar of parts) {
+      if (bar === "%") {
+        if (!lastBarChords) throw new Error("El signo % solo se puede usar después del primer compás.");
+        addBar(lastBarChords, bar);
+        continue;
+      }
+
+      const chords = bar.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+      addBar(chords, bar);
     }
 
     const totalEighthNominal = startEighth;
@@ -556,6 +603,29 @@ color:var(--txt);
 
 // No cambiamos el "final" total: solo movemos fronteras internas.
     return { segments, totalEighth: totalEighthNominal, totalBars: parts.length };
+  }
+
+  function repeatSegments(segments, totalEighth, times) {
+    const t = Math.max(1, Math.floor(times));
+    if (t === 1) return { segments, totalEighth };
+
+    const out = [];
+    for (let i = 0; i < t; i++) {
+      const offset = i * totalEighth;
+      for (const s of segments) {
+        out.push({ ...s, startEighth: s.startEighth + offset });
+      }
+    }
+
+    return { segments: out, totalEighth: totalEighth * t };
+  }
+
+  function getRepeatTimes() {
+    let n = parseInt(repeatCount.value, 10);
+    if (!Number.isFinite(n)) n = 1;
+    n = Math.max(1, Math.min(64, n));
+    repeatCount.value = String(n);
+    return n;
   }
 
   // -------------------------
@@ -1054,9 +1124,17 @@ color:var(--txt);
     return { tick, status: status & 255, d1: d1 & 127, d2: (d2==null?0:(d2&127)), order };
   }
 
-  function raiseBelowC3(note) {
-    const C3 = 48; // MIDI number for C3 when C4 = 60
-    if (note < C3) return note + 12;
+  let raiseFloorValue = 48; // MIDI number for C3 when C4 = 60
+  function setRaiseFloorValue(raw) {
+    let v = parseInt(raw, 10);
+    if (!Number.isFinite(v)) v = 48;
+    v = Math.max(0, Math.min(120, v));
+    raiseFloorValue = v;
+    raiseFloor.value = String(v);
+  }
+
+  function raiseBelowFloor(note) {
+    if (note < raiseFloorValue) return note + 12;
     return note;
   }
 
@@ -1073,7 +1151,9 @@ color:var(--txt);
   function generateMidiFromProgression(text) {
     clearLog();
 
-    const { segments, totalEighth } = parseProgression(text);
+    const { segments: baseSegments, totalEighth: baseTotalEighth } = parseProgression(text);
+    const repeatTimes = getRepeatTimes();
+    const { segments, totalEighth } = repeatSegments(baseSegments, baseTotalEighth, repeatTimes);
     if (refPpq == null) throw new Error("Primero carga la carpeta de referencias.");
     const ppq = refPpq;
     const tickPerEighth = ppq / 2;
@@ -1161,7 +1241,7 @@ color:var(--txt);
 
         let note = (e.d1 ?? 0) + seg.transpose;
         let vel = e.d2 ?? 0;
-        note = raiseBelowC3(note);
+        note = raiseBelowFloor(note);
         if (note < 0 || note > 127) continue;
 
         const key = ch + "-" + note;
@@ -1207,7 +1287,7 @@ color:var(--txt);
 
           // transpose ALWAYS upward from C by seg.transpose
           note = note + seg.transpose;
-          note = raiseBelowC3(note);
+          note = raiseBelowFloor(note);
           if (note < 0 || note > 127) continue;
 
           const key = ch + "-" + note;
@@ -1483,6 +1563,9 @@ color:var(--txt);
   tempo.addEventListener("input", () => tempoVal.textContent = tempo.value);
   // swing desactivado
   bassVel.addEventListener("input", () => bassVelVal.textContent = bassVel.value);
+  repeatCount.addEventListener("input", () => getRepeatTimes());
+  setRaiseFloorValue(raiseFloor.value);
+  raiseFloor.addEventListener("input", () => setRaiseFloorValue(raiseFloor.value));
 
   // Ayuda (modal)
   const helpModal = el("helpModal");
@@ -1596,6 +1679,7 @@ color:var(--txt);
 
   // Initial defaults
   el("prog").value = ``;
+  getRepeatTimes();
 
   setReady(false, "No listo");
   // init displayed values
