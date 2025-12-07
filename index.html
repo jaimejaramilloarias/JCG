@@ -305,7 +305,7 @@ color:var(--txt);
           <div style="height:12px"></div>
           <div class="label">Límite inferior para subir 8va</div>
           <div class="row" style="gap:14px; align-items:flex-end">
-            <input id="raiseFloor" type="number" min="0" max="120" value="48" class="inputNumber" title="Notas por debajo de este valor se transportan +12 al generar" />
+            <input id="raiseFloor" type="number" min="0" max="120" value="58" class="inputNumber" title="Notas por debajo de este valor se transportan +12 al generar" />
             <div class="mini">Las notas por debajo de este límite se transportan una octava arriba.</div>
           </div>
         </details>
@@ -1075,10 +1075,13 @@ color:var(--txt);
   // stuck notes / MIDI artefacts in the final stream.
   function sanitizeEvents(events) {
     const evs = events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order));
-    const active = new Set();
+    const active = new Map(); // key -> count of simultaneous note-ons pending note-off
     const cleaned = [];
 
     const keyOf = (ch, note) => ch + "-" + note;
+    const pushOff = (tick, ch, note, order) => cleaned.push({ tick, status: (0x80 | ch), d1: note, d2: 0, order });
+
+    let lastTick = 0;
 
     for (const e of evs) {
       const status = e.status & 0xFF;
@@ -1087,41 +1090,53 @@ color:var(--txt);
       const d1 = e.d1 & 0x7F;
       const d2 = (e.d2 ?? 0) & 0x7F;
 
-      // Controller "All Notes Off" / "All Sound Off" also reset local state
-      if (hi === 0xB0 && (d1 === 120 || d1 === 123)) {
+      if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
+
+      // Controller cleanup also resets local state
+      if (hi === 0xB0 && (d1 === 120 || d1 === 123 || d1 === 121)) {
         active.clear();
-        cleaned.push(e);
+        cleaned.push({ ...e, d1, d2 });
         continue;
       }
 
       // Note On with velocity > 0
       if (hi === 0x90 && d2 > 0) {
         const k = keyOf(ch, d1);
-        if (active.has(k)) {
+        const prevCount = active.get(k) || 0;
+        if (prevCount > 0) {
           const offOrder = (typeof e.order === "number") ? Math.max(0, e.order - 1) : 2;
-          cleaned.push({
-            tick: e.tick,
-            status: (0x80 | ch),
-            d1,
-            d2: 0,
-            order: offOrder
-          });
+          for (let i=0; i<prevCount; i++) pushOff(e.tick, ch, d1, offOrder);
         }
-        active.add(k);
-        cleaned.push(e);
+        active.set(k, 1);
+        cleaned.push({ ...e, d1, d2 });
         continue;
       }
 
       // Note Off (real 0x80 or NoteOn with vel=0)
       if (hi === 0x80 || (hi === 0x90 && d2 === 0)) {
         const k = keyOf(ch, d1);
-        if (active.has(k)) active.delete(k);
-        cleaned.push(e);
+        const prevCount = active.get(k) || 0;
+        if (prevCount > 0) {
+          active.set(k, prevCount - 1);
+        }
+        cleaned.push({ ...e, d1, d2 });
         continue;
       }
 
       // Other channel events just pass through
-      cleaned.push(e);
+      cleaned.push({ ...e, d1, d2 });
+    }
+
+    if (active.size) {
+      const cleanupTick = lastTick + 1;
+      for (const [key, count] of active.entries()) {
+        if (count <= 0) continue;
+        const [chStr, noteStr] = key.split("-");
+        const ch = parseInt(chStr, 10);
+        const note = parseInt(noteStr, 10);
+        const safeCount = Math.max(1, count);
+        for (let i=0; i<safeCount; i++) pushOff(cleanupTick, ch, note, 5);
+      }
     }
 
     return cleaned;
@@ -1134,11 +1149,15 @@ color:var(--txt);
     for (const e of events) {
       const status = e.status & 0xFF;
       const hi = status & 0xF0;
+      const d1 = e.d1 & 0x7F;
       const vel = (e.d2 ?? 0) & 0x7F;
 
       const isNoteOn = hi === 0x90 && vel > 0;
       const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-      if (isNoteOn || isNoteOff) allowed.push(e);
+      const isCleanupCC = hi === 0xB0 && (d1 === 64 || d1 === 120 || d1 === 121 || d1 === 123);
+      if (isNoteOn || isNoteOff || isCleanupCC) {
+        allowed.push({ ...e, d1, d2: vel });
+      }
     }
 
     return allowed;
@@ -1159,10 +1178,10 @@ color:var(--txt);
     return { tick, status: status & 255, d1: d1 & 127, d2: (d2==null?0:(d2&127)), order };
   }
 
-  let raiseFloorValue = 48; // MIDI number for C3 when C4 = 60
+  let raiseFloorValue = 58; // Default A#3/Bb3 floor (MIDI number)
   function setRaiseFloorValue(raw) {
     let v = parseInt(raw, 10);
-    if (!Number.isFinite(v)) v = 48;
+    if (!Number.isFinite(v)) v = 58;
     v = Math.max(0, Math.min(120, v));
     raiseFloorValue = v;
     raiseFloor.value = String(v);
