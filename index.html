@@ -312,7 +312,7 @@ color:var(--txt);
           <div style="height:12px"></div>
           <label class="row" style="gap:10px; align-items:center">
             <input type="checkbox" id="skip2" />
-            <span class="mini">skip 2</span>
+            <span class="mini">skip 2 octavado</span>
           </label>
         </details>
       </div>
@@ -1199,6 +1199,59 @@ color:var(--txt);
     return note;
   }
 
+  function enforceChordsOnly(events) {
+    if (!events?.length) return events;
+
+    const noteOnByTick = new Map();
+    const sorted = events.map((e, idx) => ({ e, idx }))
+      .sort((a,b)=> (a.e.tick - b.e.tick) || ((a.e.order ?? 0) - (b.e.order ?? 0)));
+
+    for (const { e, idx } of sorted) {
+      const status = e.status & 0xFF;
+      const hi = status & 0xF0;
+      const vel = e.d2 ?? 0;
+      if (!(hi === 0x90 && vel > 0)) continue;
+      const key = e.tick;
+      if (!noteOnByTick.has(key)) noteOnByTick.set(key, []);
+      noteOnByTick.get(key).push(idx);
+    }
+
+    const toDrop = new Set();
+    for (const arr of noteOnByTick.values()) {
+      if (arr.length === 1) toDrop.add(arr[0]);
+    }
+
+    const active = new Map(); // "ch-note" -> stack of noteOn idx
+    const offsToDrop = new Set();
+    const keyOf = (ch, note) => ch + "-" + note;
+
+    for (const { e, idx } of sorted) {
+      const status = e.status & 0xFF;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const note = e.d1 & 0x7F;
+      const vel = e.d2 ?? 0;
+
+      if (hi === 0x90 && vel > 0) {
+        const k = keyOf(ch, note);
+        if (!active.has(k)) active.set(k, []);
+        active.get(k).push(idx);
+      } else if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
+        const k = keyOf(ch, note);
+        const stack = active.get(k);
+        if (stack?.length) {
+          const onIdx = stack.shift();
+          if (!stack.length) active.delete(k);
+          if (toDrop.has(onIdx)) offsToDrop.add(idx);
+        }
+      }
+    }
+
+    const remove = new Set([...toDrop, ...offsToDrop]);
+    if (!remove.size) return events;
+    return events.filter((_, idx) => !remove.has(idx));
+  }
+
   function applySkip2Transform(events, enabled) {
     if (!enabled || !events?.length) return events;
 
@@ -1224,7 +1277,8 @@ color:var(--txt);
       toShift.add(target);
     }
 
-    const shiftedActive = new Map(); // ch-noteOriginal -> [noteShifted,...]
+    const shiftedActive = new Map(); // ch-noteOriginal -> queue of [oct1, oct2]
+    const extraEvents = [];
     const keyOf = (ch, note) => ch + "-" + note;
 
     for (const e of sorted) {
@@ -1233,27 +1287,39 @@ color:var(--txt);
       const ch = status & 0x0F;
       const vel = e.d2 ?? 0;
       const note = e.d1 ?? 0;
+      const baseOrder = (typeof e.order === "number") ? e.order : 3;
 
       if (hi === 0x90 && vel > 0) {
         if (toShift.has(e)) {
-          const newNote = Math.min(127, note + 12);
-          e.d1 = newNote;
+          const newNote1 = Math.min(127, note + 12);
+          const newNote2 = Math.min(127, note + 24);
+          e.d1 = newNote1;
+
+          const duplicate = { ...e, d1: newNote2, order: baseOrder + 0.1 };
+          extraEvents.push(duplicate);
+
           const k = keyOf(ch, note);
           if (!shiftedActive.has(k)) shiftedActive.set(k, []);
-          shiftedActive.get(k).push(newNote);
+          shiftedActive.get(k).push([newNote1, newNote2]);
         }
       } else if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
         const k = keyOf(ch, note);
         const stack = shiftedActive.get(k);
         if (stack?.length) {
           const mapped = stack.shift();
-          e.d1 = mapped;
+          const [oct1, oct2] = Array.isArray(mapped) ? mapped : [mapped, null];
+          e.d1 = oct1;
+          if (oct2 != null) {
+            const off = { ...e, d1: oct2, order: baseOrder + 0.1 };
+            extraEvents.push(off);
+          }
           if (!stack.length) shiftedActive.delete(k);
         }
       }
     }
 
-    return events;
+    if (!extraEvents.length) return events;
+    return events.concat(extraEvents);
   }
 
   function addPanicAtTick(out, tick, channelsSet, order=2) {
@@ -1656,9 +1722,10 @@ color:var(--txt);
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
 
+    const chordsOnly = enforceChordsOnly(out);
     const progressiveProfile = getProgressiveDensityProfile(segments);
     const densityFactor = densityProgressive.checked ? 1 : getDensityFactor();
-    const skipAdjusted = applySkip2Transform(out, skip2?.checked);
+    const skipAdjusted = applySkip2Transform(chordsOnly, skip2?.checked);
     const filtered = applyDensityFilter(skipAdjusted, segments, tickPerEighth, densityFactor, progressiveProfile);
     const cleaned = sanitizeEvents(filtered);
     const noteOnly = disableUnsupportedMidiMessages(cleaned);
