@@ -288,6 +288,15 @@ color:var(--txt);
         <details class="advancedBox">
           <summary>Menú avanzado</summary>
           <div style="height:8px"></div>
+          <div class="label">Despoblado / denso</div>
+          <div class="sliderRow">
+            <div class="mini" style="width:90px">Despoblado</div>
+            <input id="density" type="range" min="0" max="100" value="100" />
+            <div class="mini" style="width:60px; text-align:right">Denso</div>
+            <div class="mono" style="width:56px; text-align:right" id="densityVal">100%</div>
+          </div>
+
+          <div style="height:12px"></div>
           <div class="label">Límite inferior para subir 8va</div>
           <div class="row" style="gap:14px; align-items:flex-end">
             <input id="raiseFloor" type="number" min="0" max="120" value="48" class="inputNumber" title="Notas por debajo de este valor se transportan +12 al generar" />
@@ -433,6 +442,8 @@ color:var(--txt);
   const bassVel = el("bassVel");
   const bassVelVal = el("bassVelVal");
   const repeatCount = el("repeatCount");
+  const density = el("density");
+  const densityVal = el("densityVal");
   const raiseFloor = el("raiseFloor");
 
   function log(msg, cls="") {
@@ -1148,6 +1159,159 @@ color:var(--txt);
     }
   }
 
+  function getDensityFactor() {
+    let v = parseInt(density.value, 10);
+    if (!Number.isFinite(v)) v = 100;
+    v = Math.max(0, Math.min(100, v));
+    density.value = String(v);
+    return v / 100;
+  }
+
+  function applyDensityFilter(events, segments, tickPerEighth, densityFactor) {
+    if (!events?.length) return events;
+    if (densityFactor >= 0.999) return events;
+
+    const removal = new Set();
+    const removalStrength = 1 - densityFactor;
+    const randUnit = () => randInt(0x100000000) / 0x100000000;
+
+    const segSpans = segments.map(s => ({
+      startTick: s.startEighth * tickPerEighth,
+      endTick: (s.startEighth + s.durEighth) * tickPerEighth
+    }));
+
+    const findSegmentIndex = (tick) => {
+      for (let i=0; i<segSpans.length; i++) {
+        const seg = segSpans[i];
+        if (tick >= seg.startTick && tick < seg.endTick) return i;
+      }
+      return -1;
+    };
+
+    const sortedIdx = events
+      .map((_,i)=>i)
+      .sort((a,b)=> (events[a].tick - events[b].tick) || ((events[a].order ?? 0) - (events[b].order ?? 0)));
+
+    const active = new Map();
+    const notePairs = [];
+    for (const idx of sortedIdx) {
+      const e = events[idx];
+      const status = e.status & 255;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const vel = e.d2 ?? 0;
+
+      if (hi === 0x90 && vel > 0) {
+        const key = ch + "-" + (e.d1 ?? 0);
+        if (!active.has(key)) active.set(key, []);
+        active.get(key).push({ idx, tick: e.tick });
+      } else if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
+        const key = ch + "-" + (e.d1 ?? 0);
+        const stack = active.get(key);
+        if (stack && stack.length) {
+          const on = stack.pop();
+          const segIndex = findSegmentIndex(on.tick);
+          notePairs.push({
+            onIdx: on.idx,
+            offIdx: idx,
+            onTick: on.tick,
+            offTick: e.tick,
+            dur: e.tick - on.tick,
+            ch,
+            note: e.d1 ?? 0,
+            segIndex
+          });
+        }
+      }
+    }
+
+    const eighthTol = tickPerEighth * 0.2;
+    const sortedPairs = notePairs.slice().sort((a,b)=> a.onTick - b.onTick);
+    for (let i=0; i<sortedPairs.length; i++) {
+      const p = sortedPairs[i];
+      if (Math.abs(p.dur - tickPerEighth) > eighthTol) continue;
+      const prev = sortedPairs[i-1];
+      const next = sortedPairs[i+1];
+      const hasPrev = prev && Math.abs(p.onTick - prev.onTick) <= tickPerEighth * 1.25 && Math.abs(prev.dur - tickPerEighth) <= eighthTol;
+      const hasNext = next && Math.abs(next.onTick - p.onTick) <= tickPerEighth * 1.25 && Math.abs(next.dur - tickPerEighth) <= eighthTol;
+      if (hasPrev && hasNext && randUnit() < removalStrength) {
+        if (p.onIdx != null) removal.add(p.onIdx);
+        if (p.offIdx != null) removal.add(p.offIdx);
+      }
+    }
+
+    const groupsBySeg = new Map();
+    const groupList = [];
+    const byTick = new Map();
+    for (const p of notePairs) {
+      const arr = byTick.get(p.onTick) || [];
+      arr.push(p);
+      byTick.set(p.onTick, arr);
+    }
+
+    for (const [tick, arr] of byTick.entries()) {
+      const segIndex = findSegmentIndex(tick);
+      if (segIndex < 0) continue;
+      if (arr.length >= 3) {
+        const g = { tick, segIndex, pairs: arr.slice() };
+        groupList.push(g);
+        if (!groupsBySeg.has(segIndex)) groupsBySeg.set(segIndex, []);
+        groupsBySeg.get(segIndex).push(g);
+      }
+    }
+
+    for (const arr of groupsBySeg.values()) arr.sort((a,b)=> a.tick - b.tick);
+
+    const chordRemovalProb = Math.max(0, removalStrength - 0.2);
+    for (const g of groupList) {
+      const segGroups = groupsBySeg.get(g.segIndex) || [];
+      const mustKeep = segGroups.length <= 1;
+      if (!mustKeep && chordRemovalProb > 0 && randUnit() < chordRemovalProb) {
+        for (const p of g.pairs) {
+          if (p.onIdx != null) removal.add(p.onIdx);
+          if (p.offIdx != null) removal.add(p.offIdx);
+        }
+        g.removed = true;
+      }
+    }
+
+    const voiceRemovalThreshold = 0.55;
+    if (removalStrength > voiceRemovalThreshold) {
+      const voiceProb = Math.min(1, (removalStrength - voiceRemovalThreshold) / (1 - voiceRemovalThreshold));
+      for (const g of groupList) {
+        if (g.removed) continue;
+        const survivors = g.pairs.filter(p => !removal.has(p.onIdx));
+        if (survivors.length <= 3) continue; // mantener al menos triada
+
+        if (randUnit() < voiceProb) {
+          const ordered = survivors.slice().sort((a,b)=> a.note - b.note);
+          const target = randUnit() < 0.5 ? ordered[0] : ordered[ordered.length - 1];
+          if (survivors.length - 1 >= 3) {
+            if (target.onIdx != null) removal.add(target.onIdx);
+            if (target.offIdx != null) removal.add(target.offIdx);
+          }
+        }
+      }
+    }
+
+    for (const [segIdx, groups] of groupsBySeg.entries()) {
+      let hasChord = false;
+      for (const g of groups) {
+        const survivors = g.pairs.filter(p => !removal.has(p.onIdx));
+        if (survivors.length >= 3) { hasChord = true; break; }
+      }
+      if (!hasChord && groups.length) {
+        const g = groups[0];
+        for (const p of g.pairs) {
+          removal.delete(p.onIdx);
+          removal.delete(p.offIdx);
+        }
+      }
+    }
+
+    return events.filter((_, idx) => !removal.has(idx));
+  }
+
   function generateMidiFromProgression(text) {
     clearLog();
 
@@ -1361,7 +1525,9 @@ color:var(--txt);
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
 
-    const cleaned = sanitizeEvents(out);
+    const densityFactor = getDensityFactor();
+    const filtered = applyDensityFilter(out, segments, tickPerEighth, densityFactor);
+    const cleaned = sanitizeEvents(filtered);
     generated = { ppq, events: cleaned, lengthTicks: maxTick, debug: { segmentsForBass } };
 
     log(`Listo. Longitud: ${maxTick} ticks (${(maxTick/(ppq))* (60/REF_BPM_EXPORT)} s a 120bpm).`, "OK");
@@ -1563,6 +1729,7 @@ color:var(--txt);
   tempo.addEventListener("input", () => tempoVal.textContent = tempo.value);
   // swing desactivado
   bassVel.addEventListener("input", () => bassVelVal.textContent = bassVel.value);
+  density.addEventListener("input", () => densityVal.textContent = `${density.value}%`);
   repeatCount.addEventListener("input", () => getRepeatTimes());
   setRaiseFloorValue(raiseFloor.value);
   raiseFloor.addEventListener("input", () => setRaiseFloorValue(raiseFloor.value));
@@ -1686,6 +1853,7 @@ color:var(--txt);
   tempoVal.textContent = tempo.value;
   // swing desactivado
   bassVelVal.textContent = bassVel.value;
+  densityVal.textContent = `${density.value}%`;
 
   initMIDI();
 })();
