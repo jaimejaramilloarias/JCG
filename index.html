@@ -1,0 +1,1577 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Jazz Comping Generator - Jaime Jaramillo Arias</title>
+  <style>
+    :root{
+      --bg:#121826;
+      --panel:#182238;
+      --panel2:#1d2a45;
+      --txt:#eef2ff;
+      --muted:#aab6cc;
+      --line:#2b3b57;
+      --accent:#38bdf8;
+      --accent2:#a78bfa;
+      --bad:#fb7185;
+      --ok:#34d399;
+      --shadow: 0 10px 24px rgba(0,0,0,.28);
+      --r:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: radial-gradient(900px 520px at 18% 12%, rgba(56,189,248,.10), transparent 60%), radial-gradient(900px 520px at 82% 18%, rgba(167,139,250,.10), transparent 60%), var(--bg);
+color:var(--txt);
+    }
+    .wrap{
+      max-width:1100px; margin:24px auto; padding:0 18px 40px;
+    }
+    header{display:flex; align-items:flex-end; justify-content:space-between; gap:14px; margin-bottom:18px}
+    h1{margin:0; font-size:32px; letter-spacing:.2px; font-weight:800}
+    .sub{color:var(--muted); font-size:12px; margin-top:6px}
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:16px;
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.035));
+      border:1px solid var(--line);
+      border-radius: var(--r);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card .hd{
+      padding:14px 14px 10px;
+      border-bottom:1px solid rgba(35,50,74,.8);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      background: rgba(24,34,56,.75);
+    }
+    .card .hd .title{font-size:13px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase}
+    .card .bd{padding:14px}
+    textarea{
+      width:100%; min-height:150px; padding:12px 12px;
+      border-radius:14px; border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--txt); font-size:14px; line-height:1.35;
+      outline:none;
+    }
+    textarea:focus{border-color: rgba(125,211,252,.6); box-shadow:0 0 0 3px rgba(125,211,252,.12)}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .btn{
+      border:1px solid rgba(35,50,74,.9);
+      background: rgba(255,255,255,.07);
+      color:var(--txt);
+      padding:10px 12px;
+      border-radius:14px;
+      cursor:pointer;
+      font-weight:650;
+      font-size:13px;
+      transition: transform .06s ease, border-color .15s ease, background .15s ease;
+      user-select:none;
+    }
+    .btn:hover{border-color: rgba(125,211,252,.55); background: rgba(14,22,38,.85)}
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{border-color: rgba(125,211,252,.65); background: rgba(125,211,252,.10)}
+    .btn.purple{border-color: rgba(167,139,250,.6); background: rgba(167,139,250,.10)}
+    .btn.bad{border-color: rgba(251,113,133,.65); background: rgba(251,113,133,.08)}
+    .btn:disabled{opacity:.45; cursor:not-allowed}
+    select{
+      width:100%;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--txt);
+      outline:none;
+    }
+    select:focus{border-color: rgba(125,211,252,.6); box-shadow:0 0 0 3px rgba(125,211,252,.12)}
+    .label{font-size:12px; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; gap:8px}
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(14,22,38,.55);
+      color:var(--txt);
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .pill:hover{border-color: rgba(125,211,252,.55)}
+    .pill small{color:var(--muted); font-weight:600}
+    .chips{display:flex; flex-wrap:wrap; gap:8px}
+    .split{display:grid; grid-template-columns: 1fr 1fr; gap:10px}
+    .kpi{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .dot{width:9px; height:9px; border-radius:50%}
+    .dot.ok{background:var(--ok)}
+    .dot.bad{background:var(--bad)}
+    .mono{font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace}
+    .log{
+      max-height:260px; overflow:auto; padding:10px 12px;
+      border-radius:14px; border:1px solid rgba(35,50,74,.9);
+      background: rgba(255,255,255,.06); color:var(--muted);
+      font-size:12px; line-height:1.35;
+      white-space:pre-wrap;
+    }
+    .sliderRow{display:flex; align-items:center; gap:12px}
+    input[type="range"]{width:100%}
+    .mini{font-size:12px; color:var(--muted)}
+    .warn{color: #fbbf24}
+    .ok{color: var(--ok)}
+    .bad{color: var(--bad)}
+    .hint{color:var(--muted); font-size:12px; margin-top:10px; line-height:1.35}
+    .hint code{color:#c7d2fe}
+    
+    .topActions{display:flex; gap:10px; align-items:center}
+    .btn.ghost{background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12)}
+    .btn.ghost:hover{background: rgba(255,255,255,.10)}
+    .helpBtn{display:inline-flex; align-items:center; gap:8px}
+    .helpBtn .q{display:inline-flex; width:18px; height:18px; border-radius:999px; align-items:center; justify-content:center;
+      border:1px solid rgba(255,255,255,.18); color: var(--txt); font-weight:800; font-size:12px; background: rgba(255,255,255,.06);
+    }
+
+    /* Modal */
+    .modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:18px; background: rgba(0,0,0,.35); z-index:9999;}
+    .modal.open{display:flex}
+    .modalCard{
+      width:min(860px, 100%);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+      border:1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      box-shadow: 0 18px 44px rgba(0,0,0,.30);
+      overflow:hidden;
+    }
+    .modalHd{padding:14px 14px 10px; border-bottom:1px solid rgba(255,255,255,.12); display:flex; justify-content:space-between; align-items:center; gap:12px}
+    .modalHd h2{margin:0; font-size:14px; letter-spacing:.3px}
+    .modalBd{padding:14px}
+    .modalBd p{margin:0 0 10px; color: var(--muted); font-size:13px; line-height:1.45}
+    .modalBd ul{margin:8px 0 14px 18px; color: var(--muted); font-size:13px; line-height:1.45}
+    .kbd{font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace; padding:2px 6px; border-radius:8px;
+      border:1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: var(--txt); font-size:12px;
+    }
+
+    @media (max-width: 980px){
+      .grid{grid-template-columns: 1fr}
+    }
+  
+    /* Requested UI changes (no deletion, only hiding) */
+    #swingBlock{display:none}
+    #logBlock{display:none}
+    #ppqPill{display:none}
+
+    /* Modal: solid (no translucency) */
+    .modalCard{background: var(--panel) !important;}
+
+    /* Theme toggle */
+    html[data-theme="dark"]{
+      --bg:#121826;
+      --panel:#182238;
+      --panel2:#1d2a45;
+      --txt:#eef2ff;
+      --muted:#aab6cc;
+      --line:#2b3b57;
+      --accent:#38bdf8;
+      --accent2:#a78bfa;
+      --bad:#fb7185;
+      --ok:#34d399;
+      --shadow: 0 10px 24px rgba(0,0,0,.28);
+    }
+    html[data-theme="light"]{
+      --bg:#e8edf6;
+      --panel:#f3f6fb;
+      --panel2:#e9eff8;
+      --txt:#121826;
+      --muted:#445066;
+      --line:#c9d3e3;
+      --accent:#0ea5e9;
+      --accent2:#7c3aed;
+      --bad:#ef476f;
+      --ok:#0f9d58;
+      --shadow: 0 10px 24px rgba(12,18,40,.12);
+    }
+    html[data-theme="light"] body{
+      background: radial-gradient(900px 520px at 18% 12%, rgba(14,165,233,.10), transparent 60%),
+                  radial-gradient(900px 520px at 82% 18%, rgba(124,58,237,.10), transparent 60%),
+                  var(--bg);
+      color:var(--txt);
+    }
+    html[data-theme="light"] textarea,
+    html[data-theme="light"] select{
+      background: rgba(18,24,38,.04);
+      color: var(--txt);
+      border-color: var(--line);
+    }
+    html[data-theme="light"] .btn{
+      background: rgba(18,24,38,.04);
+      color: var(--txt);
+      border-color: var(--line);
+    }
+    html[data-theme="light"] .btn:hover{
+      background: rgba(18,24,38,.07);
+      border-color: rgba(14,165,233,.35);
+    }
+    html[data-theme="light"] .pill{
+      background: rgba(18,24,38,.04);
+      border-color: var(--line);
+      color: var(--txt);
+    }
+
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Jazz Comping Generator - Jaime Jaramillo Arias</h1>
+      <div class="sub">Escribe una progresión, genera variaciones de comping, escucha por tu salida MIDI y exporta el resultado.</div>
+    </div>
+    <div class="kpi">
+      <div class="pill" title="Estado de carga de carpeta y MIDI">
+        <span class="dot bad" id="dotReady"></span>
+        <span id="readyText">No listo</span>
+      </div>
+      <div class="pill" id="ppqPill" title="PPQ detectado en los archivos de referencia">
+        <small>PPQ</small>
+        <span class="mono" id="ppqText">—</span>
+      </div>
+    </div>
+    <div class="topActions">
+      <button class="btn ghost helpBtn" id="btnHelp" title="Abrir ayuda">
+        <span class="q">?</span><span>Ayuda</span>
+      </button>
+      <button class="btn ghost" id="btnTheme" title="Cambiar modo claro/oscuro">Modo</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <div class="hd">
+        <div class="title">Progresión</div>
+        <div class="row">
+<button class="btn primary" id="btnRegenerate" title="Generar de nuevo con variación aleatoria">Regenerar</button>
+          <button class="btn purple" id="btnExport" title="Exportar el MIDI generado">Exportar</button>
+        </div>
+      </div>
+      <div class="bd">
+        <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
+
+        <div style="height:12px"></div>
+
+        <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
+        <div class="chips" id="qualityChips"></div>
+
+        
+        <div class="hint">
+          <div><b>Calidades:</b> aparecen en la lista después de cargar tus patrones.</div>
+          <div style="margin-top:6px">Usa exactamente las calidades que ves (ej: <code>G7alt</code>, <code>F13(b9)</code>).</div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <div class="hd"><div class="title">Salida / Preview</div></div>
+      <div class="bd">
+        <div class="split">
+          <div>
+            <div class="label">Carpeta MIDI de referencia</div>
+            <div class="row">
+              <button class="btn" id="btnPickFolder" title="Cargar carpeta con archivos MIDI de referencia">Cargar carpeta</button>
+              <input id="folderFallback" type="file" webkitdirectory multiple style="display:none" />
+            </div>
+            <div class="mini" id="folderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
+          </div>
+
+          <div>
+            <div class="label">Puerto MIDI de salida</div>
+            <select id="midiOut" title="Elige el puerto MIDI de salida (destino) para la reproducción"></select>
+            <div class="mini" id="midiStatus" style="margin-top:8px">Salida MIDI: —</div>
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="label">Controles</div>
+        <div class="row">
+          <button class="btn primary" id="btnPlay" title="Reproducir el MIDI generado por el puerto seleccionado">Reproducir</button>
+          <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="label">Tempo (BPM) — solo playback</div>
+        <div class="sliderRow">
+          <input id="tempo" type="range" min="40" max="240" value="120" />
+          <div class="mono" style="width:56px; text-align:right" id="tempoVal">120</div>
+        </div>
+
+        <div style="height:10px"></div>
+        <div id="swingBlock">
+
+        <div class="label">Swing (%) — solo playback</div>
+        <div class="sliderRow">
+          <input id="swing" type="range" min="50" max="75" value="50" />
+          <div class="mono" style="width:56px; text-align:right" id="swingVal">50</div>
+        </div>
+
+        <div style="height:10px"></div>
+        </div>
+
+
+        <div class="label">Bajo (velocidad 0–67) — solo playback <span class="mini" title="El bajo no se exporta, solo suena al previsualizar">(no exporta)</span></div>
+        <div class="sliderRow">
+          <input id="bassVel" type="range" min="0" max="67" value="42" title="Velocidad MIDI del bajo (0–67). Solo afecta la reproducción en la app." />
+          <div class="mono" style="width:56px; text-align:right" id="bassVelVal">42</div>
+        </div>
+
+        <div style="height:14px"></div>
+        <div id="logBlock">
+
+        <div class="label">Log</div>
+        <div class="log" id="log"></div>
+
+        <div class="hint">
+          Si WebMIDI o “cargar carpeta” no aparecen, abre esto desde <code>http://localhost</code>.
+          En mac: <code>python3 -m http.server 8000</code> y abre <code>http://localhost:8000</code>.
+        </div>
+        </div>
+
+      </div>
+    </aside>
+  </div>
+</div>
+
+
+<div class="modal" id="helpModal" aria-hidden="true">
+  <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modalHd">
+      <h2 id="helpTitle">Ayuda</h2>
+      <div class="row">
+        <button class="btn" id="btnHelpClose" title="Cerrar ayuda">Cerrar</button>
+      </div>
+    </div>
+    <div class="modalBd">
+      <p><b>Manual rápido</b></p>
+      <ul>
+        <li><b>1) Cargar patrones:</b> pulsa <span class="kbd">Cargar carpeta</span> y elige la carpeta con tus patrones MIDI.</li>
+        <li><b>2) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
+        <li><b>3) Calidades:</b> haz clic en la lista para insertar la calidad exacta.</li>
+        <li><b>4) Regenerar:</b> crea una nueva variación.</li>
+        <li><b>5) Escuchar:</b> selecciona tu <b>Puerto MIDI de salida</b> y pulsa <span class="kbd">Reproducir</span>. Usa <span class="kbd">Stop</span> para detener.</li>
+        <li><b>6) Ajustes de escucha:</b> cambia el <b>Tempo</b> y la <b>Velocidad del bajo</b> (solo para la pre-escucha).</li>
+        <li><b>7) Exportar:</b> guarda el resultado con <span class="kbd">Exportar</span>.</li>
+      </ul>
+      <p class="mini">Atajo: <span class="kbd">Espacio</span> alterna Reproducir / Stop (cuando no estás escribiendo).</p>
+
+    </div>
+  </div>
+</div>
+
+
+<script>
+(() => {
+  // -------------------------
+  // Config / constants
+  // -------------------------
+  let QUALITIES = []; // se llena desde los nombres de archivo de la carpeta cargada
+  // Mapa: calidad exacta -> datos del MIDI de referencia
+
+  // Reference MIDI assumptions (as per your spec)
+  const TIME_SIG_NUM = 4;
+  const TIME_SIG_DEN = 4;
+  const REF_BPM_EXPORT = 120; // export tempo fixed
+
+  // Ventana base: 16 corcheas (2 compases).
+  // Si el archivo tiene 16 corcheas exactas, se usa completo (1 sola ventana).
+  // Si el archivo tiene 32 corcheas o más, se crean ventanas de 16 corcheas y se escoge una al azar por bloque.
+  const WINDOW_EIGHTS = 16; // 16 eighth-notes
+
+
+  // -------------------------
+  // UI handles
+  // -------------------------
+  const el = (id) => document.getElementById(id);
+  const logEl = el("log");
+  const dotReady = el("dotReady");
+  const readyText = el("readyText");
+  const ppqText = el("ppqText");
+  const folderStatus = el("folderStatus");
+  const midiOutSel = el("midiOut");
+  const midiStatus = el("midiStatus");
+  const tempo = el("tempo");
+  const tempoVal = el("tempoVal");
+  const swing = el("swing");
+  const swingVal = el("swingVal");
+  const bassVel = el("bassVel");
+  const bassVelVal = el("bassVelVal");
+
+  function log(msg, cls="") {
+    const line = cls ? `[${cls}] ${msg}` : msg;
+    logEl.textContent += line + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function clearLog() { logEl.textContent = ""; }
+
+  function setReady(isReady, text) {
+    dotReady.className = "dot " + (isReady ? "ok" : "bad");
+    readyText.textContent = text;
+  }
+
+  // -------------------------
+  // Random
+  // -------------------------
+  function randInt(maxExclusive) {
+    const a = new Uint32Array(1);
+    crypto.getRandomValues(a);
+    return a[0] % maxExclusive;
+  }
+  function choice(arr) { return arr[randInt(arr.length)]; }
+
+  // Bajo (solo playback): convierte semitonos desde C (0..11) a una nota entre C1(24) y C3(48)
+  function bassNoteFromTranspose(semi) {
+    let note = 36 + (semi % 12); // base C2=36
+    if (note > 48) note -= 12;
+    if (note < 24) note += 12;
+    return note;
+  }
+
+  // -------------------------
+  // Note / root parsing + transpose mapping (always upward from C)
+  // -------------------------
+  const NOTE_TO_SEMI = new Map([
+    ["C",0], ["B#",0],
+    ["C#",1], ["DB",1],
+    ["D",2],
+    ["D#",3], ["EB",3],
+    ["E",4], ["FB",4],
+    ["F",5], ["E#",5],
+    ["F#",6], ["GB",6],
+    ["G",7],
+    ["G#",8], ["AB",8],
+    ["A",9],
+    ["A#",10], ["BB",10],
+    ["B",11], ["CB",11]
+  ]);
+
+  function normalizeAccidentals(s) {
+    return s.replaceAll("♭","b").replaceAll("♯","#");
+  }
+
+  function parseChordToken(tokRaw) {
+    const tok = normalizeAccidentals(tokRaw.trim());
+    const m = tok.match(/^([A-Ga-g])([#b]?)(.*)$/);
+    if (!m) throw new Error(`No entiendo el acorde: "${tokRaw}"`);
+    const root = (m[1].toUpperCase() + (m[2]||"")).toUpperCase();
+    const qualRaw = (m[3]||"").trim();
+    const qualKey = normalizeQuality(qualRaw);
+    if (!qualKey) throw new Error(`Calidad faltante en "${tokRaw}". Ej: Dm7, G9, A7alt, Cmaj7.`);
+    const semi = NOTE_TO_SEMI.get(root.toUpperCase());
+    if (semi === undefined) throw new Error(`Fundamental inválida: "${root}"`);
+    return { root, quality: qualKey, transpose: semi };
+  }
+
+  function normalizeQuality(q) {
+    // Exacto: la calidad es exactamente lo que se escribe después de la fundamental.
+    // Sin alias ni conversiones (solo trim).
+    let s = (q || "").trim();
+    s = normalizeAccidentals(s);
+    if (!s) return null;
+    return s;
+  }
+
+  // -------------------------
+  // Progression parsing (bars with | |)
+  // Rules:
+  // | X | -> 8 eighths
+  // | X Y | -> 4 + 4 eighths
+  // Anything else -> error (by spec)
+  // -------------------------
+  function parseProgression(text) {
+    const raw = text.replace(/\r/g,"").trim();
+    if (!raw) throw new Error("Escribe una progresión.");
+    const parts = raw.split("|").map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) throw new Error("Usa barras | |. Ej: | Bbmaj7 Gm9 | ...");
+
+    const segments = [];
+    let startEighth = 0;
+
+    // 1) Construimos la progresión "recta" (sin síncopa):
+    for (const bar of parts) {
+      const chords = bar.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+      if (chords.length !== 1 && chords.length !== 2) {
+        throw new Error(`Barra inválida: "${bar}". Solo 1 o 2 acordes por compás.`);
+      }
+      const each = (chords.length === 1) ? 8 : 4;
+      for (const c of chords) {
+        const parsed = parseChordToken(c);
+        segments.push({
+          ...parsed,
+          token: c,
+          startEighth,
+          durEighth: each
+        });
+        startEighth += each;
+      }
+    }
+
+    const totalEighthNominal = startEighth;
+
+    // 2) "Síncopa jazz" CON REGLA DE MÍNIMO:
+    //    - Intentamos adelantar cada cambio 1 corchea.
+    //    - Pero garantizamos que cada acorde dure al menos MEDIO COMPÁS (4 corcheas).
+    //      (Esto evita acordes de 3 corcheas cuando hay 2 acordes por compás.)
+    const MIN_CHORD_EIGHTS = 4;
+
+    if (segments.length >= 2) {
+      // Proponemos nuevos inicios (adelantados 1 corchea), pero sin violar el mínimo.
+      for (let i = 1; i < segments.length; i++) {
+        const prevStart = segments[i-1].startEighth;
+        const proposed = Math.max(0, segments[i].startEighth - 1);
+        const minAllowed = prevStart + MIN_CHORD_EIGHTS;
+        segments[i].startEighth = Math.max(proposed, minAllowed);
+      }
+
+      // Asegura inicios estrictamente crecientes (por seguridad)
+      for (let i = 1; i < segments.length; i++) {
+        if (segments[i].startEighth <= segments[i-1].startEighth) {
+          segments[i].startEighth = segments[i-1].startEighth + 1;
+        }
+      }
+
+      // Recalcula duraciones: cada acorde dura hasta el siguiente inicio.
+      for (let i = 0; i < segments.length - 1; i++) {
+        segments[i].durEighth = segments[i+1].startEighth - segments[i].startEighth;
+      }
+      segments[segments.length - 1].durEighth = totalEighthNominal - segments[segments.length - 1].startEighth;
+
+      // Safety: evita duraciones raras y respeta mínimo
+      for (const s of segments) {
+        if (s.durEighth <= 0) s.durEighth = 1;
+        if (s.durEighth < MIN_CHORD_EIGHTS) s.durEighth = MIN_CHORD_EIGHTS;
+      }
+    }
+
+// No cambiamos el "final" total: solo movemos fronteras internas.
+    return { segments, totalEighth: totalEighthNominal, totalBars: parts.length };
+  }
+
+  // -------------------------
+  // MIDI parsing / writing (no deps)
+  // -------------------------
+  function readU32(dv, o){ return dv.getUint32(o, false); }
+  function readU16(dv, o){ return dv.getUint16(o, false); }
+
+  function readVarLen(u8, i) {
+    let value = 0;
+    for (let k=0; k<4; k++){
+      const b = u8[i++];
+      value = (value << 7) | (b & 0x7F);
+      if ((b & 0x80) === 0) return [value, i];
+    }
+    return [value, i];
+  }
+
+  function writeVarLen(n) {
+    // returns Uint8Array
+    let buffer = n & 0x7F;
+    const bytes = [];
+    while ((n >>= 7) > 0) {
+      buffer <<= 8;
+      buffer |= ((n & 0x7F) | 0x80);
+    }
+    while (true) {
+      bytes.push(buffer & 0xFF);
+      if (buffer & 0x80) buffer >>= 8;
+      else break;
+    }
+    return Uint8Array.from(bytes);
+  }
+
+  function str4(u8, o) {
+    return String.fromCharCode(u8[o],u8[o+1],u8[o+2],u8[o+3]);
+  }
+
+  function parseMidi(arrayBuffer) {
+    const u8 = new Uint8Array(arrayBuffer);
+    const dv = new DataView(arrayBuffer);
+    let i = 0;
+
+    if (str4(u8,i) !== "MThd") throw new Error("No es un MIDI válido (falta MThd).");
+    const hlen = readU32(dv, i+4);
+    const format = readU16(dv, i+8);
+    const ntrks = readU16(dv, i+10);
+    const division = readU16(dv, i+12);
+    if (division & 0x8000) throw new Error("SMPTE timecode no soportado.");
+    const ppq = division;
+    i += 8 + hlen;
+
+    const tracks = [];
+    for (let t=0; t<ntrks; t++){
+      if (str4(u8,i) !== "MTrk") throw new Error("No es un MIDI válido (falta MTrk).");
+      const len = readU32(dv, i+4);
+      const start = i + 8;
+      const end = start + len;
+      const data = u8.slice(start, end);
+      tracks.push(parseTrack(data));
+      i = end;
+    }
+
+    return { format, ppq, tracks };
+  }
+
+  function parseTrack(trackU8) {
+    let i = 0;
+    let absTick = 0;
+    let runningStatus = null;
+    let trackName = null;
+    const events = []; // channel events only (with status + data), absolute tick
+
+    while (i < trackU8.length) {
+      let delta; [delta, i] = readVarLen(trackU8, i);
+      absTick += delta;
+
+      let status = trackU8[i++];
+
+      if (status < 0x80) {
+        // running status
+        if (runningStatus === null) throw new Error("Running status inválido.");
+        i--; // step back, this byte is actually data1
+        status = runningStatus;
+      } else {
+        runningStatus = status;
+      }
+
+      if (status === 0xFF) {
+        const type = trackU8[i++];
+        let mlen; [mlen, i] = readVarLen(trackU8, i);
+        const meta = trackU8.slice(i, i+mlen);
+        i += mlen;
+
+        if (type === 0x03) { // Track Name
+          try { trackName = new TextDecoder().decode(meta).trim(); } catch(_){}
+        }
+        continue;
+      }
+
+      if (status === 0xF0 || status === 0xF7) {
+        let slen; [slen, i] = readVarLen(trackU8, i);
+        i += slen;
+        runningStatus = null;
+        continue;
+      }
+
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+
+      let d1, d2;
+      if (hi === 0xC0 || hi === 0xD0) {
+        d1 = trackU8[i++]; d2 = null;
+      } else {
+        d1 = trackU8[i++]; d2 = trackU8[i++];
+      }
+
+      events.push({ tick: absTick, status, ch, d1, d2 });
+    }
+
+    return { name: trackName, events, endTick: absTick };
+  }
+
+  // MIDI writing: Type 0 (single track) for simplicity
+  function buildMidiFile(ppq, channelEventsAbsTicks) {
+    // Meta events: tempo 120, time signature 4/4, track name, end-of-track.
+    const trackBytes = [];
+
+    const push = (arr) => { for (const b of arr) trackBytes.push(b); };
+    const pushU8 = (b) => trackBytes.push(b & 0xFF);
+
+    function pushMeta(delta, type, dataU8) {
+      push(writeVarLen(delta));
+      pushU8(0xFF);
+      pushU8(type);
+      push(writeVarLen(dataU8.length));
+      push(dataU8);
+    }
+    function pushTrackName(name) {
+      const data = new TextEncoder().encode(name);
+      pushMeta(0, 0x03, data);
+    }
+    function pushTempo(bpm) {
+      const mpqn = Math.round(60000000 / bpm);
+      const data = Uint8Array.from([(mpqn>>16)&255, (mpqn>>8)&255, mpqn&255]);
+      pushMeta(0, 0x51, data);
+    }
+    function pushTimeSig(nn, dd) {
+      const denomPow = Math.log2(dd) | 0;
+      const data = Uint8Array.from([nn&255, denomPow&255, 24, 8]); // default MIDI clocks/metronome
+      pushMeta(0, 0x58, data);
+    }
+
+    pushTrackName("generated");
+    pushTimeSig(TIME_SIG_NUM, TIME_SIG_DEN);
+    pushTempo(REF_BPM_EXPORT);
+
+    // Sort by tick, then order to preserve cleanup/start logic
+    const evs = channelEventsAbsTicks
+      .slice()
+      .sort((a,b)=> (a.tick-b.tick) || (a.order-b.order));
+
+    let lastTick = 0;
+    let running = null;
+
+    for (const e of evs) {
+      const delta = e.tick - lastTick;
+      lastTick = e.tick;
+
+      push(writeVarLen(delta));
+
+      const status = e.status & 0xFF;
+      const hi = status & 0xF0;
+
+      // running status optimization (optional)
+      if (running !== status) {
+        pushU8(status);
+        running = status;
+      }
+
+      pushU8(e.d1);
+      if (!(hi === 0xC0 || hi === 0xD0)) pushU8(e.d2 ?? 0);
+    }
+
+    // End of track
+    pushMeta(0, 0x2F, Uint8Array.from([]));
+
+    // Wrap track
+    const trackU8 = Uint8Array.from(trackBytes);
+    const trackLen = trackU8.length;
+
+    const header = new Uint8Array(14);
+    header.set([0x4D,0x54,0x68,0x64]); // MThd
+    header.set([0x00,0x00,0x00,0x06], 4);
+    header.set([0x00,0x00], 8); // format 0
+    header.set([0x00,0x01], 10); // 1 track
+    header[12] = (ppq >> 8) & 255;
+    header[13] = ppq & 255;
+
+    const trkh = new Uint8Array(8);
+    trkh.set([0x4D,0x54,0x72,0x6B]); // MTrk
+    trkh[4] = (trackLen >>> 24) & 255;
+    trkh[5] = (trackLen >>> 16) & 255;
+    trkh[6] = (trackLen >>> 8) & 255;
+    trkh[7] = trackLen & 255;
+
+    const out = new Uint8Array(header.length + trkh.length + trackU8.length);
+    out.set(header, 0);
+    out.set(trkh, header.length);
+    out.set(trackU8, header.length + trkh.length);
+    return out;
+  }
+
+  // -------------------------
+  // Reference library loading
+  // -------------------------
+  let midiAccess = null;
+  let midiOutputs = [];
+  let refByQuality = new Map(); // qualityKey -> {ppq, events, windowsPerFile, tickPerEighth, winTicks}
+  let refPpq = null;
+  let folderLoaded = false;
+
+  function makeKeyVariants(name) {
+    const base = name.toLowerCase().trim().replace(/\.(mid|midi)$/,"");
+    const v = new Set();
+    v.add(base);
+    v.add(base.replace(/[\s_]/g,""));
+    v.add(base.replace(/[()]/g,""));
+    v.add(base.replace(/[()\s_]/g,""));
+    return [...v];
+  }
+
+  function indexReferenceFile(qualityKey, midiObj) {
+    const ppq = midiObj.ppq;
+    if (refPpq === null) refPpq = ppq;
+    if (ppq !== refPpq) throw new Error(`PPQ inconsistente. Esperaba ${refPpq}, encontré ${ppq}.`);
+
+    // Requisito: UNA SOLA PISTA por archivo de referencia.
+    if (!midiObj.tracks || midiObj.tracks.length !== 1) {
+      throw new Error(`"${qualityKey}": el MIDI debe tener 1 sola pista. Encontré ${midiObj.tracks ? midiObj.tracks.length : 0}.`);
+    }
+
+    const tr = midiObj.tracks[0];
+    const events = tr.events || [];
+
+    const tickPerEighth = ppq / 2;
+    if ((ppq % 2) !== 0) {
+      throw new Error(`"${qualityKey}": PPQ inválido (${ppq}). Debe ser par para poder contar corcheas.`);
+    }
+
+    const minTicks = WINDOW_EIGHTS * tickPerEighth; // 16 corcheas = 2 compases
+
+    // Longitud real del archivo: no depende de Note On/Off; incluye silencios hasta End-Of-Track.
+    let maxTick = 0;
+    for (const e of events) if ((e.tick|0) > maxTick) maxTick = e.tick|0;
+
+    const trackLenTicks = (typeof tr.endTick === "number" && tr.endTick > 0) ? (tr.endTick|0) : maxTick;
+
+    if (trackLenTicks < minTicks) {
+      throw new Error(`"${qualityKey}": demasiado corto. Debe tener al menos 16 corcheas (2 compases).`);
+    }
+
+    // El MIDI de referencia debe venir cuantizado a corcheas, aunque haya silencios.
+    if ((trackLenTicks % tickPerEighth) !== 0) {
+      throw new Error(`"${qualityKey}": longitud no cuantizada a corcheas. Ajusta el final del archivo a una corchea exacta.`);
+    }
+
+    const totalEighths = trackLenTicks / tickPerEighth;
+
+    // Requisito: múltiplos de 16 corcheas por archivo de referencia.
+    if ((totalEighths % WINDOW_EIGHTS) !== 0) {
+      throw new Error(`"${qualityKey}": longitud inválida. Debe ser múltiplo de ${WINDOW_EIGHTS} corcheas; encontré ${totalEighths}.`);
+    }
+
+    const windowsPerFile = totalEighths / WINDOW_EIGHTS;
+    const winTicks = WINDOW_EIGHTS * tickPerEighth; // ventana en ticks
+
+    // Precomputo: evita seleccionar ventanas completamente silenciosas al azar.
+    // Guardamos, por ventana de 16 corcheas, el primer NoteOn (vel>0) relativo a la ventana.
+    // Si no hay notas en una ventana, queda Infinity.
+    const firstNoteOnRel = new Array(windowsPerFile).fill(Infinity);
+    for (const e of events) {
+      const status = (e.status ?? 0) & 255;
+      const hi = status & 0xF0;
+      const vel = (e.d2 ?? 0) & 127;
+      if (hi === 0x90 && vel > 0) {
+        const w = Math.floor((e.tick|0) / winTicks);
+        if (w >= 0 && w < windowsPerFile) {
+          const rel = (e.tick|0) - (w * winTicks);
+          if (rel < firstNoteOnRel[w]) firstNoteOnRel[w] = rel;
+        }
+      }
+    }
+
+
+    refByQuality.set(qualityKey, {
+      ppq,
+      tickPerEighth,
+      winTicks,
+      windowsPerFile,
+      firstNoteOnRel,
+      events
+    });
+  }
+
+  async function loadFolderViaPicker() {
+    // Prefer File System Access API if available
+    if (window.showDirectoryPicker) {
+      const dir = await window.showDirectoryPicker();
+      const files = [];
+      for await (const [name, handle] of dir.entries()) {
+        if (handle.kind === "file") {
+          const f = await handle.getFile();
+          files.push(f);
+        }
+      }
+      return { name: dir.name || "carpeta", files };
+    }
+
+    // Fallback: <input webkitdirectory>
+    return await new Promise((resolve, reject) => {
+      const input = el("folderFallback");
+      input.onchange = () => {
+        const list = [...input.files];
+        if (!list.length) reject(new Error("No se encontraron archivos en esa carpeta."));
+        else resolve({ name: "carpeta", files: list });
+      };
+      input.click();
+    });
+  }
+
+  async function loadReferenceFolder() {
+    clearLog();
+    refByQuality.clear();
+    refPpq = null;
+    ppqText.textContent = "—";
+    setReady(false, "Cargando…");
+    folderLoaded = false;
+    folderStatus.textContent = "Cargando…";
+
+    try{
+      const { name, files } = await loadFolderViaPicker();
+      const folderFiles = files;
+
+      folderStatus.textContent = `Carpeta: ${name} — ${folderFiles.length} archivo(s).`;
+
+      const skipped = [];
+      const dups = [];
+      const found = [];
+
+      for (const f of folderFiles) {
+        const fullName = (f.name || "").trim();
+        if (!fullName) { skipped.push("(sin nombre)"); continue; }
+
+        // Calidad = nombre de archivo SIN la última extensión (si la hay)
+        const base = fullName.replace(/\.[^.]+$/,"").trim();
+        if (!base) { skipped.push(fullName); continue; }
+
+        // No soportamos espacios en la "calidad" porque el parser separa por whitespace.
+        if (/\s/.test(base)) { skipped.push(fullName); continue; }
+
+        if (refByQuality.has(base)) { dups.push(base); }
+
+        try{
+          const buf = await f.arrayBuffer();
+          const midi = parseMidi(buf);
+          indexReferenceFile(base, midi);
+          found.push(base);
+        } catch(err) {
+          skipped.push(fullName);
+          continue;
+        }
+      }
+
+      QUALITIES = [...new Set(found)].sort((a,b)=>a.localeCompare(b, "en"));
+
+      renderQualityChips();
+
+      ppqText.textContent = (refPpq ?? "—");
+
+      if (!QUALITIES.length) {
+        log("No encontré calidades válidas. Revisa que los nombres de archivo no tengan espacios y que los archivos sean MIDI.", "ERROR");
+        setReady(false, "No listo");
+        return;
+      }
+
+      if (skipped.length) {
+        log(`Archivos ignorados (no MIDI / nombre inválido / con espacios / demasiado cortos / más de una pista): ${skipped.join(", ")}`, "WARN");
+      }
+      if (dups.length) {
+        log(`Duplicados: se usó el último archivo para: ${[...new Set(dups)].join(", ")}`, "WARN");
+      }
+
+      log(`Cargadas ${QUALITIES.length} calidad(es) desde la carpeta.`, "OK");
+      folderLoaded = true;
+      setReady(true, "Listo");
+    } catch(err){
+      setReady(false, "No listo");
+      folderStatus.textContent = "Error al cargar carpeta.";
+      log(String(err?.message || err), "ERROR");
+    }
+  }
+
+  // -------------------------
+  // Generation (core)
+  // -------------------------
+  // Small safety pass: if any NoteOn appears while the same note is already active
+  // on that channel, we inject a NoteOff at the same tick just before it.
+  // This guarantees that overlapped notes are always cut cleanly and avoids
+  // stuck notes / MIDI artefacts in the final stream.
+  function sanitizeEvents(events) {
+    const evs = events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order));
+    const active = new Set();
+    const cleaned = [];
+
+    const keyOf = (ch, note) => ch + "-" + note;
+
+    for (const e of evs) {
+      const status = e.status & 0xFF;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const d1 = e.d1 & 0x7F;
+      const d2 = (e.d2 ?? 0) & 0x7F;
+
+      // Controller "All Notes Off" / "All Sound Off" also reset local state
+      if (hi === 0xB0 && (d1 === 120 || d1 === 123)) {
+        active.clear();
+        cleaned.push(e);
+        continue;
+      }
+
+      // Note On with velocity > 0
+      if (hi === 0x90 && d2 > 0) {
+        const k = keyOf(ch, d1);
+        if (active.has(k)) {
+          const offOrder = (typeof e.order === "number") ? Math.max(0, e.order - 1) : 2;
+          cleaned.push({
+            tick: e.tick,
+            status: (0x80 | ch),
+            d1,
+            d2: 0,
+            order: offOrder
+          });
+        }
+        active.add(k);
+        cleaned.push(e);
+        continue;
+      }
+
+      // Note Off (real 0x80 or NoteOn with vel=0)
+      if (hi === 0x80 || (hi === 0x90 && d2 === 0)) {
+        const k = keyOf(ch, d1);
+        if (active.has(k)) active.delete(k);
+        cleaned.push(e);
+        continue;
+      }
+
+      // Other channel events just pass through
+      cleaned.push(e);
+    }
+
+    return cleaned;
+  }
+
+  let generated = {
+    ppq: null,
+    events: [],     // channel events, abs ticks, include {tick, status, d1, d2, order}
+    lengthTicks: 0,
+    debug: {}
+  };
+
+  function ensureQualityLoaded(q) {
+    if (!refByQuality.has(q)) throw new Error(`No tengo el MIDI de referencia para "${q}".`);
+  }
+
+  function channelEvent(tick, status, d1, d2, order=3) {
+    return { tick, status: status & 255, d1: d1 & 127, d2: (d2==null?0:(d2&127)), order };
+  }
+
+  function addPanicAtTick(out, tick, channelsSet, order=2) {
+    // Limpieza anti-artefactos: Reset All Controllers (121), Sustain Off (64), All Notes Off (123), All Sound Off (120)
+    for (const ch of channelsSet) {
+      out.push(channelEvent(tick, 0xB0 | ch, 121, 0, order));
+      out.push(channelEvent(tick, 0xB0 | ch, 64, 0, order));
+      out.push(channelEvent(tick, 0xB0 | ch, 123, 0, order));
+      out.push(channelEvent(tick, 0xB0 | ch, 120, 0, order));
+    }
+  }
+
+  function generateMidiFromProgression(text) {
+    clearLog();
+
+    const { segments, totalEighth } = parseProgression(text);
+    if (refPpq == null) throw new Error("Primero carga la carpeta de referencias.");
+    const ppq = refPpq;
+    const tickPerEighth = ppq / 2;
+    const winTicks = 8 * ppq;
+
+    // Random seed por bloque de 2 compases en la línea de tiempo de salida
+    const totalBlocks = Math.ceil(totalEighth / WINDOW_EIGHTS);
+    const blockWindowSeed = [];
+    for (let b=0; b<totalBlocks; b++){
+      blockWindowSeed.push(randInt(0x100000000));
+    }
+    const out = [];
+    let maxTick = 0;
+
+    // generate segment by segment
+    for (const seg of segments) {
+      ensureQualityLoaded(seg.quality);
+      const ref = refByQuality.get(seg.quality);
+
+      const startTickOut = seg.startEighth * tickPerEighth;
+      const durTicks = seg.durEighth * tickPerEighth;
+      const endTickOut = startTickOut + durTicks;
+
+      const block = Math.floor(seg.startEighth / WINDOW_EIGHTS);
+
+      // Selección de ventana:
+      // - Si el archivo es EXACTAMENTE 16 corcheas (windowsPerFile===1), NO hay ventanas aleatorias.
+      // - Si el archivo tiene 32 corcheas o más (windowsPerFile>1), se elige una ventana por bloque de 16 corcheas.
+      //   PERO: evitamos ventanas silenciosas (para que ningún acorde quede sin notas).
+      let srcWindow;
+      if (ref.windowsPerFile === 1) {
+        srcWindow = 0;
+      } else {
+        const cand = (blockWindowSeed[block] % ref.windowsPerFile);
+        srcWindow = cand;
+
+        // Si la ventana candidata no tiene ningún NoteOn antes de que termine el acorde, buscamos otra.
+        if (!(ref.firstNoteOnRel && ref.firstNoteOnRel[srcWindow] < durTicks)) {
+          for (let off = 1; off <= ref.windowsPerFile; off++) {
+            const w = (cand + off) % ref.windowsPerFile;
+            if (ref.firstNoteOnRel && ref.firstNoteOnRel[w] < durTicks) { srcWindow = w; break; }
+          }
+        }
+      }
+
+      // Regla: al cambiar de acorde, se debe usar el material desde el INICIO de la ventana elegida.
+      // (No usamos offsets internos por posición dentro del bloque.)
+      const srcStart = (srcWindow * ref.winTicks);
+      const srcEnd = srcStart + durTicks;
+
+      // Archivo de referencia con UNA SOLA PISTA
+      const srcEvents = ref.events;
+
+      const gapEndTickOut = startTickOut;
+      // collect channels used in this segment (post-filter)
+      const channelsUsed = new Set();
+
+      // anti-artifact: cleanup at boundary BEFORE start events
+      // (note-offs from prior segment are handled per segment end)
+      // We'll still send a short panic at each chord boundary (safe).
+      // order=2 means after any "end cleanup" at same tick (order=1) but before copied notes (order=3).
+      // We'll decide channels from extracted events; if none, we panic channel 0 just in case.
+      const extracted = [];
+      // Conteo por nota para evitar artefactos si aparece NoteOn repetido antes de su NoteOff
+      const activeCount = new Map(); // "ch-note" -> int
+      const carryVel = new Map();    // "ch-note" -> last velocity
+      const winBase = srcWindow * ref.winTicks;
+
+      // --- Carryover: si en el patrón hay notas sostenidas que empezaron antes de srcStart,
+      // las activamos al inicio del segmento para que el acorde suene "completo".
+      for (const e of srcEvents) {
+        if (e.tick < winBase || e.tick >= srcStart) continue;
+
+        const status = e.status & 255;
+        const hi = status & 0xF0;
+        const ch = status & 0x0F;
+
+        if (hi !== 0x80 && hi !== 0x90) continue;
+
+        let note = (e.d1 ?? 0) + seg.transpose;
+        let vel = e.d2 ?? 0;
+        if (note < 0 || note > 127) continue;
+
+        const key = ch + "-" + note;
+        const isOn = (hi === 0x90) && vel > 0;
+        const isOff = (hi === 0x80) || ((hi === 0x90) && vel === 0);
+
+        if (isOn) {
+          const cnt = activeCount.get(key) || 0;
+          activeCount.set(key, cnt + 1);
+          carryVel.set(key, vel);
+        } else if (isOff) {
+          const cnt = activeCount.get(key) || 0;
+          if (cnt > 0) activeCount.set(key, cnt - 1);
+        }
+      }
+
+      // Emitimos NoteOn de carryover al inicio del segmento (order 1, después del panic order 0)
+      for (const [key, cnt] of activeCount.entries()) {
+        if (cnt <= 0) continue;
+        const [chStr, noteStr] = key.split("-");
+        const ch = parseInt(chStr, 10);
+        const note = parseInt(noteStr, 10);
+        const vel = (carryVel.get(key) ?? 80) & 127;
+
+        channelsUsed.add(ch);
+        if (gapEndTickOut < endTickOut) extracted.push(channelEvent(gapEndTickOut, 0x90 | ch, note, vel, 1));
+      }
+
+      for (const e of srcEvents) {
+        if (e.tick < srcStart || e.tick >= srcEnd) continue;
+
+        const rel = e.tick - srcStart;
+        const t = startTickOut + rel;
+
+        const status = e.status & 255;
+        const hi = status & 0xF0;
+        const ch = status & 0x0F;
+
+        // keep only within segment; ignore garbage
+        if (hi === 0x80 || hi === 0x90) {
+          let note = e.d1;
+          let vel = e.d2 ?? 0;
+
+          // transpose ALWAYS upward from C by seg.transpose
+          note = note + seg.transpose;
+          if (note < 0 || note > 127) continue;
+
+          const key = ch + "-" + note;
+          channelsUsed.add(ch);
+
+          const isOn = (hi === 0x90) && vel > 0;
+          const isOff = (hi === 0x80) || ((hi === 0x90) && vel === 0);
+
+          if (isOn) {
+            const cnt = activeCount.get(key) || 0;
+
+            // Si ya estaba sonando, forzamos un NoteOff en el mismo tick (order 2) antes del nuevo NoteOn (order 3)
+            if (cnt > 0) {
+              extracted.push(channelEvent(t, 0x80 | ch, note, 0, 2));
+            }
+
+            activeCount.set(key, cnt + 1);
+            extracted.push(channelEvent(t, 0x90 | ch, note, vel, 3));
+          } else if (isOff) {
+            const cnt = activeCount.get(key) || 0;
+            // Solo dejamos NoteOff si hubo NoteOn dentro de esta ventana (evita offs raros por corte)
+            if (cnt > 0) {
+              activeCount.set(key, cnt - 1);
+              extracted.push(channelEvent(t, 0x80 | ch, note, 0, 3));
+            }
+          }
+        } else {
+          // other channel events: keep them (CC, pitch bend, program, etc.)
+          channelsUsed.add(ch);
+
+          if (hi === 0xC0 || hi === 0xD0) {
+            extracted.push({ tick: t, status, d1: e.d1 & 127, d2: 0, order: 3 });
+          } else {
+            extracted.push({ tick: t, status, d1: e.d1 & 127, d2: (e.d2 ?? 0) & 127, order: 3 });
+          }
+        }
+      }
+
+      if (channelsUsed.size === 0) channelsUsed.add(0);
+
+      // PANIC at segment start (order 2) to avoid carryover artifacts
+      addPanicAtTick(out, startTickOut, channelsUsed, 0);
+
+      // Copy extracted events
+      for (const e of extracted) out.push(e);
+
+      // Segment end cleanup: fuerza NoteOff de todas las notas que quedaron activas en esta ventana
+      const endChannels = new Set(channelsUsed);
+      for (const [key, cnt] of activeCount.entries()) {
+        if (cnt <= 0) continue;
+        const [chStr, noteStr] = key.split("-");
+        const ch = parseInt(chStr,10);
+        const note = parseInt(noteStr,10);
+        out.push(channelEvent(endTickOut, 0x80 | ch, note, 0, 1)); // order 1: cleanup first
+      }
+      // also clear sustain / notes at segment end (order 1)
+      addPanicAtTick(out, endTickOut, endChannels, 1);
+
+      if (endTickOut > maxTick) maxTick = endTickOut;
+      log(`Seg: ${seg.token}  q=${seg.quality}  srcWin=${srcWindow+1}/${ref.windowsPerFile}  transp=+${seg.transpose}`, "OK");
+    }
+
+    // Final global panic
+    const allCh = new Set([...Array(16)].map((_,i)=>i));
+    addPanicAtTick(out, maxTick, allCh, 1);
+
+    const segmentsForBass = segments.map(s => ({
+      token: s.token,
+      transpose: s.transpose, // 0..11 (C..B, siempre hacia arriba)
+      startTick: s.startEighth * tickPerEighth,
+      endTick: (s.startEighth + s.durEighth) * tickPerEighth
+    }));
+
+    const cleaned = sanitizeEvents(out);
+    generated = { ppq, events: cleaned, lengthTicks: maxTick, debug: { segmentsForBass } };
+
+    log(`Listo. Longitud: ${maxTick} ticks (${(maxTick/(ppq))* (60/REF_BPM_EXPORT)} s a 120bpm).`, "OK");
+    return generated;
+
+  }
+  // -------------------------
+  // Playback (WebMIDI) with tempo + swing (only playback)
+  // -------------------------
+  function tickToMsSwung(tick, ppq, bpm, swingPct) {
+    const msPerTick = (60_000 / bpm) / ppq;
+
+    // swingPct: 50..75 -> ratio r in 0.5..0.75 for the off-beat position in the quarter
+    const r = Math.min(0.75, Math.max(0.50, swingPct/100));
+    const q = ppq;          // quarter ticks
+    const e = ppq / 2;      // eighth ticks
+
+    // Map inside each quarter
+    const quarterIndex = Math.floor(tick / q);
+    const pos = tick - quarterIndex * q;
+
+    let newPos = pos;
+    if (pos >= e) {
+      // pos in [e, q): remap to [r*q, q)
+      const t = (pos - e) / (q - e); // 0..1
+      newPos = (r * q) + t * (q - (r*q));
+    }
+    const swungTick = quarterIndex * q + newPos;
+    return swungTick * msPerTick;
+  }
+
+  function getSelectedOutput() {
+    const id = midiOutSel.value;
+    return midiOutputs.find(o => o.id === id) || null;
+  }
+
+  function panicNow(out) {
+    if (!out) return;
+    for (let ch=0; ch<16; ch++){
+      out.send([0xB0|ch, 64, 0]);
+      out.send([0xB0|ch, 123, 0]);
+      out.send([0xB0|ch, 120, 0]);
+    }
+  }
+
+  // Estado de reproducción (para poder detener de verdad)
+  let isPlaying = false;
+  let playTimers = [];
+  let playOut = null;
+
+  function stopPlayback() {
+    isPlaying = false;
+    for (const t of playTimers) clearTimeout(t);
+    playTimers = [];
+
+    const out = playOut || getSelectedOutput();
+    if (out) {
+      panicNow(out);
+      const t2 = setTimeout(() => panicNow(out), 60);
+      playTimers.push(t2);
+    }
+  }
+
+  function playGenerated() {
+    const out = getSelectedOutput();
+    if (!out) { log("Selecciona un puerto MIDI de salida.", "ERROR"); return; }
+    if (!generated?.events?.length) { log("Primero genera MIDI (Regenerar).", "ERROR"); return; }
+
+    if (isPlaying) stopPlayback();
+
+    isPlaying = true;
+    playOut = out;
+
+    panicNow(out);
+
+    const bpm = parseInt(tempo.value, 10);
+    const sw = 50; // swing desactivado
+    const ppq = generated.ppq;
+
+    const leadIn = 80;
+    const base = performance.now() + leadIn;
+
+    const evs = generated.events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order));
+
+    const schedule = (fn, delayMs) => {
+      const id = setTimeout(() => { if (isPlaying) fn(); }, delayMs);
+      playTimers.push(id);
+    };
+
+    let lastDelay = 0;
+    for (const e of evs) {
+      const status = e.status & 255;
+      const hi = status & 0xF0;
+      const tMs = tickToMsSwung(e.tick, ppq, bpm, sw);
+      const delay = Math.max(0, Math.round((base + tMs) - performance.now()));
+      if (delay > lastDelay) lastDelay = delay;
+
+      schedule(() => {
+        if (hi === 0xC0 || hi === 0xD0) out.send([status, e.d1 & 127]);
+        else out.send([status, e.d1 & 127, (e.d2 ?? 0) & 127]);
+      }, delay);
+    }
+
+    // Bajo SOLO para playback (NO export)
+    const segs = generated.debug?.segmentsForBass || [];
+    const BASS_CH = 15;
+    const BASS_VEL = Math.max(0, Math.min(67, parseInt(bassVel.value, 10) || 0));
+
+    const barTicks = 4 * ppq;
+    const quarter = ppq;
+
+    let si = 0;
+    for (let barStart = 0; barStart < generated.lengthTicks; barStart += barTicks) {
+      const pulses = [barStart, barStart + 2 * quarter];
+      for (const t0 of pulses) {
+        if (t0 >= generated.lengthTicks) continue;
+
+        while (si < segs.length && t0 >= segs[si].endTick) si++;
+        if (si >= segs.length) continue;
+        if (t0 < segs[si].startTick) continue;
+
+        const note = bassNoteFromTranspose(segs[si].transpose);
+
+        const onDelay = Math.max(0, Math.round((base + tickToMsSwung(t0, ppq, bpm, sw)) - performance.now()));
+        const offDelay = Math.max(0, Math.round((base + tickToMsSwung(t0 + quarter, ppq, bpm, sw)) - performance.now()));
+        if (offDelay > lastDelay) lastDelay = offDelay;
+
+        schedule(() => out.send([0x90 | BASS_CH, note & 127, BASS_VEL & 127]), onDelay);
+        schedule(() => out.send([0x80 | BASS_CH, note & 127, 0]), offDelay);
+      }
+    }
+
+    schedule(() => { isPlaying = false; }, lastDelay + 120);
+  }
+
+  // -------------------------
+  // Export
+  // -------------------------
+  function exportGenerated() {
+    if (!generated?.events?.length) { log("No hay MIDI generado.", "ERROR"); return; }
+    const bytes = buildMidiFile(generated.ppq, generated.events);
+    const blob = new Blob([bytes], { type: "audio/midi" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "generated.mid";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    log("Exportado: generated.mid (tempo fijo 120; swing NO afecta exportación).", "OK");
+  }
+
+  // -------------------------
+  // WebMIDI init
+  // -------------------------
+  async function initMIDI() {
+    try{
+      if (!navigator.requestMIDIAccess) {
+        midiStatus.innerHTML = `<span class="bad">MIDI no soportado en este navegador.</span>`;
+        midiOutSel.innerHTML = `<option value="">(sin MIDI)</option>`;
+        return;
+      }
+      midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+      midiStatus.innerHTML = `<span class="ok">MIDI listo.</span>`;
+      refreshOutputs();
+
+      midiAccess.onstatechange = () => refreshOutputs();
+    } catch(err) {
+      midiStatus.innerHTML = `<span class="bad">MIDI bloqueado.</span>`;
+      log(String(err?.message || err), "ERROR");
+    }
+  }
+
+  function refreshOutputs() {
+    midiOutputs = [];
+    midiOutSel.innerHTML = "";
+    if (!midiAccess) {
+      midiOutSel.innerHTML = `<option value="">(sin MIDI)</option>`;
+      return;
+    }
+    for (const out of midiAccess.outputs.values()) midiOutputs.push(out);
+
+    if (!midiOutputs.length) {
+      midiOutSel.innerHTML = `<option value="">(no hay salidas)</option>`;
+      return;
+    }
+    for (const out of midiOutputs) {
+      const opt = document.createElement("option");
+      opt.value = out.id;
+      opt.textContent = out.name || out.manufacturer || out.id;
+      midiOutSel.appendChild(opt);
+    }
+  }
+
+  // -------------------------
+  // UI wiring
+  // -------------------------
+  tempo.addEventListener("input", () => tempoVal.textContent = tempo.value);
+  // swing desactivado
+  bassVel.addEventListener("input", () => bassVelVal.textContent = bassVel.value);
+
+  // Ayuda (modal)
+  const helpModal = el("helpModal");
+  const btnHelp = el("btnHelp");
+  const btnHelpClose = el("btnHelpClose");
+  function openHelp(){
+    helpModal.classList.add("open");
+    helpModal.setAttribute("aria-hidden","false");
+  }
+  function closeHelp(){
+    helpModal.classList.remove("open");
+    helpModal.setAttribute("aria-hidden","true");
+  }
+  btnHelp.addEventListener("click", openHelp);
+  btnHelpClose.addEventListener("click", closeHelp);
+
+  // Tema claro/oscuro
+  const btnTheme = el("btnTheme");
+  const root = document.documentElement;
+  function setTheme(t){
+    root.setAttribute("data-theme", t);
+    try{ localStorage.setItem("jcg_theme", t); }catch(_){}
+  }
+  const savedTheme = (()=>{ try{ return localStorage.getItem("jcg_theme"); } catch(_){ return null; } })();
+  setTheme(savedTheme || "dark");
+  btnTheme.addEventListener("click", () => {
+    const cur = root.getAttribute("data-theme") || "dark";
+    setTheme(cur === "dark" ? "light" : "dark");
+  });
+
+  helpModal.addEventListener("click", (e) => { if (e.target === helpModal) closeHelp(); });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelp(); });
+
+  // Barra espaciadora: Play/Stop (solo si NO estás escribiendo)
+  window.addEventListener("keydown", (e) => {
+    if (e.code !== "Space" && e.key != " ") return;
+
+    const ae = document.activeElement;
+    const tag = ae && ae.tagName ? ae.tagName.toLowerCase() : "";
+    const typing = tag === "textarea" || tag === "input" || tag === "select" || (ae && ae.isContentEditable);
+    if (typing) return;
+
+    e.preventDefault();
+    if (isPlaying) stopPlayback();
+    else playGenerated();
+  });
+
+  el("btnPickFolder").addEventListener("click", loadReferenceFolder);
+
+  el("btnRegenerate").addEventListener("click", () => {
+    try{
+      const g = generateMidiFromProgression(el("prog").value);
+      // Si la carpeta está cargada, mantenemos el estado "Listo" aunque la progresión tenga un error.
+      if (!folderLoaded) setReady(true, "Listo");
+      else setReady(true, "Listo");
+      ppqText.textContent = g.ppq ?? "—";
+    } catch(err){
+      log(String(err?.message || err), "ERROR");
+      if (!folderLoaded) setReady(false, "No listo");
+      else setReady(true, "Listo");
+    }
+  });
+
+  el("btnPlay").addEventListener("click", playGenerated);
+  el("btnStop").addEventListener("click", () => { stopPlayback(); });
+
+  el("btnExport").addEventListener("click", exportGenerated);
+
+  // quality chips (dinámicos desde la carpeta)
+  const chips = el("qualityChips");
+
+  function insertAtCursor(textarea, txt) {
+    textarea.focus();
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    const before = textarea.value.slice(0, start);
+    const after = textarea.value.slice(end);
+
+    // SIN espacio previo: "C" + click "maj7" => "Cmaj7"
+    const needsSpaceAfter = after.length && !/^\s/.test(after);
+    const insert = txt + (needsSpaceAfter ? " " : "");
+
+    textarea.value = before + insert + after;
+    const pos = (before + insert).length;
+    textarea.selectionStart = textarea.selectionEnd = pos;
+  }
+
+  function renderQualityChips() {
+    chips.innerHTML = "";
+    if (!QUALITIES.length) {
+      const s = document.createElement("span");
+      s.className = "mini";
+      s.textContent = "Carga una carpeta para ver las calidades disponibles.";
+      chips.appendChild(s);
+      return;
+    }
+
+    for (const q of QUALITIES) {
+      const b = document.createElement("span");
+      b.className = "pill";
+      b.textContent = q;
+      b.title = "Clic: insertar la calidad exacta en el cuadro de progresión";
+      b.addEventListener("click", () => {
+        insertAtCursor(el("prog"), q);
+      });
+      chips.appendChild(b);
+    }
+  }
+
+  renderQualityChips(); // estado inicial
+
+  // Initial defaults
+  el("prog").value = ``;
+
+  setReady(false, "No listo");
+  // init displayed values
+  tempoVal.textContent = tempo.value;
+  // swing desactivado
+  bassVelVal.textContent = bassVel.value;
+
+  initMIDI();
+})();
+</script>
+</body>
+</html>
