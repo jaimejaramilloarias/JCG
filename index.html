@@ -311,7 +311,11 @@ color:var(--txt);
 
           <div style="height:12px"></div>
           <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="skip2" />
+            <input type="checkbox" id="skip2Simple" />
+            <span class="mini">skip 2</span>
+          </label>
+          <label class="row" style="gap:10px; align-items:center">
+            <input type="checkbox" id="skip2Oct" />
             <span class="mini">skip 2 octavado</span>
           </label>
         </details>
@@ -458,7 +462,8 @@ color:var(--txt);
   const densityVal = el("densityVal");
   const densityProgressive = el("densityProgressive");
   const raiseFloor = el("raiseFloor");
-  const skip2 = el("skip2");
+  const skip2Simple = el("skip2Simple");
+  const skip2Oct = el("skip2Oct");
 
   function log(msg, cls="") {
     const line = cls ? `[${cls}] ${msg}` : msg;
@@ -1252,8 +1257,9 @@ color:var(--txt);
     return events.filter((_, idx) => !remove.has(idx));
   }
 
-  function applySkip2Transform(events, enabled) {
-    if (!enabled || !events?.length) return events;
+  function applySkip2Transform(events, mode) {
+    if (!mode || !events?.length) return events;
+    const shouldDouble = mode === "octavado";
 
     const sorted = events.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
     const toShift = new Set();
@@ -1292,11 +1298,13 @@ color:var(--txt);
       if (hi === 0x90 && vel > 0) {
         if (toShift.has(e)) {
           const newNote1 = Math.min(127, note + 12);
-          const newNote2 = Math.min(127, note + 24);
+          const newNote2 = shouldDouble ? Math.min(127, note + 24) : null;
           e.d1 = newNote1;
 
-          const duplicate = { ...e, d1: newNote2, order: baseOrder + 0.1 };
-          extraEvents.push(duplicate);
+          if (shouldDouble && newNote2 != null) {
+            const duplicate = { ...e, d1: newNote2, order: baseOrder + 0.1 };
+            extraEvents.push(duplicate);
+          }
 
           const k = keyOf(ch, note);
           if (!shiftedActive.has(k)) shiftedActive.set(k, []);
@@ -1330,6 +1338,12 @@ color:var(--txt);
       out.push(channelEvent(tick, 0xB0 | ch, 123, 0, order));
       out.push(channelEvent(tick, 0xB0 | ch, 120, 0, order));
     }
+  }
+
+  function getSkip2Mode() {
+    if (skip2Oct?.checked) return "octavado";
+    if (skip2Simple?.checked) return "simple";
+    return null;
   }
 
   function getDensityFactor() {
@@ -1725,7 +1739,7 @@ color:var(--txt);
     const chordsOnly = enforceChordsOnly(out);
     const progressiveProfile = getProgressiveDensityProfile(segments);
     const densityFactor = densityProgressive.checked ? 1 : getDensityFactor();
-    const skipAdjusted = applySkip2Transform(chordsOnly, skip2?.checked);
+    const skipAdjusted = applySkip2Transform(chordsOnly, getSkip2Mode());
     const filtered = applyDensityFilter(skipAdjusted, segments, tickPerEighth, densityFactor, progressiveProfile);
     const cleaned = sanitizeEvents(filtered);
     const noteOnly = disableUnsupportedMidiMessages(cleaned);
@@ -1939,6 +1953,13 @@ color:var(--txt);
   repeatCount.addEventListener("input", () => getRepeatTimes());
   setRaiseFloorValue(raiseFloor.value);
   raiseFloor.addEventListener("input", () => setRaiseFloorValue(raiseFloor.value));
+  function handleSkip2Toggle(e) {
+    if (!e?.target?.checked) return;
+    if (e.target === skip2Simple) skip2Oct.checked = false;
+    if (e.target === skip2Oct) skip2Simple.checked = false;
+  }
+  skip2Simple?.addEventListener("change", handleSkip2Toggle);
+  skip2Oct?.addEventListener("change", handleSkip2Toggle);
 
   // Ayuda (modal)
   const helpModal = el("helpModal");
