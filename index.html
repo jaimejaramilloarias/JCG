@@ -1054,6 +1054,12 @@ color:var(--txt);
     return { tick, status: status & 255, d1: d1 & 127, d2: (d2==null?0:(d2&127)), order };
   }
 
+  function raiseBelowC3(note) {
+    const C3 = 48; // MIDI number for C3 when C4 = 60
+    if (note < C3) return note + 12;
+    return note;
+  }
+
   function addPanicAtTick(out, tick, channelsSet, order=2) {
     // Limpieza anti-artefactos: Reset All Controllers (121), Sustain Off (64), All Notes Off (123), All Sound Off (120)
     for (const ch of channelsSet) {
@@ -1155,6 +1161,7 @@ color:var(--txt);
 
         let note = (e.d1 ?? 0) + seg.transpose;
         let vel = e.d2 ?? 0;
+        note = raiseBelowC3(note);
         if (note < 0 || note > 127) continue;
 
         const key = ch + "-" + note;
@@ -1200,6 +1207,7 @@ color:var(--txt);
 
           // transpose ALWAYS upward from C by seg.transpose
           note = note + seg.transpose;
+          note = raiseBelowC3(note);
           if (note < 0 || note > 127) continue;
 
           const key = ch + "-" + note;
