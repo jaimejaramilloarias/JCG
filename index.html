@@ -260,7 +260,7 @@ color:var(--txt);
         <div class="title">Progresión</div>
         <div class="row">
 <button class="btn primary" id="btnRegenerate" title="Generar de nuevo con variación aleatoria">Regenerar</button>
-          <button class="btn" id="btnClean" title="Insertar NoteOff en notas demasiado largas y limpiar artefactos">Limpiar midi</button>
+          <button class="btn" id="btnClean" title="Insertar NoteOff en notas demasiado largas y limpiar artefactos">Limpiar artefactos MIDI</button>
           <button class="btn purple" id="btnExport" title="Exportar el MIDI generado">Exportar</button>
         </div>
       </div>
@@ -1550,6 +1550,72 @@ if (typeof globalThis !== "undefined") {
     return sorted.concat(extra).sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
   }
 
+  function sanitizeChannelEvents(events) {
+    if (!events?.length) return [];
+
+    const evs = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+    const active = new Map();
+    const cleaned = [];
+    let lastTick = 0;
+
+    const keyOf = (ch, note) => `${ch}-${note}`;
+    const pushOff = (tick, ch, note, order) => cleaned.push({ tick, status: (0x80 | ch), d1: note, d2: 0, order });
+
+    for (const e of evs) {
+      const status = e.status & 0xFF;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const d1 = e.d1 & 0x7F;
+      const d2 = (e.d2 ?? 0) & 0x7F;
+
+      if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
+
+      if (hi === 0xB0 && (d1 === 120 || d1 === 123 || d1 === 121)) {
+        active.clear();
+        cleaned.push({ ...e, d1, d2 });
+        continue;
+      }
+
+      if (hi === 0x90 && d2 > 0) {
+        const k = keyOf(ch, d1);
+        const prevCount = active.get(k) || 0;
+        if (prevCount > 0) {
+          const offOrder = (typeof e.order === "number") ? Math.max(0, e.order - 1) : 2;
+          for (let i = 0; i < prevCount; i++) pushOff(e.tick, ch, d1, offOrder);
+        }
+        active.set(k, prevCount + 1);
+        cleaned.push({ ...e, d1, d2 });
+        continue;
+      }
+
+      if (hi === 0x80 || (hi === 0x90 && d2 === 0)) {
+        const k = keyOf(ch, d1);
+        const prevCount = active.get(k) || 0;
+        if (prevCount > 0) {
+          active.set(k, prevCount - 1);
+        }
+        cleaned.push({ ...e, d1, d2 });
+        continue;
+      }
+
+      cleaned.push({ ...e, d1, d2 });
+    }
+
+    if (active.size) {
+      const cleanupTick = lastTick + 1;
+      for (const [key, count] of active.entries()) {
+        if (count <= 0) continue;
+        const [chStr, noteStr] = key.split("-");
+        const ch = parseInt(chStr, 10);
+        const note = parseInt(noteStr, 10);
+        const safeCount = Math.max(1, count);
+        for (let i = 0; i < safeCount; i++) pushOff(cleanupTick, ch, note, 5);
+      }
+    }
+
+    return cleaned;
+  }
+
   function removeNotesOutsideRange(events, minLenTicks, maxLenTicks, totalLength) {
     if (!events?.length) return events;
     const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
@@ -2263,9 +2329,12 @@ if (typeof globalThis !== "undefined") {
     const maxLen = Math.max(1, Math.round(tickPerEighth * 4)); // 4 corcheas
     const minLen = Math.max(1, Math.round(ppqVal / 8)); // 1/32
 
-    generated.events = removeNotesOutsideRange(generated.events, minLen, maxLen, generated.lengthTicks);
-    generated.events = insertNoteOffsForLongNotes(generated.events, maxLen, generated.lengthTicks);
-    log("MIDI limpiado: se eliminaron notas fuera del rango permitido y se insertaron NoteOff para notas largas.", "OK");
+    const sanitized = sanitizeChannelEvents(generated.events);
+    const ranged = removeNotesOutsideRange(sanitized, minLen, maxLen, generated.lengthTicks);
+    const lengthLimited = insertNoteOffsForLongNotes(ranged, maxLen, generated.lengthTicks);
+    generated.events = sanitizeChannelEvents(lengthLimited);
+
+    log("MIDI limpiado: sin notas huérfanas, fuera de rango ni sostenidas en exceso.", "OK");
   }
 
   // -------------------------
