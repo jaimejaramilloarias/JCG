@@ -794,7 +794,7 @@ if (typeof globalThis !== "undefined") {
   function choice(arr) { return arr[randInt(arr.length)]; }
   const randUnit = () => randInt(0x100000000) / 0x100000000;
 
-  // Bajo (solo playback): convierte semitonos desde C (0..11) a una nota entre C1(24) y C3(48)
+  // Bajo (solo playback): convierte semitonos desde C a una nota entre C1(24) y C3(48)
   function bassNoteFromTranspose(semi) {
     let note = 36 + (semi % 12); // base C2=36
     if (note > 48) note -= 12;
@@ -803,7 +803,7 @@ if (typeof globalThis !== "undefined") {
   }
 
   // -------------------------
-  // Note / root parsing + transpose mapping (always upward from C)
+  // Note / root parsing + transpose mapping (up to F# upward, G..B downward)
   // -------------------------
   const NOTE_TO_SEMI = new Map([
     ["C",0], ["B#",0],
@@ -832,9 +832,13 @@ if (typeof globalThis !== "undefined") {
     const qualRaw = (m[3]||"").trim();
     const qualKey = normalizeQuality(qualRaw);
     if (!qualKey) throw new Error(`Calidad faltante en "${tokRaw}". Ej: Dm7, G9, A7alt, Cmaj7.`);
-    const semi = NOTE_TO_SEMI.get(root.toUpperCase());
-    if (semi === undefined) throw new Error(`Fundamental inválida: "${root}"`);
-    return { root, quality: qualKey, transpose: semi };
+    const semiUpward = NOTE_TO_SEMI.get(root.toUpperCase());
+    if (semiUpward === undefined) throw new Error(`Fundamental inválida: "${root}"`);
+
+    // Upward from C only until F# (0..6). For G..B, transpose downward from C.
+    const transpose = semiUpward > 6 ? semiUpward - 12 : semiUpward;
+
+    return { root, quality: qualKey, transpose };
   }
 
   function normalizeQuality(q) {
@@ -1822,7 +1826,7 @@ if (typeof globalThis !== "undefined") {
           let note = e.d1;
           let vel = e.d2 ?? 0;
 
-          // transpose ALWAYS upward from C by seg.transpose
+          // transpose from C (up to +6, roots G..B go downward)
           note = note + seg.transpose;
           note = raiseBelowFloor(note);
           if (note < 0 || note > 127) continue;
@@ -1884,7 +1888,8 @@ if (typeof globalThis !== "undefined") {
       addPanicAtTick(out, endTickOut, endChannels, 1);
 
       if (endTickOut > maxTick) maxTick = endTickOut;
-      log(`Seg: ${seg.token}  q=${seg.quality}  srcWin=${srcWindow+1}/${ref.windowsPerFile}  transp=+${seg.transpose}`, "OK");
+      const transpLabel = seg.transpose >= 0 ? `+${seg.transpose}` : `${seg.transpose}`;
+      log(`Seg: ${seg.token}  q=${seg.quality}  srcWin=${srcWindow+1}/${ref.windowsPerFile}  transp=${transpLabel}`, "OK");
     }
 
     // Final global panic
@@ -1893,7 +1898,7 @@ if (typeof globalThis !== "undefined") {
 
     const segmentsForBass = segments.map(s => ({
       token: s.token,
-      transpose: s.transpose, // 0..11 (C..B, siempre hacia arriba)
+      transpose: s.transpose, // semitonos relativos desde C (G..B bajan una octava)
       startTick: s.startEighth * tickPerEighth,
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
