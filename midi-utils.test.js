@@ -41,6 +41,22 @@ test('sanitizeEvents elimina artefactos por solapamiento de notas', () => {
   strictEqual(offs[0].tick, 10);
 });
 
+test('sanitizeEvents alinea los note off de notas duplicadas con su origen', () => {
+  const originId = 'grp';
+  const events = [
+    { tick: 0, status: 0x90, d1: 60, d2: 100, order: 1, originId },
+    { tick: 0, status: 0x90, d1: 72, d2: 100, order: 1.1, originId },
+    { tick: 120, status: 0x80, d1: 60, d2: 0, order: 1, originId },
+    { tick: 140, status: 0x80, d1: 72, d2: 0, order: 1.1, originId },
+  ];
+
+  const cleaned = sanitizeEvents(events);
+  const offs = cleaned.filter(e => (e.status & 0xF0) === 0x80);
+
+  strictEqual(offs.length, 2);
+  deepStrictEqual(offs.map(e => e.tick), [120, 120]);
+});
+
 test('buildMidiFile exporta un solo track en formato 0', () => {
   const events = [
     { tick: 0, status: 0x90, d1: 60, d2: 100, order: 1 },
