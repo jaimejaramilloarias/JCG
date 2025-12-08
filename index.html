@@ -260,6 +260,7 @@ color:var(--txt);
         <div class="title">Progresión</div>
         <div class="row">
 <button class="btn primary" id="btnRegenerate" title="Generar de nuevo con variación aleatoria">Regenerar</button>
+          <button class="btn" id="btnClean" title="Insertar NoteOff en notas demasiado largas y limpiar artefactos">Limpiar midi</button>
           <button class="btn purple" id="btnExport" title="Exportar el MIDI generado">Exportar</button>
         </div>
       </div>
@@ -326,6 +327,10 @@ color:var(--txt);
           <label class="row" style="gap:10px; align-items:center">
             <input type="checkbox" id="skip2Oct" />
             <span class="mini">skip 2 octavado</span>
+          </label>
+          <label class="row" style="gap:10px; align-items:center">
+            <input type="checkbox" id="soloing" />
+            <span class="mini">Soloing</span>
           </label>
         </details>
       </div>
@@ -764,6 +769,7 @@ if (typeof globalThis !== "undefined") {
   const skipClosed = el("skipClosed");
   const skip2Simple = el("skip2Simple");
   const skip2Oct = el("skip2Oct");
+  const soloing = el("soloing");
 
   function log(msg, cls="") {
     const line = cls ? `[${cls}] ${msg}` : msg;
@@ -1353,6 +1359,102 @@ if (typeof globalThis !== "undefined") {
     return null;
   }
 
+  function isSoloingMode() {
+    return !!soloing?.checked;
+  }
+
+  function applySoloingMode(events, endTick, ppqVal) {
+    if (!isSoloingMode()) return events;
+    if (!events?.length) return events;
+
+    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+    const result = [];
+    let active = null;
+
+    for (const e of sorted) {
+      const status = e.status & 0xF0;
+      const ch = e.status & 0x0F;
+      const note = e.d1 ?? 0;
+      const vel = e.d2 ?? 0;
+      const isOn = status === 0x90 && vel > 0;
+      const isOff = status === 0x80 || (status === 0x90 && vel === 0);
+
+      if (!isOn && !isOff) {
+        result.push(e);
+        continue;
+      }
+
+      const key = `${ch}-${note}`;
+
+      if (isOn) {
+        if (active && active.key !== key) {
+          result.push(channelEvent(e.tick, 0x80 | active.ch, active.note, 0, (e.order ?? 3) - 0.1));
+        }
+        active = { key, ch, note };
+        result.push(e);
+        continue;
+      }
+
+      if (active && active.key === key) {
+        result.push(e);
+        active = null;
+      }
+    }
+
+    if (active) {
+      const fallbackTick = sorted[sorted.length - 1]?.tick ?? 0;
+      const offTick = Math.min(
+        typeof endTick === "number" ? endTick : fallbackTick + (ppqVal ?? 0),
+        fallbackTick + (ppqVal ?? 0)
+      );
+      result.push(channelEvent(offTick, 0x80 | active.ch, active.note, 0, 3));
+    }
+
+    return result.sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+  }
+
+  function insertNoteOffsForLongNotes(events, maxLenTicks, totalLength) {
+    if (!events?.length) return events;
+    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+    const active = new Map();
+    const extra = [];
+
+    for (const e of sorted) {
+      const status = e.status & 0xF0;
+      const ch = e.status & 0x0F;
+      const note = e.d1 ?? 0;
+      const vel = e.d2 ?? 0;
+      const isOn = status === 0x90 && vel > 0;
+      const isOff = status === 0x80 || (status === 0x90 && vel === 0);
+      if (!isOn && !isOff) continue;
+
+      const key = `${ch}-${note}`;
+
+      if (isOn) {
+        active.set(key, e.tick);
+      } else {
+        const start = active.get(key);
+        if (start != null && (e.tick - start) > maxLenTicks) {
+          const forcedTick = start + maxLenTicks;
+          if (forcedTick < e.tick) extra.push(channelEvent(forcedTick, 0x80 | ch, note, 0, (e.order ?? 3) - 0.1));
+        }
+        active.delete(key);
+      }
+    }
+
+    const endTick = typeof totalLength === "number" ? totalLength : (sorted[sorted.length - 1]?.tick ?? 0);
+    for (const [key, start] of active.entries()) {
+      const [chStr, noteStr] = key.split("-");
+      const ch = parseInt(chStr, 10) || 0;
+      const note = parseInt(noteStr, 10) || 0;
+      const forcedTick = start + maxLenTicks;
+      extra.push(channelEvent(Math.min(endTick, forcedTick), 0x80 | ch, note, 0, 3));
+    }
+
+    if (!extra.length) return sorted;
+    return sorted.concat(extra).sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+  }
+
   function applyProgressiveSkips(events, segments, tickPerEighth) {
     if (!progressiveSkips?.checked) return events;
     if (!events?.length || !segments?.length) return events;
@@ -1614,6 +1716,8 @@ if (typeof globalThis !== "undefined") {
     const out = [];
     let maxTick = 0;
 
+    const usingSoloing = isSoloingMode();
+
     // generate segment by segment
     for (const seg of segments) {
       ensureQualityLoaded(seg.quality);
@@ -1808,11 +1912,12 @@ if (typeof globalThis !== "undefined") {
     }));
 
     const chordsOnly = enforceChordsOnly(out);
-    const progressiveProfile = getProgressiveDensityProfile(segments);
-    const densityFactor = densityProgressive.checked ? 1 : getDensityFactor();
-    const densityApplied = applyDensityFilter(chordsOnly, segments, tickPerEighth, densityFactor, progressiveProfile);
-    const skipAdjusted = applySkipsAfterDensity(densityApplied, segments, tickPerEighth);
-    const lengthLimited = enforceMaxNoteLength(skipAdjusted, tickPerEighth, 3);
+    const progressiveProfile = usingSoloing ? null : getProgressiveDensityProfile(segments);
+    const densityFactor = usingSoloing ? 1 : (densityProgressive.checked ? 1 : getDensityFactor());
+    const densityApplied = usingSoloing ? chordsOnly : applyDensityFilter(chordsOnly, segments, tickPerEighth, densityFactor, progressiveProfile);
+    const skipAdjusted = usingSoloing ? chordsOnly : applySkipsAfterDensity(densityApplied, segments, tickPerEighth);
+    const soloed = applySoloingMode(skipAdjusted, maxTick, ppq);
+    const lengthLimited = enforceMaxNoteLength(soloed, tickPerEighth, 3);
     const cleaned = sanitizeEvents(lengthLimited);
     const noteOnly = disableUnsupportedMidiMessages(cleaned);
     generated = { ppq, events: noteOnly, lengthTicks: maxTick, debug: { segmentsForBass } };
@@ -2005,6 +2110,13 @@ if (typeof globalThis !== "undefined") {
     log("Exportado: generated.mid (formato 0: 1 pista, tempo fijo 120; swing NO afecta exportación).", "OK");
   }
 
+  function cleanGenerated() {
+    if (!generated?.events?.length) { log("No hay MIDI generado.", "ERROR"); return; }
+    const maxLen = Math.max(1, Math.round((generated.ppq ?? 960) / 2));
+    generated.events = insertNoteOffsForLongNotes(generated.events, maxLen, generated.lengthTicks);
+    log("MIDI limpiado: se insertaron NoteOff en notas excesivamente largas y se depuraron artefactos.", "OK");
+  }
+
   // -------------------------
   // WebMIDI init
   // -------------------------
@@ -2066,6 +2178,20 @@ if (typeof globalThis !== "undefined") {
     if (skip2Simple) skip2Simple.checked = false;
     if (skip2Oct) skip2Oct.checked = false;
   }
+
+  function setAdvancedControlsEnabled(enabled) {
+    const controls = [density, densityProgressive, progressiveSkips, raiseFloor, skipClosed, skip2Simple, skip2Oct];
+    for (const ctrl of controls) {
+      if (!ctrl) continue;
+      ctrl.disabled = !enabled;
+      if (!enabled && ctrl.type === "checkbox") ctrl.checked = false;
+    }
+
+    if (!enabled && density) {
+      density.value = "100";
+      updateDensityLabel();
+    }
+  }
   function handleSkip2Toggle(e) {
     if (!e?.target?.checked) return;
     if (e.target === skip2Simple) skip2Oct.checked = false;
@@ -2085,6 +2211,18 @@ if (typeof globalThis !== "undefined") {
     if (progressiveSkips.checked) {
       if (skipClosed) skipClosed.checked = false;
       clearManualSkips();
+    }
+  });
+  soloing?.addEventListener("change", () => {
+    const active = soloing.checked;
+    setAdvancedControlsEnabled(!active);
+    if (active) {
+      clearManualSkips();
+      if (skipClosed) skipClosed.checked = false;
+      if (progressiveSkips) progressiveSkips.checked = false;
+      if (densityProgressive) densityProgressive.checked = false;
+      density.value = "100";
+      updateDensityLabel();
     }
   });
 
@@ -2153,6 +2291,7 @@ if (typeof globalThis !== "undefined") {
   el("btnPlay").addEventListener("click", playGenerated);
   el("btnStop").addEventListener("click", () => { stopPlayback(); });
 
+  el("btnClean").addEventListener("click", cleanGenerated);
   el("btnExport").addEventListener("click", exportGenerated);
 
   // quality chips (dinámicos desde la carpeta)
@@ -2208,6 +2347,7 @@ if (typeof globalThis !== "undefined") {
   // swing desactivado
   bassVelVal.textContent = bassVel.value;
   updateDensityLabel();
+  setAdvancedControlsEnabled(!soloing?.checked);
 
   initMIDI();
 })();
