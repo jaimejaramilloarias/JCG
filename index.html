@@ -1084,13 +1084,18 @@ if (typeof globalThis !== "undefined") {
     // Prefer File System Access API if available
     if (window.showDirectoryPicker) {
       const dir = await window.showDirectoryPicker();
-      const files = [];
-      for await (const [name, handle] of dir.entries()) {
-        if (handle.kind === "file") {
-          const f = await handle.getFile();
-          files.push(f);
+      const collect = async (handle, acc) => {
+        for await (const [, child] of handle.entries()) {
+          if (child.kind === "file") {
+            acc.push(await child.getFile());
+          } else if (child.kind === "directory") {
+            await collect(child, acc);
+          }
         }
-      }
+      };
+
+      const files = [];
+      await collect(dir, files);
       return { name: dir.name || "carpeta", files };
     }
 
