@@ -1612,10 +1612,50 @@ if (typeof globalThis !== "undefined") {
     return modes;
   }
 
-  function getSkip2Mode() {
+  function applyManualSkipModes(events, segments, tickPerEighth) {
     const modes = getSelectedSkipModes();
-    if (!modes.length) return null;
-    return choice(modes);
+    if (!events?.length || !modes.length) return events;
+    if (!segments?.length || !Number.isFinite(tickPerEighth)) {
+      return applySkipMode(events, choice(modes));
+    }
+
+    const spans = segments.map((s) => ({
+      startTick: s.startEighth * tickPerEighth,
+      endTick: (s.startEighth + s.durEighth) * tickPerEighth,
+    }));
+
+    const findSegmentIndex = (tick) => {
+      for (let i = 0; i < spans.length; i++) {
+        const seg = spans[i];
+        if (tick >= seg.startTick && tick < seg.endTick) return i;
+      }
+      return -1;
+    };
+
+    const grouped = new Map();
+    const outside = [];
+
+    for (const e of events) {
+      const segIndex = findSegmentIndex(e.tick);
+      if (segIndex < 0) {
+        outside.push(e);
+        continue;
+      }
+      if (!grouped.has(segIndex)) grouped.set(segIndex, []);
+      grouped.get(segIndex).push(e);
+    }
+
+    const result = [];
+    const orderedSegIndexes = [...grouped.keys()].sort((a, b) => a - b);
+    for (const segIndex of orderedSegIndexes) {
+      const mode = choice(modes);
+      const chunk = grouped.get(segIndex) || [];
+      const transformed = applySkipMode(chunk.slice(), mode);
+      result.push(...transformed);
+    }
+
+    result.push(...outside);
+    return result;
   }
 
   function applySkipMode(events, mode) {
@@ -1924,8 +1964,7 @@ if (typeof globalThis !== "undefined") {
     if (!events?.length) return events;
     if (progressiveSkips?.checked) return applyProgressiveSkips(events, segments, tickPerEighth);
 
-    const mode = getSkip2Mode();
-    return applySkipMode(events, mode);
+    return applyManualSkipModes(events, segments, tickPerEighth);
   }
 
   function getDensityFactor() {
