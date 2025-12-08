@@ -1446,6 +1446,56 @@ if (typeof globalThis !== "undefined") {
     return sorted.concat(extra).sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
   }
 
+  function removeNotesOutsideRange(events, minLenTicks, maxLenTicks, totalLength) {
+    if (!events?.length) return events;
+    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+    const active = new Map();
+    const toDrop = new Set();
+    let lastTick = 0;
+
+    const keyOf = (ch, note) => `${ch}-${note}`;
+    const mark = (ev) => { if (ev) toDrop.add(ev); };
+
+    for (const e of sorted) {
+      const status = e.status & 0xF0;
+      const ch = e.status & 0x0F;
+      const note = e.d1 ?? 0;
+      const vel = e.d2 ?? 0;
+      const isOn = status === 0x90 && vel > 0;
+      const isOff = status === 0x80 || (status === 0x90 && vel === 0);
+
+      if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
+
+      if (!isOn && !isOff) continue;
+
+      const key = keyOf(ch, note);
+
+      if (isOn) {
+        active.set(key, e);
+        continue;
+      }
+
+      const startEv = active.get(key);
+      if (startEv) {
+        const dur = e.tick - startEv.tick;
+        if (dur > maxLenTicks || dur < minLenTicks) {
+          mark(startEv);
+          mark(e);
+        }
+        active.delete(key);
+      }
+    }
+
+    const finalTick = typeof totalLength === "number" ? totalLength : lastTick;
+    for (const startEv of active.values()) {
+      const dur = finalTick - startEv.tick;
+      if (dur > maxLenTicks || dur < minLenTicks) mark(startEv);
+    }
+
+    if (!toDrop.size) return events;
+    return events.filter((ev) => !toDrop.has(ev));
+  }
+
   function applyProgressiveSkips(events, segments, tickPerEighth) {
     if (!progressiveSkips?.checked) return events;
     if (!events?.length || !segments?.length) return events;
@@ -2104,9 +2154,14 @@ if (typeof globalThis !== "undefined") {
 
   function cleanGenerated() {
     if (!generated?.events?.length) { log("No hay MIDI generado.", "ERROR"); return; }
-    const maxLen = Math.max(1, Math.round((generated.ppq ?? 960) / 2));
+    const ppqVal = generated.ppq ?? 960;
+    const tickPerEighth = ppqVal / 2;
+    const maxLen = Math.max(1, Math.round(tickPerEighth * 4)); // 4 corcheas
+    const minLen = Math.max(1, Math.round(ppqVal / 8)); // 1/32
+
+    generated.events = removeNotesOutsideRange(generated.events, minLen, maxLen, generated.lengthTicks);
     generated.events = insertNoteOffsForLongNotes(generated.events, maxLen, generated.lengthTicks);
-    log("MIDI limpiado: se insertaron NoteOff en notas excesivamente largas y se depuraron artefactos.", "OK");
+    log("MIDI limpiado: se eliminaron notas fuera del rango permitido y se insertaron NoteOff para notas largas.", "OK");
   }
 
   // -------------------------
