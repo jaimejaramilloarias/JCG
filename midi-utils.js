@@ -321,6 +321,65 @@ export function enforceMaxNoteLength(events, tickPerEighth, maxEighths=3) {
   return out.sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
 }
 
+export function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
+  if (!events?.length || !tickPerEighth) return events;
+
+  const maxDur = tickPerEighth * Math.max(1, maxEighths);
+  const indexed = events.map((e, idx) => ({ ...e, _idx: idx }));
+  const sorted = indexed.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+
+  const active = new Map();
+  const toRemove = new Set();
+
+  const keyOf = (ch, note) => `${ch}-${note}`;
+
+  for (const ev of sorted) {
+    const status = ev.status & 0xFF;
+    const hi = status & 0xF0;
+    const ch = status & 0x0F;
+    const note = ev.d1 & 0x7F;
+    const vel = (ev.d2 ?? 0) & 0x7F;
+
+    if (hi === 0xB0 && note === 64) {
+      toRemove.add(ev._idx);
+      continue;
+    }
+
+    if (hi === 0x90 && vel > 0) {
+      const stack = active.get(keyOf(ch, note)) || [];
+      stack.push(ev);
+      active.set(keyOf(ch, note), stack);
+      continue;
+    }
+
+    const isOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+    if (isOff) {
+      const key = keyOf(ch, note);
+      const stack = active.get(key);
+      const onEv = stack?.shift();
+      if (stack && stack.length === 0) active.delete(key);
+
+      if (onEv) {
+        const dur = ev.tick - onEv.tick;
+        if (dur > maxDur) {
+          toRemove.add(onEv._idx);
+          toRemove.add(ev._idx);
+        }
+      }
+    }
+  }
+
+  if (active.size) {
+    for (const stack of active.values()) {
+      for (const onEv of stack) {
+        toRemove.add(onEv._idx);
+      }
+    }
+  }
+
+  return events.filter((_, idx) => !toRemove.has(idx));
+}
+
 export function disableUnsupportedMidiMessages(events) {
   if (!events?.length) return events;
 

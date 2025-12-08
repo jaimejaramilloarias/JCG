@@ -723,6 +723,7 @@ if (typeof globalThis !== "undefined") {
   const {
     buildMidiFile,
     disableUnsupportedMidiMessages,
+    dropLongNotesAndSustain,
     enforceMaxNoteLength,
     parseMidi,
     sanitizeEvents,
@@ -2132,7 +2133,8 @@ if (typeof globalThis !== "undefined") {
     const lengthLimited = enforceMaxNoteLength(soloed, tickPerEighth, 3);
     const cleaned = sanitizeEvents(lengthLimited);
     const noteOnly = disableUnsupportedMidiMessages(cleaned);
-    generated = { ppq, events: noteOnly, lengthTicks: maxTick, debug: { segmentsForBass } };
+    const pruned = dropLongNotesAndSustain(noteOnly, tickPerEighth, 4);
+    generated = { ppq, events: pruned, lengthTicks: maxTick, debug: { segmentsForBass } };
 
     log(`Listo. Longitud: ${maxTick} ticks (${(maxTick/(ppq))* (60/REF_BPM_EXPORT)} s a 120bpm).`, "OK");
     return generated;

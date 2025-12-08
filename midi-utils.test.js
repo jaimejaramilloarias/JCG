@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   buildMidiFile,
   disableUnsupportedMidiMessages,
+  dropLongNotesAndSustain,
   enforceMaxNoteLength,
   parseMidi,
   sanitizeEvents
@@ -69,4 +70,23 @@ test('disableUnsupportedMidiMessages deja únicamente Note On/Off con nota y vel
   deepStrictEqual(statuses, [0x90, 0x90, 0x80]);
   deepStrictEqual(filtered.map(e => e.d1), [60, 62, 60]);
   deepStrictEqual(filtered.map(e => e.d2), [100, 90, 0]);
+});
+
+test('dropLongNotesAndSustain elimina notas largas y mensajes de sustain', () => {
+  const tickPerEighth = 60;
+  const events = [
+    { tick: 0, status: 0x90, d1: 60, d2: 90 },
+    { tick: 300, status: 0x80, d1: 60, d2: 0 }, // 5 corcheas -> se elimina
+    { tick: 50, status: 0xB0, d1: 64, d2: 127 }, // sustain -> se elimina
+    { tick: 480, status: 0x90, d1: 62, d2: 80 },
+    { tick: 600, status: 0x80, d1: 62, d2: 0 }, // 2 corcheas -> se conserva
+    { tick: 800, status: 0x90, d1: 64, d2: 70 }, // sin note off -> se elimina
+  ];
+
+  const filtered = dropLongNotesAndSustain(events, tickPerEighth, 4);
+  const statuses = filtered.map(e => e.status & 0xF0);
+
+  deepStrictEqual(filtered.length, 2);
+  deepStrictEqual(statuses, [0x90, 0x80]);
+  deepStrictEqual(filtered.map(e => e.d1), [62, 62]);
 });
