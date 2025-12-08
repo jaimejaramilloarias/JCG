@@ -473,88 +473,78 @@ function parseTrack(trackU8) {
   const events = [];
 
   while (i < trackU8.length) {
-    const delta = readVarLen(trackU8, i);
-    const deltaTicks = delta[0];
-    i = delta[1];
+    let delta; [delta, i] = readVarLen(trackU8, i);
+    absTick += delta;
 
-    const status = trackU8[i++];
-    if (status === undefined) break;
+    let status = trackU8[i++];
+
+    if (status < 0x80) {
+      if (runningStatus === null) throw new Error("Running status inválido.");
+      i--;
+      status = runningStatus;
+    } else {
+      runningStatus = status;
+    }
 
     if (status === 0xFF) {
-      const metaType = trackU8[i++];
-      const lenArr = readVarLen(trackU8, i);
-      const len = lenArr[0];
-      i = lenArr[1];
-      const data = trackU8.slice(i, i+len);
-      i += len;
+      const type = trackU8[i++];
+      let mlen; [mlen, i] = readVarLen(trackU8, i);
+      const meta = trackU8.slice(i, i+mlen);
+      i += mlen;
 
-      if (metaType === 0x03) {
-        trackName = new TextDecoder().decode(data);
+      if (type === 0x03) {
+        try { trackName = new TextDecoder().decode(meta).trim(); } catch(_){}
       }
-
-      events.push({ absTick, delta: deltaTicks, type: "meta", metaType, data });
-    }
-    else if (status === 0xF0 || status === 0xF7) {
-      const lenArr = readVarLen(trackU8, i);
-      const len = lenArr[0];
-      i = lenArr[1];
-      const data = trackU8.slice(i, i+len);
-      i += len;
-      events.push({ absTick, delta: deltaTicks, type: "sysex", data });
-    }
-    else {
-      let eStatus = status;
-      let d1 = trackU8[i++];
-      if ((eStatus & 0x80) === 0) {
-        d1 = eStatus;
-        eStatus = runningStatus;
-      }
-      const hi = eStatus & 0xF0;
-      const eType = hi >> 4;
-      const ch = eStatus & 0x0F;
-      let d2 = null;
-      if (hi !== 0xC0 && hi !== 0xD0) {
-        d2 = trackU8[i++];
-      }
-      runningStatus = eStatus;
-      events.push({ absTick, delta: deltaTicks, type: "midi", eType, ch, d1, d2 });
-    }
-
-    absTick += deltaTicks;
-  }
-
-  return { trackName, events };
-}
-
-function parseMidi(u8) {
-  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-  const header = str4(u8, 0);
-  if (header !== "MThd") {
-    throw new Error("Invalid MIDI header");
-  }
-  const headerLength = readU32(dv, 4);
-  if (headerLength !== 6) {
-    throw new Error("Unsupported MIDI header length");
-  }
-  const formatType = readU16(dv, 8);
-  const numTracks = readU16(dv, 10);
-  const division = readU16(dv, 12);
-  let offset = 14;
-  const tracks = [];
-  for (let t=0; t<numTracks; t++) {
-    const chunkType = str4(u8, offset);
-    offset += 4;
-    const length = readU32(dv, offset);
-    offset += 4;
-    const chunkData = u8.slice(offset, offset+length);
-    offset += length;
-    if (chunkType !== "MTrk") {
       continue;
     }
-    const parsed = parseTrack(chunkData);
-    tracks.push(parsed);
+
+    if (status === 0xF0 || status === 0xF7) {
+      let slen; [slen, i] = readVarLen(trackU8, i);
+      i += slen;
+      runningStatus = null;
+      continue;
+    }
+
+    const hi = status & 0xF0;
+    let d1, d2;
+    if (hi === 0xC0 || hi === 0xD0) {
+      d1 = trackU8[i++]; d2 = null;
+    } else {
+      d1 = trackU8[i++]; d2 = trackU8[i++];
+    }
+
+    events.push({ tick: absTick, status, ch: status & 0x0F, d1, d2 });
   }
-  return { formatType, numTracks, division, tracks };
+
+  return { name: trackName, events, endTick: absTick };
+}
+
+function parseMidi(input) {
+  const u8 = (input instanceof Uint8Array) ? input : new Uint8Array(input);
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  let i = 0;
+
+  if (str4(u8,i) !== "MThd") throw new Error("No es un MIDI válido (falta MThd).");
+  const hlen = readU32(dv, i+4);
+  const format = readU16(dv, i+8);
+  const ntrks = readU16(dv, i+10);
+  const division = readU16(dv, i+12);
+  if (division & 0x8000) throw new Error("SMPTE timecode no soportado.");
+  const ppq = division;
+  i += 8 + hlen;
+
+  const tracks = [];
+  for (let t=0; t<ntrks; t++){
+    if (str4(u8,i) !== "MTrk") throw new Error("No es un MIDI válido (falta MTrk).");
+    const len = readU32(dv, i+4);
+    const start = i + 8;
+    const end = start + len;
+    const data = u8.slice(start, end);
+    tracks.push(parseTrack(data));
+    i = end;
+  }
+
+  return { format, ppq, tracks };
 }
 
 function buildMidiFile({ division, tracks }) {
