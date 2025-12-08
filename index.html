@@ -1369,7 +1369,7 @@ if (typeof globalThis !== "undefined") {
 
     const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
     const result = [];
-    let active = null;
+    const active = new Map();
 
     for (const e of sorted) {
       const status = e.status & 0xF0;
@@ -1379,35 +1379,22 @@ if (typeof globalThis !== "undefined") {
       const isOn = status === 0x90 && vel > 0;
       const isOff = status === 0x80 || (status === 0x90 && vel === 0);
 
-      if (!isOn && !isOff) {
-        result.push(e);
-        continue;
-      }
+      result.push(e);
+
+      if (!isOn && !isOff) continue;
 
       const key = `${ch}-${note}`;
-
-      if (isOn) {
-        if (active && active.key !== key) {
-          result.push(channelEvent(e.tick, 0x80 | active.ch, active.note, 0, (e.order ?? 3) - 0.1));
-        }
-        active = { key, ch, note };
-        result.push(e);
-        continue;
-      }
-
-      if (active && active.key === key) {
-        result.push(e);
-        active = null;
-      }
+      if (isOn) active.set(key, { ch, note });
+      else if (isOff) active.delete(key);
     }
 
-    if (active) {
+    if (active.size) {
       const fallbackTick = sorted[sorted.length - 1]?.tick ?? 0;
-      const offTick = Math.min(
-        typeof endTick === "number" ? endTick : fallbackTick + (ppqVal ?? 0),
-        fallbackTick + (ppqVal ?? 0)
-      );
-      result.push(channelEvent(offTick, 0x80 | active.ch, active.note, 0, 3));
+      const computedOffTick = fallbackTick + (ppqVal ?? 0);
+      const offTick = typeof endTick === "number" ? Math.min(endTick, computedOffTick) : computedOffTick;
+      for (const { ch, note } of active.values()) {
+        result.push(channelEvent(offTick, 0x80 | ch, note, 0, 3));
+      }
     }
 
     return result.sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
