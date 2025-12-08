@@ -302,6 +302,11 @@ color:var(--txt);
             <span class="mini">Densidad progresiva</span>
           </label>
 
+          <label class="row" style="gap:10px; align-items:center; margin-top:2px">
+            <input type="checkbox" id="progressiveSkips" />
+            <span class="mini">Skips progresivos</span>
+          </label>
+
           <div style="height:12px"></div>
           <div class="label">Límite inferior para subir 8va</div>
           <div class="row" style="gap:14px; align-items:flex-end">
@@ -310,6 +315,10 @@ color:var(--txt);
           </div>
 
           <div style="height:12px"></div>
+          <label class="row" style="gap:10px; align-items:center">
+            <input type="checkbox" id="skipClosed" />
+            <span class="mini">cerrado</span>
+          </label>
           <label class="row" style="gap:10px; align-items:center">
             <input type="checkbox" id="skip2Simple" />
             <span class="mini">skip 2</span>
@@ -461,7 +470,9 @@ color:var(--txt);
   const density = el("density");
   const densityVal = el("densityVal");
   const densityProgressive = el("densityProgressive");
+  const progressiveSkips = el("progressiveSkips");
   const raiseFloor = el("raiseFloor");
+  const skipClosed = el("skipClosed");
   const skip2Simple = el("skip2Simple");
   const skip2Oct = el("skip2Oct");
 
@@ -486,6 +497,7 @@ color:var(--txt);
     return a[0] % maxExclusive;
   }
   function choice(arr) { return arr[randInt(arr.length)]; }
+  const randUnit = () => randInt(0x100000000) / 0x100000000;
 
   // Bajo (solo playback): convierte semitonos desde C (0..11) a una nota entre C1(24) y C3(48)
   function bassNoteFromTranspose(semi) {
@@ -1341,9 +1353,75 @@ color:var(--txt);
   }
 
   function getSkip2Mode() {
+    if (skipClosed?.checked) return null;
     if (skip2Oct?.checked) return "octavado";
     if (skip2Simple?.checked) return "simple";
     return null;
+  }
+
+  function applyProgressiveSkips(events, segments, tickPerEighth) {
+    if (!progressiveSkips?.checked) return events;
+    if (!events?.length || !segments?.length) return events;
+
+    const spans = segments.map((s) => ({
+      startTick: s.startEighth * tickPerEighth,
+      endTick: (s.startEighth + s.durEighth) * tickPerEighth,
+    }));
+
+    const findSegmentIndex = (tick) => {
+      for (let i = 0; i < spans.length; i++) {
+        const seg = spans[i];
+        if (tick >= seg.startTick && tick < seg.endTick) return i;
+      }
+      return -1;
+    };
+
+    const grouped = new Map();
+    const outside = [];
+
+    for (const e of events) {
+      const segIndex = findSegmentIndex(e.tick);
+      if (segIndex < 0) {
+        outside.push(e);
+        continue;
+      }
+      if (!grouped.has(segIndex)) grouped.set(segIndex, []);
+      grouped.get(segIndex).push(e);
+    }
+
+    const result = [];
+    const lastIndex = spans.length - 1;
+
+    const modeForSeg = (segIndex) => {
+      if (lastIndex <= 0) return null;
+      const ratio = segIndex / lastIndex;
+      if (ratio < 0.25) return null; // cerrado
+      if (ratio < 0.5) return randUnit() < 0.7 ? "simple" : null;
+      if (ratio < 0.75) return randUnit() < 0.5 ? "simple" : "octavado";
+      return "octavado";
+    };
+
+    const orderedSegIndexes = [...grouped.keys()].sort((a, b) => a - b);
+    for (const segIndex of orderedSegIndexes) {
+      const mode = modeForSeg(segIndex);
+      const chunk = grouped.get(segIndex) || [];
+      if (!mode) {
+        result.push(...chunk);
+        continue;
+      }
+      const transformed = applySkip2Transform(chunk.slice(), mode);
+      result.push(...transformed);
+    }
+
+    result.push(...outside);
+    return result;
+  }
+
+  function applySkipsAfterDensity(events, segments, tickPerEighth) {
+    if (!events?.length) return events;
+    if (skipClosed?.checked) return events;
+    if (progressiveSkips?.checked) return applyProgressiveSkips(events, segments, tickPerEighth);
+    return applySkip2Transform(events, getSkip2Mode());
   }
 
   function getDensityFactor() {
@@ -1375,7 +1453,6 @@ color:var(--txt);
     if (minDensity >= 0.999) return events;
 
     const removal = new Set();
-    const randUnit = () => randInt(0x100000000) / 0x100000000;
 
     const segSpans = segments.map(s => ({
       startTick: s.startEighth * tickPerEighth,
@@ -1739,9 +1816,9 @@ color:var(--txt);
     const chordsOnly = enforceChordsOnly(out);
     const progressiveProfile = getProgressiveDensityProfile(segments);
     const densityFactor = densityProgressive.checked ? 1 : getDensityFactor();
-    const skipAdjusted = applySkip2Transform(chordsOnly, getSkip2Mode());
-    const filtered = applyDensityFilter(skipAdjusted, segments, tickPerEighth, densityFactor, progressiveProfile);
-    const cleaned = sanitizeEvents(filtered);
+    const densityApplied = applyDensityFilter(chordsOnly, segments, tickPerEighth, densityFactor, progressiveProfile);
+    const skipAdjusted = applySkipsAfterDensity(densityApplied, segments, tickPerEighth);
+    const cleaned = sanitizeEvents(skipAdjusted);
     const noteOnly = disableUnsupportedMidiMessages(cleaned);
     generated = { ppq, events: noteOnly, lengthTicks: maxTick, debug: { segmentsForBass } };
 
@@ -1953,13 +2030,31 @@ color:var(--txt);
   repeatCount.addEventListener("input", () => getRepeatTimes());
   setRaiseFloorValue(raiseFloor.value);
   raiseFloor.addEventListener("input", () => setRaiseFloorValue(raiseFloor.value));
+  function clearManualSkips() {
+    if (skip2Simple) skip2Simple.checked = false;
+    if (skip2Oct) skip2Oct.checked = false;
+  }
   function handleSkip2Toggle(e) {
     if (!e?.target?.checked) return;
     if (e.target === skip2Simple) skip2Oct.checked = false;
     if (e.target === skip2Oct) skip2Simple.checked = false;
+    if (skipClosed) skipClosed.checked = false;
+    if (progressiveSkips) progressiveSkips.checked = false;
   }
   skip2Simple?.addEventListener("change", handleSkip2Toggle);
   skip2Oct?.addEventListener("change", handleSkip2Toggle);
+  skipClosed?.addEventListener("change", () => {
+    if (skipClosed.checked) {
+      clearManualSkips();
+      if (progressiveSkips) progressiveSkips.checked = false;
+    }
+  });
+  progressiveSkips?.addEventListener("change", () => {
+    if (progressiveSkips.checked) {
+      if (skipClosed) skipClosed.checked = false;
+      clearManualSkips();
+    }
+  });
 
   // Ayuda (modal)
   const helpModal = el("helpModal");
