@@ -430,15 +430,20 @@ color:var(--txt);
 </div>
 
 
-<script type="module">
-import {
-  buildMidiFile,
-  disableUnsupportedMidiMessages,
-  enforceMaxNoteLength,
-  parseMidi,
-  sanitizeEvents
-} from "./midi-utils.js";
+<script src="./midi-utils.browser.js"></script>
+<script>
 (() => {
+  const {
+    buildMidiFile,
+    disableUnsupportedMidiMessages,
+    enforceMaxNoteLength,
+    parseMidi,
+    sanitizeEvents,
+  } = globalThis.MidiUtils ?? {};
+
+  if (!buildMidiFile) {
+    throw new Error("No se pudo cargar midi-utils en el navegador.");
+  }
   // -------------------------
   // Config / constants
   // -------------------------
