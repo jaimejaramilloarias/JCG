@@ -2511,30 +2511,14 @@ if (typeof globalThis !== "undefined") {
   function exportGenerated() {
     if (!generated?.events?.length) { log("No hay MIDI generado.", "ERROR"); return; }
 
-    const tempoMicro = Math.round(60_000_000 / REF_BPM_EXPORT);
-    const tempoMeta = { type: "meta", absTick: 0, metaType: 0x51, data: [
-      (tempoMicro >> 16) & 0xFF,
-      (tempoMicro >> 8) & 0xFF,
-      tempoMicro & 0xFF,
-    ]};
+    const trackEvents = normalizeExportEvents(generated.events).map((e) => ({
+      tick: e.absTick,
+      status: ((e.eType === 0x8 ? 0x80 : 0x90) | (e.ch ?? 0)) & 0xFF,
+      d1: e.d1 ?? 0,
+      d2: e.d2 ?? 0,
+    }));
 
-    const timeSigMeta = { type: "meta", absTick: 0, metaType: 0x58, data: [
-      TIME_SIG_NUM & 0xFF,
-      Math.log2(TIME_SIG_DEN) & 0xFF,
-      24, // MIDI clocks per metronome click
-      8,  // 32nd notes per 24 MIDI clocks
-    ]};
-
-    const trackEvents = [
-      tempoMeta,
-      timeSigMeta,
-      ...normalizeExportEvents(generated.events),
-    ];
-
-    const bytes = buildMidiFile({
-      division: generated.ppq,
-      tracks: [{ events: trackEvents }],
-    });
+    const bytes = buildMidiFile(generated.ppq, trackEvents);
     const blob = new Blob([bytes], { type: "audio/midi" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
