@@ -140,7 +140,6 @@ function buildMidiFile(ppq, channelEventsAbsTicks) {
     pushMeta(0, 0x58, data);
   }
 
-  pushMeta(0, 0x00, Uint8Array.from([]));
   pushTrackName("generated");
   pushTempo(120);
   pushTimeSig(4,4);

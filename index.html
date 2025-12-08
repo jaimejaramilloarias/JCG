@@ -557,67 +557,82 @@ function parseMidi(input) {
   return { format, ppq, tracks };
 }
 
-function buildMidiFile({ division, tracks }) {
-  const chunks = [];
-  const encoder = new TextEncoder();
+function buildMidiFile(ppq, channelEventsAbsTicks) {
+  const trackBytes = [];
 
-  const hdr = new Uint8Array(14);
-  const dv = new DataView(hdr.buffer);
-  hdr.set(encoder.encode("MThd"), 0);
-  dv.setUint32(4, 6, false);
-  dv.setUint16(8, tracks.length === 1 ? 0 : 1, false);
-  dv.setUint16(10, tracks.length, false);
-  dv.setUint16(12, division, false);
-  chunks.push(hdr);
+  const push = (arr) => { for (const b of arr) trackBytes.push(b); };
+  const pushU8 = (b) => trackBytes.push(b & 0xFF);
 
-  for (const track of tracks) {
-    const bytes = [];
-    let prevTick = 0;
-    for (const e of track.events) {
-      const delta = e.absTick - prevTick;
-      prevTick = e.absTick;
-      const deltaBytes = writeVarLen(delta);
-      bytes.push(...deltaBytes);
+  function pushMeta(delta, type, dataU8) {
+    push(writeVarLen(delta));
+    pushU8(0xFF);
+    pushU8(type);
+    push(writeVarLen(dataU8.length));
+    push(dataU8);
+  }
+  function pushTrackName(name) {
+    const data = new TextEncoder().encode(name);
+    pushMeta(0, 0x03, data);
+  }
+  function pushTempo(bpm) {
+    const mpqn = Math.round(60000000 / bpm);
+    const data = Uint8Array.from([(mpqn>>16)&255, (mpqn>>8)&255, mpqn&255]);
+    pushMeta(0, 0x51, data);
+  }
+  function pushTimeSig(nn, dd) {
+    const denomPow = Math.log2(dd) | 0;
+    const data = Uint8Array.from([nn&255, denomPow&255, 24, 8]);
+    pushMeta(0, 0x58, data);
+  }
 
-      if (e.type === "meta") {
-        bytes.push(0xFF, e.metaType);
-        const lenBytes = writeVarLen(e.data.length);
-        bytes.push(...lenBytes, ...e.data);
-      }
-      else if (e.type === "sysex") {
-        const prefix = e.status ?? 0xF0;
-        bytes.push(prefix);
-        const lenBytes = writeVarLen(e.data.length);
-        bytes.push(...lenBytes, ...e.data);
-      }
-      else if (e.type === "midi") {
-        const status = ((e.eType & 0x0F) << 4) | (e.ch & 0x0F);
-        bytes.push(status, e.d1 & 0x7F);
-        if (e.d2 !== null && e.d2 !== undefined) {
-          bytes.push(e.d2 & 0x7F);
-        }
-      }
+  pushTrackName("generated");
+  pushTempo(120);
+  pushTimeSig(4,4);
+
+  let running = null;
+  let lastTick = 0;
+  const evs = channelEventsAbsTicks.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+  for (const e of evs) {
+    const delta = Math.max(0, (e.tick|0) - lastTick);
+    lastTick = (e.tick|0);
+    push(writeVarLen(delta));
+
+    const status = e.status & 0xFF;
+    const hi = status & 0xF0;
+
+    if (running !== status) {
+      pushU8(status);
+      running = status;
     }
 
-    const endOfTrack = [0x00, 0xFF, 0x2F, 0x00];
-    bytes.push(...endOfTrack);
-
-    const trackArr = Uint8Array.from(bytes);
-    const trk = new Uint8Array(8 + trackArr.length);
-    const dvTrk = new DataView(trk.buffer);
-    trk.set(encoder.encode("MTrk"), 0);
-    dvTrk.setUint32(4, trackArr.length, false);
-    trk.set(trackArr, 8);
-    chunks.push(trk);
+    pushU8(e.d1 & 0x7F);
+    if (!(hi === 0xC0 || hi === 0xD0)) pushU8((e.d2 ?? 0) & 0x7F);
   }
 
-  const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
-  const out = new Uint8Array(totalLength);
-  let pos = 0;
-  for (const c of chunks) {
-    out.set(c, pos);
-    pos += c.length;
-  }
+  pushMeta(0, 0x2F, Uint8Array.from([]));
+
+  const trackU8 = Uint8Array.from(trackBytes);
+  const trackLen = trackU8.length;
+
+  const header = new Uint8Array(14);
+  header.set([0x4D,0x54,0x68,0x64]);
+  header.set([0x00,0x00,0x00,0x06], 4);
+  header.set([0x00,0x00], 8);
+  header.set([0x00,0x01], 10);
+  header[12] = (ppq >> 8) & 255;
+  header[13] = ppq & 255;
+
+  const trkh = new Uint8Array(8);
+  trkh.set([0x4D,0x54,0x72,0x6B]);
+  trkh[4] = (trackLen >>> 24) & 255;
+  trkh[5] = (trackLen >>> 16) & 255;
+  trkh[6] = (trackLen >>> 8) & 255;
+  trkh[7] = trackLen & 255;
+
+  const out = new Uint8Array(header.length + trkh.length + trackU8.length);
+  out.set(header, 0);
+  out.set(trkh, header.length);
+  out.set(trackU8, header.length + trkh.length);
   return out;
 }
 
