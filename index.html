@@ -622,70 +622,199 @@ function buildMidiFile({ division, tracks }) {
 }
 
 function sanitizeEvents(events) {
-  const sanitized = [];
-  for (const e of events) {
-    if (e.type !== "midi") {
-      sanitized.push(e);
+  const evs = events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order));
+  const active = new Map();
+  const cleaned = [];
+
+  const keyOf = (ch, note) => ch + "-" + note;
+  const pushOff = (tick, ch, note, order) => cleaned.push({ tick, status: (0x80 | ch), d1: note, d2: 0, order });
+
+  let lastTick = 0;
+
+  for (const e of evs) {
+    const status = e.status & 0xFF;
+    const hi = status & 0xF0;
+    const ch = status & 0x0F;
+    const d1 = e.d1 & 0x7F;
+    const d2 = (e.d2 ?? 0) & 0x7F;
+
+    if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
+
+    if (hi === 0xB0 && (d1 === 120 || d1 === 123 || d1 === 121)) {
+      active.clear();
+      cleaned.push({ ...e, d1, d2 });
       continue;
     }
 
-    const status = e.eType & 0x0F;
-    const hi = (status << 4) & 0xF0;
-    const d1 = e.d1 & 0x7F;
-    const vel = (e.d2 ?? 0) & 0x7F;
+    if (hi === 0x90 && d2 > 0) {
+      const k = keyOf(ch, d1);
+      const prevCount = active.get(k) || 0;
+      if (prevCount > 0) {
+        const offOrder = (typeof e.order === "number") ? Math.max(0, e.order - 1) : 2;
+        for (let i=0; i<prevCount; i++) pushOff(e.tick, ch, d1, offOrder);
+      }
+      active.set(k, 1);
+      cleaned.push({ ...e, d1, d2 });
+      continue;
+    }
 
-    const isNoteOn = hi === 0x90 && vel > 0;
-    const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-    if (isNoteOn || isNoteOff) {
-      sanitized.push({ ...e, d1, d2: vel });
+    if (hi === 0x80 || (hi === 0x90 && d2 === 0)) {
+      const k = keyOf(ch, d1);
+      const prevCount = active.get(k) || 0;
+      if (prevCount > 0) {
+        active.set(k, prevCount - 1);
+      }
+      cleaned.push({ ...e, d1, d2 });
+      continue;
+    }
+
+    cleaned.push({ ...e, d1, d2 });
+  }
+
+  if (active.size) {
+    const cleanupTick = lastTick + 1;
+    for (const [key, count] of active.entries()) {
+      if (count <= 0) continue;
+      const [chStr, noteStr] = key.split("-");
+      const ch = parseInt(chStr, 10);
+      const note = parseInt(noteStr, 10);
+      const safeCount = Math.max(1, count);
+      for (let i=0; i<safeCount; i++) pushOff(cleanupTick, ch, note, 5);
     }
   }
 
-  return sanitized;
+  return cleaned;
 }
 
-function enforceMaxNoteLength(events, maxTicks) {
-  const sanitized = sanitizeEvents(events);
-  const activeNotes = new Map();
+function enforceMaxNoteLength(events, tickPerEighth, maxEighths=3) {
+  if (!events?.length) return events;
+  const maxDur = tickPerEighth * Math.max(1, maxEighths);
+  const evs = events.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+  const active = new Map();
   const out = [];
+  let lastTick = 0;
 
-  for (const e of sanitized) {
-    if (e.type !== "midi") {
-      out.push(e);
+  const keyOf = (ch, note) => `${ch}-${note}`;
+  const pushOff = (tick, ch, note, order=3) => {
+    out.push({ tick, status: 0x80 | (ch & 0x0F), d1: note & 0x7F, d2: 0, order });
+  };
+
+  for (const e of evs) {
+    const status = e.status & 0xFF;
+    const hi = status & 0xF0;
+    const ch = status & 0x0F;
+    const note = e.d1 & 0x7F;
+    const vel = (e.d2 ?? 0) & 0x7F;
+    const order = e.order;
+
+    if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
+
+    if (hi === 0x90 && vel > 0) {
+      const entry = active.get(keyOf(ch, note)) || [];
+      entry.push({ deadline: e.tick + maxDur, order });
+      active.set(keyOf(ch, note), entry);
+      out.push({ ...e, d1: note, d2: vel });
       continue;
     }
-    const hi = e.eType & 0x0F;
-    const isNoteOn = hi === 0x09 && e.d2 > 0;
-    const isNoteOff = hi === 0x08 || (hi === 0x09 && e.d2 === 0);
 
-    if (isNoteOn) {
-      activeNotes.set(e.d1, e.absTick);
-      out.push(e);
-    } else if (isNoteOff) {
-      const startTick = activeNotes.get(e.d1);
-      if (startTick !== undefined && (e.absTick - startTick) > maxTicks) {
-        const forcedOff = { ...e, absTick: startTick + maxTicks, delta: maxTicks };
-        out.push(forcedOff);
+    if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
+      const key = keyOf(ch, note);
+      const stack = active.get(key);
+      if (stack?.length) {
+        const state = stack.shift();
+        if (!stack.length) active.delete(key);
+        const offTick = Math.min(e.tick, state.deadline);
+        lastTick = Math.max(lastTick, offTick);
+        out.push({ ...e, tick: offTick, d1: note, d2: 0 });
+      } else {
+        out.push({ ...e, d1: note, d2: 0 });
       }
-      out.push(e);
-      activeNotes.delete(e.d1);
-    } else {
-      out.push(e);
+      continue;
+    }
+
+    out.push({ ...e, d1: note, d2: vel });
+  }
+
+  if (active.size) {
+    for (const [key, stack] of active.entries()) {
+      const [chStr, noteStr] = key.split("-");
+      const ch = parseInt(chStr, 10) || 0;
+      const note = parseInt(noteStr, 10) || 0;
+      for (const state of stack) {
+        const offTick = Math.max(lastTick, state.deadline);
+        pushOff(offTick, ch, note, state.order ?? 3);
+      }
     }
   }
 
-  return out;
+  return out.sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+}
+
+function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
+  if (!events?.length || !tickPerEighth) return events;
+
+  const maxDur = tickPerEighth * Math.max(1, maxEighths);
+  const indexed = events.map((e, idx) => ({ ...e, _idx: idx }));
+  const sorted = indexed.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+
+  const active = new Map();
+  const toRemove = new Set();
+
+  const keyOf = (ch, note) => `${ch}-${note}`;
+
+  for (const ev of sorted) {
+    const status = ev.status & 0xFF;
+    const hi = status & 0xF0;
+    const ch = status & 0x0F;
+    const note = ev.d1 & 0x7F;
+    const vel = (ev.d2 ?? 0) & 0x7F;
+
+    if (hi === 0xB0 && note === 64) {
+      toRemove.add(ev._idx);
+      continue;
+    }
+
+    if (hi === 0x90 && vel > 0) {
+      const stack = active.get(keyOf(ch, note)) || [];
+      stack.push(ev);
+      active.set(keyOf(ch, note), stack);
+      continue;
+    }
+
+    const isOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+    if (isOff) {
+      const key = keyOf(ch, note);
+      const stack = active.get(key);
+      const onEv = stack?.shift();
+      if (stack && stack.length === 0) active.delete(key);
+
+      if (onEv) {
+        const dur = ev.tick - onEv.tick;
+        if (dur > maxDur) {
+          toRemove.add(onEv._idx);
+          toRemove.add(ev._idx);
+        }
+      }
+    }
+  }
+
+  if (active.size) {
+    for (const stack of active.values()) {
+      for (const onEv of stack) {
+        toRemove.add(onEv._idx);
+      }
+    }
+  }
+
+  return events.filter((_, idx) => !toRemove.has(idx));
 }
 
 function disableUnsupportedMidiMessages(events) {
+  if (!events?.length) return events;
+
   const allowed = [];
   for (const e of events) {
-    if (e.type !== "midi") {
-      allowed.push(e);
-      continue;
-    }
-
-    const status = ((e.eType & 0x0F) << 4) | (e.ch & 0x0F);
+    const status = e.status & 0xFF;
     const hi = status & 0xF0;
     const d1 = e.d1 & 0x7F;
     const vel = (e.d2 ?? 0) & 0x7F;
@@ -711,6 +840,7 @@ const MidiUtils = {
   buildMidiFile,
   sanitizeEvents,
   enforceMaxNoteLength,
+  dropLongNotesAndSustain,
   disableUnsupportedMidiMessages,
 };
 
