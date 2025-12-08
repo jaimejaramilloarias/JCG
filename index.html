@@ -1357,6 +1357,25 @@ if (typeof globalThis !== "undefined") {
     return note;
   }
 
+  function applyRaiseFloor(events) {
+    if (!events?.length) return events;
+
+    let changed = false;
+    const mapped = events.map((ev) => {
+      const status = ev.status & 0xF0;
+      const isNoteOn = status === 0x90;
+      const isNoteOff = status === 0x80 || (status === 0x90 && (ev.d2 ?? 0) === 0);
+      if (!isNoteOn && !isNoteOff) return ev;
+
+      const raised = raiseBelowFloor(ev.d1 ?? 0);
+      if (raised === (ev.d1 ?? 0)) return ev;
+      changed = true;
+      return { ...ev, d1: raised };
+    });
+
+    return changed ? mapped : events;
+  }
+
   function enforceChordsOnly(events) {
     if (!events?.length) return events;
 
@@ -2254,7 +2273,8 @@ if (typeof globalThis !== "undefined") {
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
 
-    const chordsOnly = usingSoloing ? out : enforceChordsOnly(out);
+    const floored = applyRaiseFloor(out);
+    const chordsOnly = usingSoloing ? floored : enforceChordsOnly(floored);
     const progressiveProfile = usingSoloing ? null : getProgressiveDensityProfile(segments);
     const densityFactor = usingSoloing ? 1 : (densityProgressive.checked ? 1 : getDensityFactor());
     const densityApplied = usingSoloing ? chordsOnly : applyDensityFilter(chordsOnly, segments, tickPerEighth, densityFactor, progressiveProfile);
