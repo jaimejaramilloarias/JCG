@@ -295,6 +295,7 @@ color:var(--txt);
             <input id="density" type="range" min="0" max="100" value="100" />
             <div class="mini" style="width:60px; text-align:right">Denso</div>
             <div class="mono" style="width:56px; text-align:right" id="densityVal">100%</div>
+            <div class="mini" style="width:60px; text-align:right">Spread</div>
           </div>
 
           <div style="height:10px"></div>
@@ -305,7 +306,7 @@ color:var(--txt);
 
           <label class="row" style="gap:10px; align-items:center; margin-top:2px">
             <input type="checkbox" id="progressiveSkips" />
-            <span class="mini">Skips progresivos</span>
+            <span class="mini">Skips/spreads progresivos</span>
           </label>
 
           <div style="height:12px"></div>
@@ -327,6 +328,10 @@ color:var(--txt);
           <label class="row" style="gap:10px; align-items:center">
             <input type="checkbox" id="skip2Oct" />
             <span class="mini">skip 2 octavado</span>
+          </label>
+          <label class="row" style="gap:10px; align-items:center">
+            <input type="checkbox" id="skipSpread" />
+            <span class="mini">Spread</span>
           </label>
           <label class="row" style="gap:10px; align-items:center">
             <input type="checkbox" id="soloing" />
@@ -769,6 +774,7 @@ if (typeof globalThis !== "undefined") {
   const skipClosed = el("skipClosed");
   const skip2Simple = el("skip2Simple");
   const skip2Oct = el("skip2Oct");
+  const skipSpread = el("skipSpread");
   const soloing = el("soloing");
 
   function log(msg, cls="") {
@@ -1346,6 +1352,97 @@ if (typeof globalThis !== "undefined") {
     return events.concat(extraEvents);
   }
 
+  function applySpreadTransform(events) {
+    if (!events?.length) return events;
+
+    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+    const byTickCh = new Map();
+    const toShift = new Set();
+    const duplicates = [];
+
+    const clampNote = (n) => Math.max(0, Math.min(127, n));
+
+    for (const e of sorted) {
+      const status = e.status & 255;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const vel = e.d2 ?? 0;
+      if (!(hi === 0x90 && vel > 0)) continue;
+      const key = `${e.tick}|${ch}`;
+      if (!byTickCh.has(key)) byTickCh.set(key, []);
+      byTickCh.get(key).push(e);
+    }
+
+    for (const group of byTickCh.values()) {
+      if (!group.length) continue;
+      const ordered = group.slice().sort((a, b) => (a.d1 ?? 0) - (b.d1 ?? 0));
+      const top = ordered[ordered.length - 1];
+      duplicates.push({ src: top, note: clampNote((top.d1 ?? 0) + 12) });
+
+      if (ordered.length >= 2) {
+        const second = ordered[1];
+        toShift.add(second);
+        duplicates.push({ src: second, note: clampNote((second.d1 ?? 0) + 24) });
+      }
+    }
+
+    if (!toShift.size && !duplicates.length) return events;
+
+    const spreadActive = new Map(); // "ch-note" -> queue of {notes: number[]}
+    const keyOf = (ch, note) => `${ch}-${note}`;
+    const extraEvents = [];
+
+    for (const e of sorted) {
+      const status = e.status & 255;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const vel = e.d2 ?? 0;
+      const note = e.d1 ?? 0;
+      const isOn = hi === 0x90 && vel > 0;
+      const isOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+      const baseOrder = (typeof e.order === "number") ? e.order : 3;
+
+      if (!isOn && !isOff) continue;
+
+      if (isOn) {
+        const shiftUp = toShift.has(e) ? 12 : 0;
+        const baseNote = clampNote(note + shiftUp);
+        e.d1 = baseNote;
+
+        const dupNotes = duplicates
+          .filter((d) => d.src === e)
+          .map((d) => d.note)
+          .filter((n) => typeof n === "number");
+
+        for (const [idx, dupNote] of dupNotes.entries()) {
+          const duplicateEv = { ...e, d1: dupNote, order: baseOrder + 0.1 + idx * 0.05 };
+          extraEvents.push(duplicateEv);
+        }
+
+        const key = keyOf(ch, note);
+        if (!spreadActive.has(key)) spreadActive.set(key, []);
+        spreadActive.get(key).push({ notes: [baseNote, ...dupNotes] });
+      } else if (isOff) {
+        const key = keyOf(ch, note);
+        const queue = spreadActive.get(key);
+        if (queue?.length) {
+          const { notes } = queue.shift();
+          const [baseNote, ...dupNotes] = notes;
+          e.d1 = baseNote;
+          if (!queue.length) spreadActive.delete(key);
+
+          for (const [idx, dupNote] of dupNotes.entries()) {
+            const offEv = channelEvent(e.tick, status, dupNote, 0, (baseOrder ?? 3) + 0.1 + idx * 0.05);
+            extraEvents.push(offEv);
+          }
+        }
+      }
+    }
+
+    if (!extraEvents.length) return events;
+    return sorted.concat(extraEvents).sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+  }
+
   function addPanicAtTick(out, tick, channelsSet, order=2) {
     // Limpieza anti-artefactos: Reset All Controllers (121), Sustain Off (64), All Notes Off (123), All Sound Off (120)
     for (const ch of channelsSet) {
@@ -1358,9 +1455,16 @@ if (typeof globalThis !== "undefined") {
 
   function getSkip2Mode() {
     if (skipClosed?.checked) return null;
+    if (skipSpread?.checked) return "spread";
     if (skip2Oct?.checked) return "octavado";
     if (skip2Simple?.checked) return "simple";
     return null;
+  }
+
+  function applySkipMode(events, mode) {
+    if (mode === "spread") return applySpreadTransform(events);
+    if (mode === "simple" || mode === "octavado") return applySkip2Transform(events, mode);
+    return events;
   }
 
   function isSoloingMode() {
@@ -1535,7 +1639,7 @@ if (typeof globalThis !== "undefined") {
       if (ratio < 0.25) return null; // cerrado
       if (ratio < 0.5) return randUnit() < 0.7 ? "simple" : null;
       if (ratio < 0.75) return randUnit() < 0.5 ? "simple" : "octavado";
-      return "octavado";
+      return "spread";
     };
 
     const orderedSegIndexes = [...grouped.keys()].sort((a, b) => a - b);
@@ -1546,7 +1650,7 @@ if (typeof globalThis !== "undefined") {
         result.push(...chunk);
         continue;
       }
-      const transformed = applySkip2Transform(chunk.slice(), mode);
+      const transformed = applySkipMode(chunk.slice(), mode);
       result.push(...transformed);
     }
 
@@ -1558,7 +1662,7 @@ if (typeof globalThis !== "undefined") {
     if (!events?.length) return events;
     if (skipClosed?.checked) return events;
     if (progressiveSkips?.checked) return applyProgressiveSkips(events, segments, tickPerEighth);
-    return applySkip2Transform(events, getSkip2Mode());
+    return applySkipMode(events, getSkip2Mode());
   }
 
   function getDensityFactor() {
@@ -2224,10 +2328,11 @@ if (typeof globalThis !== "undefined") {
   function clearManualSkips() {
     if (skip2Simple) skip2Simple.checked = false;
     if (skip2Oct) skip2Oct.checked = false;
+    if (skipSpread) skipSpread.checked = false;
   }
 
   function setAdvancedControlsEnabled(enabled) {
-    const controls = [density, densityProgressive, progressiveSkips, raiseFloor, skipClosed, skip2Simple, skip2Oct];
+    const controls = [density, densityProgressive, progressiveSkips, raiseFloor, skipClosed, skip2Simple, skip2Oct, skipSpread];
     for (const ctrl of controls) {
       if (!ctrl) continue;
       ctrl.disabled = !enabled;
@@ -2243,11 +2348,19 @@ if (typeof globalThis !== "undefined") {
     if (!e?.target?.checked) return;
     if (e.target === skip2Simple) skip2Oct.checked = false;
     if (e.target === skip2Oct) skip2Simple.checked = false;
+    if (skipSpread) skipSpread.checked = false;
     if (skipClosed) skipClosed.checked = false;
     if (progressiveSkips) progressiveSkips.checked = false;
   }
   skip2Simple?.addEventListener("change", handleSkip2Toggle);
   skip2Oct?.addEventListener("change", handleSkip2Toggle);
+  skipSpread?.addEventListener("change", (e) => {
+    if (!e?.target?.checked) return;
+    clearManualSkips();
+    if (skipClosed) skipClosed.checked = false;
+    if (progressiveSkips) progressiveSkips.checked = false;
+    skipSpread.checked = true;
+  });
   skipClosed?.addEventListener("change", () => {
     if (skipClosed.checked) {
       clearManualSkips();
