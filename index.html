@@ -430,7 +430,294 @@ color:var(--txt);
 </div>
 
 
-<script src="./midi-utils.browser.js"></script>
+<script>
+// -- MIDI utils embebidos para funcionar sin servidor (file://)
+// Copiado de midi-utils.browser.js
+function readU32(dv, o){ return dv.getUint32(o, false); }
+function readU16(dv, o){ return dv.getUint16(o, false); }
+
+function readVarLen(u8, i) {
+  let value = 0;
+  for (let k=0; k<4; k++){
+    const b = u8[i++];
+    value = (value << 7) | (b & 0x7F);
+    if ((b & 0x80) === 0) return [value, i];
+  }
+  return [value, i];
+}
+
+function writeVarLen(n) {
+  let buffer = n & 0x7F;
+  const bytes = [];
+  while ((n >>= 7) > 0) {
+    buffer <<= 8;
+    buffer |= ((n & 0x7F) | 0x80);
+  }
+  while (true) {
+    bytes.push(buffer & 0xFF);
+    if (buffer & 0x80) buffer >>= 8;
+    else break;
+  }
+  return Uint8Array.from(bytes);
+}
+
+function str4(u8, o) {
+  return String.fromCharCode(u8[o],u8[o+1],u8[o+2],u8[o+3]);
+}
+
+function parseTrack(trackU8) {
+  let i = 0;
+  let absTick = 0;
+  let runningStatus = null;
+  let trackName = null;
+  const events = [];
+
+  while (i < trackU8.length) {
+    const delta = readVarLen(trackU8, i);
+    const deltaTicks = delta[0];
+    i = delta[1];
+
+    const status = trackU8[i++];
+    if (status === undefined) break;
+
+    if (status === 0xFF) {
+      const metaType = trackU8[i++];
+      const lenArr = readVarLen(trackU8, i);
+      const len = lenArr[0];
+      i = lenArr[1];
+      const data = trackU8.slice(i, i+len);
+      i += len;
+
+      if (metaType === 0x03) {
+        trackName = new TextDecoder().decode(data);
+      }
+
+      events.push({ absTick, delta: deltaTicks, type: "meta", metaType, data });
+    }
+    else if (status === 0xF0 || status === 0xF7) {
+      const lenArr = readVarLen(trackU8, i);
+      const len = lenArr[0];
+      i = lenArr[1];
+      const data = trackU8.slice(i, i+len);
+      i += len;
+      events.push({ absTick, delta: deltaTicks, type: "sysex", data });
+    }
+    else {
+      let eStatus = status;
+      let d1 = trackU8[i++];
+      if ((eStatus & 0x80) === 0) {
+        d1 = eStatus;
+        eStatus = runningStatus;
+      }
+      const hi = eStatus & 0xF0;
+      const eType = hi >> 4;
+      const ch = eStatus & 0x0F;
+      let d2 = null;
+      if (hi !== 0xC0 && hi !== 0xD0) {
+        d2 = trackU8[i++];
+      }
+      runningStatus = eStatus;
+      events.push({ absTick, delta: deltaTicks, type: "midi", eType, ch, d1, d2 });
+    }
+
+    absTick += deltaTicks;
+  }
+
+  return { trackName, events };
+}
+
+function parseMidi(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const header = str4(u8, 0);
+  if (header !== "MThd") {
+    throw new Error("Invalid MIDI header");
+  }
+  const headerLength = readU32(dv, 4);
+  if (headerLength !== 6) {
+    throw new Error("Unsupported MIDI header length");
+  }
+  const formatType = readU16(dv, 8);
+  const numTracks = readU16(dv, 10);
+  const division = readU16(dv, 12);
+  let offset = 14;
+  const tracks = [];
+  for (let t=0; t<numTracks; t++) {
+    const chunkType = str4(u8, offset);
+    offset += 4;
+    const length = readU32(dv, offset);
+    offset += 4;
+    const chunkData = u8.slice(offset, offset+length);
+    offset += length;
+    if (chunkType !== "MTrk") {
+      continue;
+    }
+    const parsed = parseTrack(chunkData);
+    tracks.push(parsed);
+  }
+  return { formatType, numTracks, division, tracks };
+}
+
+function buildMidiFile({ division, tracks }) {
+  const chunks = [];
+  const encoder = new TextEncoder();
+
+  const hdr = new Uint8Array(14);
+  const dv = new DataView(hdr.buffer);
+  hdr.set(encoder.encode("MThd"), 0);
+  dv.setUint32(4, 6, false);
+  dv.setUint16(8, tracks.length === 1 ? 0 : 1, false);
+  dv.setUint16(10, tracks.length, false);
+  dv.setUint16(12, division, false);
+  chunks.push(hdr);
+
+  for (const track of tracks) {
+    const bytes = [];
+    let prevTick = 0;
+    for (const e of track.events) {
+      const delta = e.absTick - prevTick;
+      prevTick = e.absTick;
+      const deltaBytes = writeVarLen(delta);
+      bytes.push(...deltaBytes);
+
+      if (e.type === "meta") {
+        bytes.push(0xFF, e.metaType);
+        const lenBytes = writeVarLen(e.data.length);
+        bytes.push(...lenBytes, ...e.data);
+      }
+      else if (e.type === "sysex") {
+        const prefix = e.status ?? 0xF0;
+        bytes.push(prefix);
+        const lenBytes = writeVarLen(e.data.length);
+        bytes.push(...lenBytes, ...e.data);
+      }
+      else if (e.type === "midi") {
+        const status = ((e.eType & 0x0F) << 4) | (e.ch & 0x0F);
+        bytes.push(status, e.d1 & 0x7F);
+        if (e.d2 !== null && e.d2 !== undefined) {
+          bytes.push(e.d2 & 0x7F);
+        }
+      }
+    }
+
+    const endOfTrack = [0x00, 0xFF, 0x2F, 0x00];
+    bytes.push(...endOfTrack);
+
+    const trackArr = Uint8Array.from(bytes);
+    const trk = new Uint8Array(8 + trackArr.length);
+    const dvTrk = new DataView(trk.buffer);
+    trk.set(encoder.encode("MTrk"), 0);
+    dvTrk.setUint32(4, trackArr.length, false);
+    trk.set(trackArr, 8);
+    chunks.push(trk);
+  }
+
+  const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+  const out = new Uint8Array(totalLength);
+  let pos = 0;
+  for (const c of chunks) {
+    out.set(c, pos);
+    pos += c.length;
+  }
+  return out;
+}
+
+function sanitizeEvents(events) {
+  const sanitized = [];
+  for (const e of events) {
+    if (e.type !== "midi") {
+      sanitized.push(e);
+      continue;
+    }
+
+    const status = e.eType & 0x0F;
+    const hi = (status << 4) & 0xF0;
+    const d1 = e.d1 & 0x7F;
+    const vel = (e.d2 ?? 0) & 0x7F;
+
+    const isNoteOn = hi === 0x90 && vel > 0;
+    const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+    if (isNoteOn || isNoteOff) {
+      sanitized.push({ ...e, d1, d2: vel });
+    }
+  }
+
+  return sanitized;
+}
+
+function enforceMaxNoteLength(events, maxTicks) {
+  const sanitized = sanitizeEvents(events);
+  const activeNotes = new Map();
+  const out = [];
+
+  for (const e of sanitized) {
+    if (e.type !== "midi") {
+      out.push(e);
+      continue;
+    }
+    const hi = e.eType & 0x0F;
+    const isNoteOn = hi === 0x09 && e.d2 > 0;
+    const isNoteOff = hi === 0x08 || (hi === 0x09 && e.d2 === 0);
+
+    if (isNoteOn) {
+      activeNotes.set(e.d1, e.absTick);
+      out.push(e);
+    } else if (isNoteOff) {
+      const startTick = activeNotes.get(e.d1);
+      if (startTick !== undefined && (e.absTick - startTick) > maxTicks) {
+        const forcedOff = { ...e, absTick: startTick + maxTicks, delta: maxTicks };
+        out.push(forcedOff);
+      }
+      out.push(e);
+      activeNotes.delete(e.d1);
+    } else {
+      out.push(e);
+    }
+  }
+
+  return out;
+}
+
+function disableUnsupportedMidiMessages(events) {
+  const allowed = [];
+  for (const e of events) {
+    if (e.type !== "midi") {
+      allowed.push(e);
+      continue;
+    }
+
+    const status = ((e.eType & 0x0F) << 4) | (e.ch & 0x0F);
+    const hi = status & 0xF0;
+    const d1 = e.d1 & 0x7F;
+    const vel = (e.d2 ?? 0) & 0x7F;
+
+    const isNoteOn = hi === 0x90 && vel > 0;
+    const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+    if (isNoteOn || isNoteOff) {
+      allowed.push({ ...e, d1, d2: vel });
+    }
+  }
+
+  return allowed;
+}
+
+const MidiUtils = {
+  readU32,
+  readU16,
+  readVarLen,
+  writeVarLen,
+  str4,
+  parseTrack,
+  parseMidi,
+  buildMidiFile,
+  sanitizeEvents,
+  enforceMaxNoteLength,
+  disableUnsupportedMidiMessages,
+};
+
+if (typeof globalThis !== "undefined") {
+  globalThis.MidiUtils = MidiUtils;
+}
+</script>
 <script>
 (() => {
   const {
