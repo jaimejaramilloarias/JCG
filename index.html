@@ -1110,6 +1110,9 @@ if (typeof globalThis !== "undefined") {
     clearLog();
     refByQuality.clear();
     refPpq = null;
+    QUALITIES = [];
+    renderQualityChips();
+
     ppqText.textContent = "—";
     setReady(false, "Cargando…");
     folderLoaded = false;
@@ -1149,7 +1152,7 @@ if (typeof globalThis !== "undefined") {
         }
       }
 
-      QUALITIES = [...new Set(found)].sort((a,b)=>a.localeCompare(b, "en"));
+      QUALITIES = [...new Set(refByQuality.keys())].sort((a,b)=>a.localeCompare(b, "en"));
 
       renderQualityChips();
 
@@ -1174,6 +1177,8 @@ if (typeof globalThis !== "undefined") {
     } catch(err){
       setReady(false, "No listo");
       folderStatus.textContent = "Error al cargar carpeta.";
+      QUALITIES = [];
+      renderQualityChips();
       log(String(err?.message || err), "ERROR");
     }
   }
