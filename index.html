@@ -621,8 +621,53 @@ function buildMidiFile({ division, tracks }) {
   return out;
 }
 
+function alignDerivedNoteOffs(events) {
+  if (!events?.length) return events;
+
+  const byOrigin = new Map();
+  const isOn = (e) => {
+    const hi = e.status & 0xF0;
+    const vel = (e.d2 ?? 0) & 0x7F;
+    return hi === 0x90 && vel > 0;
+  };
+  const isOff = (e) => {
+    const hi = e.status & 0xF0;
+    const vel = (e.d2 ?? 0) & 0x7F;
+    return hi === 0x80 || (hi === 0x90 && vel === 0);
+  };
+
+  for (const e of events) {
+    if (!e?.originId) continue;
+    if (!isOn(e) && !isOff(e)) continue;
+    if (!byOrigin.has(e.originId)) byOrigin.set(e.originId, { ons: [], offs: [] });
+    const bucket = byOrigin.get(e.originId);
+    if (isOn(e)) bucket.ons.push(e);
+    if (isOff(e)) bucket.offs.push(e);
+  }
+
+  for (const { offs } of byOrigin.values()) {
+    if (!offs?.length) continue;
+    const canonical = offs.reduce((best, ev) => {
+      if (!best) return ev;
+      const bestOrder = typeof best.order === "number" ? best.order : 0;
+      const evOrder = typeof ev.order === "number" ? ev.order : 0;
+      if (evOrder < bestOrder) return ev;
+      if (evOrder === bestOrder && ev.tick < best.tick) return ev;
+      return best;
+    }, null);
+
+    const offTick = canonical?.tick;
+    if (typeof offTick !== "number") continue;
+    for (const offEv of offs) {
+      offEv.tick = offTick;
+    }
+  }
+
+  return events;
+}
+
 function sanitizeEvents(events) {
-  const evs = events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order));
+  const evs = alignDerivedNoteOffs(events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order)));
   const active = new Map();
   const cleaned = [];
 
@@ -1455,7 +1500,7 @@ if (typeof globalThis !== "undefined") {
       toShift.add(target);
     }
 
-    const shiftedActive = new Map(); // ch-noteOriginal -> queue of [oct1, oct2]
+    const shiftedActive = new Map(); // ch-noteOriginal -> queue of { notes: [oct1, oct2], originId }
     const extraEvents = [];
     const keyOf = (ch, note) => ch + "-" + note;
 
@@ -1471,26 +1516,30 @@ if (typeof globalThis !== "undefined") {
         if (toShift.has(e)) {
           const newNote1 = Math.min(127, note + 12);
           const newNote2 = shouldDouble ? Math.min(127, note + 24) : null;
+          const originId = e.originId ?? `${e.tick}|${ch}|${note}|${baseOrder|0}`;
+          e.originId = originId;
           e.d1 = newNote1;
 
           if (shouldDouble && newNote2 != null) {
-            const duplicate = { ...e, d1: newNote2, order: baseOrder + 0.1 };
+            const duplicate = { ...e, d1: newNote2, order: baseOrder + 0.1, originId };
             extraEvents.push(duplicate);
           }
 
           const k = keyOf(ch, note);
           if (!shiftedActive.has(k)) shiftedActive.set(k, []);
-          shiftedActive.get(k).push([newNote1, newNote2]);
+          shiftedActive.get(k).push({ notes: [newNote1, newNote2], originId });
         }
       } else if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
         const k = keyOf(ch, note);
         const stack = shiftedActive.get(k);
         if (stack?.length) {
           const mapped = stack.shift();
-          const [oct1, oct2] = Array.isArray(mapped) ? mapped : [mapped, null];
+          const { notes, originId } = Array.isArray(mapped) ? { notes: mapped, originId: e.originId } : mapped;
+          const [oct1, oct2] = Array.isArray(notes) ? notes : [notes, null];
           e.d1 = oct1;
+          if (originId) e.originId ??= originId;
           if (oct2 != null) {
-            const off = { ...e, d1: oct2, order: baseOrder + 0.1 };
+            const off = { ...e, d1: oct2, order: baseOrder + 0.1, originId };
             extraEvents.push(off);
           }
           if (!stack.length) shiftedActive.delete(k);
@@ -1538,7 +1587,7 @@ if (typeof globalThis !== "undefined") {
 
     if (!toShift.size && !duplicates.length) return events;
 
-    const spreadActive = new Map(); // "ch-note" -> queue of {notes: number[]}
+    const spreadActive = new Map(); // "ch-note" -> queue of {notes: number[], originId}
     const keyOf = (ch, note) => `${ch}-${note}`;
     const extraEvents = [];
 
@@ -1557,6 +1606,8 @@ if (typeof globalThis !== "undefined") {
       if (isOn) {
         const shiftUp = toShift.has(e) ? 12 : 0;
         const baseNote = clampNote(note + shiftUp);
+        const originId = e.originId ?? `${e.tick}|${ch}|${note}|${baseOrder|0}`;
+        e.originId = originId;
         e.d1 = baseNote;
 
         const dupNotes = duplicates
@@ -1565,24 +1616,25 @@ if (typeof globalThis !== "undefined") {
           .filter((n) => typeof n === "number");
 
         for (const [idx, dupNote] of dupNotes.entries()) {
-          const duplicateEv = { ...e, d1: dupNote, order: baseOrder + 0.1 + idx * 0.05 };
+          const duplicateEv = { ...e, d1: dupNote, order: baseOrder + 0.1 + idx * 0.05, originId };
           extraEvents.push(duplicateEv);
         }
 
         const key = keyOf(ch, note);
         if (!spreadActive.has(key)) spreadActive.set(key, []);
-        spreadActive.get(key).push({ notes: [baseNote, ...dupNotes] });
+        spreadActive.get(key).push({ notes: [baseNote, ...dupNotes], originId });
       } else if (isOff) {
         const key = keyOf(ch, note);
         const queue = spreadActive.get(key);
         if (queue?.length) {
-          const { notes } = queue.shift();
+          const { notes, originId } = queue.shift();
           const [baseNote, ...dupNotes] = notes;
           e.d1 = baseNote;
+          if (originId) e.originId ??= originId;
           if (!queue.length) spreadActive.delete(key);
 
           for (const [idx, dupNote] of dupNotes.entries()) {
-            const offEv = channelEvent(e.tick, status, dupNote, 0, (baseOrder ?? 3) + 0.1 + idx * 0.05);
+            const offEv = { ...channelEvent(e.tick, status, dupNote, 0, (baseOrder ?? 3) + 0.1 + idx * 0.05), originId };
             extraEvents.push(offEv);
           }
         }

@@ -192,8 +192,53 @@ function buildMidiFile(ppq, channelEventsAbsTicks) {
   return out;
 }
 
+function alignDerivedNoteOffs(events) {
+  if (!events?.length) return events;
+
+  const byOrigin = new Map();
+  const isOn = (e) => {
+    const hi = e.status & 0xF0;
+    const vel = (e.d2 ?? 0) & 0x7F;
+    return hi === 0x90 && vel > 0;
+  };
+  const isOff = (e) => {
+    const hi = e.status & 0xF0;
+    const vel = (e.d2 ?? 0) & 0x7F;
+    return hi === 0x80 || (hi === 0x90 && vel === 0);
+  };
+
+  for (const e of events) {
+    if (!e?.originId) continue;
+    if (!isOn(e) && !isOff(e)) continue;
+    if (!byOrigin.has(e.originId)) byOrigin.set(e.originId, { ons: [], offs: [] });
+    const bucket = byOrigin.get(e.originId);
+    if (isOn(e)) bucket.ons.push(e);
+    if (isOff(e)) bucket.offs.push(e);
+  }
+
+  for (const { offs } of byOrigin.values()) {
+    if (!offs?.length) continue;
+    const canonical = offs.reduce((best, ev) => {
+      if (!best) return ev;
+      const bestOrder = typeof best.order === "number" ? best.order : 0;
+      const evOrder = typeof ev.order === "number" ? ev.order : 0;
+      if (evOrder < bestOrder) return ev;
+      if (evOrder === bestOrder && ev.tick < best.tick) return ev;
+      return best;
+    }, null);
+
+    const offTick = canonical?.tick;
+    if (typeof offTick !== "number") continue;
+    for (const offEv of offs) {
+      offEv.tick = offTick;
+    }
+  }
+
+  return events;
+}
+
 function sanitizeEvents(events) {
-  const evs = events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order));
+  const evs = alignDerivedNoteOffs(events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order)));
   const active = new Map();
   const cleaned = [];
 
