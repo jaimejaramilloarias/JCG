@@ -1955,7 +1955,44 @@ if (typeof globalThis !== "undefined") {
   // -------------------------
   function exportGenerated() {
     if (!generated?.events?.length) { log("No hay MIDI generado.", "ERROR"); return; }
-    const bytes = buildMidiFile(generated.ppq, generated.events);
+
+    const tempoMicro = Math.round(60_000_000 / REF_BPM_EXPORT);
+    const tempoMeta = { type: "meta", absTick: 0, metaType: 0x51, data: [
+      (tempoMicro >> 16) & 0xFF,
+      (tempoMicro >> 8) & 0xFF,
+      tempoMicro & 0xFF,
+    ]};
+
+    const timeSigMeta = { type: "meta", absTick: 0, metaType: 0x58, data: [
+      TIME_SIG_NUM & 0xFF,
+      Math.log2(TIME_SIG_DEN) & 0xFF,
+      24, // MIDI clocks per metronome click
+      8,  // 32nd notes per 24 MIDI clocks
+    ]};
+
+    const trackEvents = [tempoMeta, timeSigMeta];
+
+    const sorted = generated.events.slice().sort((a,b)=> (a.tick-b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+    for (const e of sorted) {
+      const status = e.status & 0xFF;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const eType = hi >> 4;
+
+      trackEvents.push({
+        type: "midi",
+        absTick: e.tick,
+        eType,
+        ch,
+        d1: e.d1 & 0x7F,
+        d2: (e.d2 ?? 0) & 0x7F,
+      });
+    }
+
+    const bytes = buildMidiFile({
+      division: generated.ppq,
+      tracks: [{ events: trackEvents }],
+    });
     const blob = new Blob([bytes], { type: "audio/midi" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
