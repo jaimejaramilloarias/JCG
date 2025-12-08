@@ -1766,6 +1766,45 @@ if (typeof globalThis !== "undefined") {
     return cleaned;
   }
 
+  function normalizeExportEvents(events) {
+    if (!events?.length) return [];
+
+    const sanitized = sanitizeChannelEvents(events);
+
+    const filtered = sanitized
+      .filter((e) => {
+        const hi = e.status & 0xF0;
+        const note = e.d1 & 0x7F;
+        const vel = (e.d2 ?? 0) & 0x7F;
+        const isNoteOn = hi === 0x90 && vel > 0;
+        const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+
+        if (!isNoteOn && !isNoteOff) return false;
+
+        // Anchors/dummies: nota 0 con velocidad mínima insertada para mantener la
+        // cuadrícula de corcheas en los archivos de referencia. No deben exportarse.
+        const isAnchor = note === 0 && vel <= 1;
+        return !isAnchor;
+      })
+      .map((e) => {
+        const hi = e.status & 0xF0;
+        const note = e.d1 & 0x7F;
+        const vel = (e.d2 ?? 0) & 0x7F;
+        const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+
+        return {
+          type: "midi",
+          absTick: e.tick | 0,
+          eType: isNoteOff ? 0x8 : 0x9,
+          ch: 0, // fuerza TODO a un solo canal para evitar pistas extra al importar
+          d1: note,
+          d2: isNoteOff ? 0 : vel,
+        };
+      });
+
+    return filtered.sort((a, b) => (a.absTick - b.absTick) || (a.d1 - b.d1));
+  }
+
   function removeNotesOutsideRange(events, minLenTicks, maxLenTicks, totalLength) {
     if (!events?.length) return events;
     const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
@@ -2439,24 +2478,11 @@ if (typeof globalThis !== "undefined") {
       8,  // 32nd notes per 24 MIDI clocks
     ]};
 
-    const trackEvents = [tempoMeta, timeSigMeta];
-
-    const sorted = generated.events.slice().sort((a,b)=> (a.tick-b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-    for (const e of sorted) {
-      const status = e.status & 0xFF;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const eType = hi >> 4;
-
-      trackEvents.push({
-        type: "midi",
-        absTick: e.tick,
-        eType,
-        ch,
-        d1: e.d1 & 0x7F,
-        d2: (e.d2 ?? 0) & 0x7F,
-      });
-    }
+    const trackEvents = [
+      tempoMeta,
+      timeSigMeta,
+      ...normalizeExportEvents(generated.events),
+    ];
 
     const bytes = buildMidiFile({
       division: generated.ppq,
@@ -2471,7 +2497,7 @@ if (typeof globalThis !== "undefined") {
     a.click();
     a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 2000);
-    log("Exportado: generated.mid (formato 0: 1 pista, tempo fijo 120; swing NO afecta exportación).", "OK");
+    log("Exportado: generated.mid (una sola pista/canal, tempo fijo 120; swing NO afecta exportación).", "OK");
   }
 
   function cleanGenerated() {
