@@ -1898,7 +1898,7 @@ if (typeof globalThis !== "undefined") {
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
 
-    const chordsOnly = enforceChordsOnly(out);
+    const chordsOnly = usingSoloing ? out : enforceChordsOnly(out);
     const progressiveProfile = usingSoloing ? null : getProgressiveDensityProfile(segments);
     const densityFactor = usingSoloing ? 1 : (densityProgressive.checked ? 1 : getDensityFactor());
     const densityApplied = usingSoloing ? chordsOnly : applyDensityFilter(chordsOnly, segments, tickPerEighth, densityFactor, progressiveProfile);
