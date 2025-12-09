@@ -368,12 +368,13 @@ function enforceMaxNoteLength(events, tickPerEighth, maxEighths=3) {
 function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
   if (!events?.length || !tickPerEighth) return events;
 
-  const maxDur = tickPerEighth * Math.max(1, maxEighths);
   const indexed = events.map((e, idx) => ({ ...e, _idx: idx }));
   const sorted = indexed.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
 
   const active = new Map();
   const toRemove = new Set();
+  const durations = [];
+  const trimmedOffTicks = new Map();
 
   const keyOf = (ch, note) => `${ch}-${note}`;
 
@@ -405,10 +406,7 @@ function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
 
       if (onEv) {
         const dur = ev.tick - onEv.tick;
-        if (dur > maxDur) {
-          toRemove.add(onEv._idx);
-          toRemove.add(ev._idx);
-        }
+        durations.push({ dur, onIdx: onEv._idx, offIdx: ev._idx, onTick: onEv.tick });
       }
     }
   }
@@ -421,7 +419,35 @@ function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
     }
   }
 
-  return events.filter((_, idx) => !toRemove.has(idx));
+  if (durations.length) {
+    const sortedDur = durations.slice().sort((a,b)=> a.dur - b.dur);
+    const shortPool = (sortedDur.length === 3)
+      ? sortedDur.slice(0, 2)
+      : sortedDur.slice(0, Math.max(1, sortedDur.length - 2));
+    const shortAvg = shortPool.reduce((sum,d)=> sum + d.dur, 0) / shortPool.length;
+    const hardLimit = tickPerEighth * Math.max(1, maxEighths);
+
+    const outliers = sortedDur.slice(shortPool.length).filter(d => {
+      const ratioBad = d.dur > shortAvg * 2.5;
+      const absoluteBad = d.dur > hardLimit;
+      return ratioBad && absoluteBad;
+    }).slice(0, 2);
+
+    const targetDur = Math.max(shortAvg, tickPerEighth);
+    for (const o of outliers) {
+      const newOffTick = Math.max(o.onTick + 1, Math.round(o.onTick + targetDur));
+      trimmedOffTicks.set(o.offIdx, newOffTick);
+    }
+  }
+
+  return events
+    .map((e, idx) => {
+      if (trimmedOffTicks.has(idx)) {
+        return { ...e, tick: trimmedOffTicks.get(idx) };
+      }
+      return e;
+    })
+    .filter((_, idx) => !toRemove.has(idx));
 }
 
 function disableUnsupportedMidiMessages(events) {

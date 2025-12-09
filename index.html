@@ -273,6 +273,14 @@ color:var(--txt);
 
         <div style="height:10px"></div>
 
+        <div class="label">Transposición</div>
+        <div class="row" style="gap:14px; align-items:flex-end">
+          <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
+          <div class="mini">Ajusta las fundamentales del cifrado sin alterar la selección ni transposición de los archivos de referencia.</div>
+        </div>
+
+        <div style="height:10px"></div>
+
         <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
 
         <div style="height:12px"></div>
@@ -810,64 +818,90 @@ function enforceMaxNoteLength(events, tickPerEighth, maxEighths=3) {
   return out.sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
 }
 
-function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
-  if (!events?.length || !tickPerEighth) return events;
+  function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
+    if (!events?.length || !tickPerEighth) return events;
 
-  const maxDur = tickPerEighth * Math.max(1, maxEighths);
-  const indexed = events.map((e, idx) => ({ ...e, _idx: idx }));
-  const sorted = indexed.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
+    const indexed = events.map((e, idx) => ({ ...e, _idx: idx }));
+    const sorted = indexed.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
 
-  const active = new Map();
-  const toRemove = new Set();
+    const active = new Map();
+    const toRemove = new Set();
+    const durations = [];
+    const trimmedOffTicks = new Map();
 
-  const keyOf = (ch, note) => `${ch}-${note}`;
+    const keyOf = (ch, note) => `${ch}-${note}`;
 
-  for (const ev of sorted) {
-    const status = ev.status & 0xFF;
-    const hi = status & 0xF0;
-    const ch = status & 0x0F;
-    const note = ev.d1 & 0x7F;
-    const vel = (ev.d2 ?? 0) & 0x7F;
+    for (const ev of sorted) {
+      const status = ev.status & 0xFF;
+      const hi = status & 0xF0;
+      const ch = status & 0x0F;
+      const note = ev.d1 & 0x7F;
+      const vel = (ev.d2 ?? 0) & 0x7F;
 
-    if (hi === 0xB0 && note === 64) {
-      toRemove.add(ev._idx);
-      continue;
-    }
+      if (hi === 0xB0 && note === 64) {
+        toRemove.add(ev._idx);
+        continue;
+      }
 
-    if (hi === 0x90 && vel > 0) {
-      const stack = active.get(keyOf(ch, note)) || [];
-      stack.push(ev);
-      active.set(keyOf(ch, note), stack);
-      continue;
-    }
+      if (hi === 0x90 && vel > 0) {
+        const stack = active.get(keyOf(ch, note)) || [];
+        stack.push(ev);
+        active.set(keyOf(ch, note), stack);
+        continue;
+      }
 
-    const isOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-    if (isOff) {
-      const key = keyOf(ch, note);
-      const stack = active.get(key);
-      const onEv = stack?.shift();
-      if (stack && stack.length === 0) active.delete(key);
+      const isOff = hi === 0x80 || (hi === 0x90 && vel === 0);
+      if (isOff) {
+        const key = keyOf(ch, note);
+        const stack = active.get(key);
+        const onEv = stack?.shift();
+        if (stack && stack.length === 0) active.delete(key);
 
-      if (onEv) {
-        const dur = ev.tick - onEv.tick;
-        if (dur > maxDur) {
-          toRemove.add(onEv._idx);
-          toRemove.add(ev._idx);
+        if (onEv) {
+          const dur = ev.tick - onEv.tick;
+          durations.push({ dur, onIdx: onEv._idx, offIdx: ev._idx, onTick: onEv.tick });
         }
       }
     }
-  }
 
-  if (active.size) {
-    for (const stack of active.values()) {
-      for (const onEv of stack) {
-        toRemove.add(onEv._idx);
+    if (active.size) {
+      for (const stack of active.values()) {
+        for (const onEv of stack) {
+          toRemove.add(onEv._idx);
+        }
       }
     }
-  }
 
-  return events.filter((_, idx) => !toRemove.has(idx));
-}
+    if (durations.length) {
+      const sortedDur = durations.slice().sort((a,b)=> a.dur - b.dur);
+      const shortPool = (sortedDur.length === 3)
+        ? sortedDur.slice(0, 2)
+        : sortedDur.slice(0, Math.max(1, sortedDur.length - 2));
+      const shortAvg = shortPool.reduce((sum,d)=> sum + d.dur, 0) / shortPool.length;
+      const hardLimit = tickPerEighth * Math.max(1, maxEighths);
+
+      const outliers = sortedDur.slice(shortPool.length).filter(d => {
+        const ratioBad = d.dur > shortAvg * 2.5;
+        const absoluteBad = d.dur > hardLimit;
+        return ratioBad && absoluteBad;
+      }).slice(0, 2);
+
+      const targetDur = Math.max(shortAvg, tickPerEighth);
+      for (const o of outliers) {
+        const newOffTick = Math.max(o.onTick + 1, Math.round(o.onTick + targetDur));
+        trimmedOffTicks.set(o.offIdx, newOffTick);
+      }
+    }
+
+    return events
+      .map((e, idx) => {
+        if (trimmedOffTicks.has(idx)) {
+          return { ...e, tick: trimmedOffTicks.get(idx) };
+        }
+        return e;
+      })
+      .filter((_, idx) => !toRemove.has(idx));
+  }
 
 function disableUnsupportedMidiMessages(events) {
   if (!events?.length) return events;
@@ -957,6 +991,8 @@ if (typeof globalThis !== "undefined") {
   const bassVel = el("bassVel");
   const bassVelVal = el("bassVelVal");
   const repeatCount = el("repeatCount");
+  const globalTranspose = el("globalTranspose");
+  const prog = el("prog");
   const density = el("density");
   const densityVal = el("densityVal");
   const densityProgressive = el("densityProgressive");
@@ -974,6 +1010,8 @@ if (typeof globalThis !== "undefined") {
     logEl.scrollTop = logEl.scrollHeight;
   }
   function clearLog() { logEl.textContent = ""; }
+
+  let currentGlobalTranspose = 0;
 
   function setReady(isReady, text) {
     dotReady.className = "dot " + (isReady ? "ok" : "bad");
@@ -1016,6 +1054,9 @@ if (typeof globalThis !== "undefined") {
     ["A#",10], ["BB",10],
     ["B",11], ["CB",11]
   ]);
+
+  const SEMI_TO_NOTE_SHARP = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const SEMI_TO_NOTE_FLAT = ["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
 
   function normalizeAccidentals(s) {
     return s.replaceAll("♭","b").replaceAll("♯","#");
@@ -1066,6 +1107,61 @@ if (typeof globalThis !== "undefined") {
     s = stripVariantSuffix(s);
     if (!s) return null;
     return s;
+  }
+
+  function wrapSemi(semi) {
+    const m = semi % 12;
+    return m < 0 ? m + 12 : m;
+  }
+
+  function transposeRootLabel(root, delta, preferFlat=false) {
+    const baseSemi = NOTE_TO_SEMI.get(root.toUpperCase());
+    if (baseSemi == null) return root;
+    const target = wrapSemi(baseSemi + delta);
+    const dict = preferFlat ? SEMI_TO_NOTE_FLAT : SEMI_TO_NOTE_SHARP;
+    return dict[target] ?? root;
+  }
+
+  function transposeChordTokenText(tok, delta) {
+    if (!delta) return tok;
+    const normalized = normalizeAccidentals(tok.trim());
+    const m = normalized.match(/^([A-Ga-g])([#b]?)(.*)$/);
+    if (!m) return tok;
+    const rootKey = (m[1].toUpperCase() + (m[2]||"" )).toUpperCase();
+    const preferFlat = m[2] === "b" || m[2] === "♭";
+    if (!NOTE_TO_SEMI.has(rootKey)) return tok;
+    const rest = m[3] || "";
+    const newRoot = transposeRootLabel(rootKey, delta, preferFlat);
+    return newRoot + rest;
+  }
+
+  function transposeProgressionText(text, delta) {
+    if (!delta) return text;
+    const bars = text.replace(/\r/g,"").split("|");
+    const mapped = bars.map(bar => {
+      const trimmed = bar.trim();
+      if (!trimmed) return "";
+      const tokens = trimmed.split(/\s+/).filter(Boolean).map(tok => tok === "%" ? tok : transposeChordTokenText(tok, delta));
+      return tokens.length ? ` ${tokens.join(" ")} ` : "";
+    });
+    return mapped.join("|");
+  }
+
+  function clampGlobalTranspose() {
+    let n = parseInt(globalTranspose.value, 10);
+    if (!Number.isFinite(n)) n = 0;
+    n = Math.max(-24, Math.min(24, n));
+    globalTranspose.value = String(n);
+    return n;
+  }
+
+  function applyGlobalTranspose() {
+    const desired = clampGlobalTranspose();
+    const delta = desired - currentGlobalTranspose;
+    if (delta === 0) return;
+    const newText = transposeProgressionText(prog.value, delta);
+    prog.value = newText;
+    currentGlobalTranspose = desired;
   }
 
   // -------------------------
@@ -2707,7 +2803,9 @@ if (typeof globalThis !== "undefined") {
   bassVel.addEventListener("input", () => bassVelVal.textContent = bassVel.value);
   density.addEventListener("input", updateDensityLabel);
   densityProgressive.addEventListener("change", updateDensityLabel);
+  globalTranspose.addEventListener("input", applyGlobalTranspose);
   repeatCount.addEventListener("input", () => getRepeatTimes());
+  clampGlobalTranspose();
   setRaiseFloorValue(raiseFloor.value);
   raiseFloor.addEventListener("input", () => setRaiseFloorValue(raiseFloor.value));
   function clearManualSkips() {
