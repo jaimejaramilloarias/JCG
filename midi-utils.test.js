@@ -114,3 +114,20 @@ test('dropLongNotesAndSustain recorta al promedio de notas cortas y elimina sust
   const off64 = filtered.find(e => (e.status & 0xF0) === 0x80 && e.d1 === 64);
   strictEqual(off64.tick, 690); // recorta incluso notas moderadamente largas al promedio corto
 });
+
+test('dropLongNotesAndSustain promedia por acorde y recorta notas largas desalineadas', () => {
+  const tickPerEighth = 100;
+  const events = [
+    { tick: 0, status: 0x90, d1: 60, d2: 90 },
+    { tick: 0, status: 0x90, d1: 64, d2: 85 },
+    { tick: 0, status: 0x90, d1: 67, d2: 80 },
+    { tick: 120, status: 0x80, d1: 60, d2: 0 }, // 1.2 corcheas
+    { tick: 120, status: 0x80, d1: 64, d2: 0 }, // 1.2 corcheas
+    { tick: 330, status: 0x80, d1: 67, d2: 0 }, // outlier dentro del acorde
+  ];
+
+  const filtered = dropLongNotesAndSustain(events, tickPerEighth, 4);
+
+  const off67 = filtered.find(e => (e.status & 0xF0) === 0x80 && e.d1 === 67);
+  strictEqual(off67.tick, 120); // se recorta a la media corta del acorde (antes quedaba largo)
+});
