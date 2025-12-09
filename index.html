@@ -2034,7 +2034,7 @@ if (typeof globalThis !== "undefined") {
 
         // Anchors/dummies: nota 0 con velocidad mínima insertada para mantener la
         // cuadrícula de corcheas en los archivos de referencia. No deben exportarse.
-        const isAnchor = note === 0 && vel <= 1;
+        const isAnchor = note === 0; // eliminar siempre la nota grave dummy
         return !isAnchor;
       })
       .map((e) => {
