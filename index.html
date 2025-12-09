@@ -1000,7 +1000,7 @@ if (typeof globalThis !== "undefined") {
   }
 
   // -------------------------
-  // Note / root parsing + transpose mapping (up to F# upward, G..B downward)
+  // Note / root parsing + transpose mapping (variant-based, always upward)
   // -------------------------
   const NOTE_TO_SEMI = new Map([
     ["C",0], ["B#",0],
@@ -1021,6 +1021,26 @@ if (typeof globalThis !== "undefined") {
     return s.replaceAll("♭","b").replaceAll("♯","#");
   }
 
+  const REF_VARIANT_BASES = {
+    "1": NOTE_TO_SEMI.get("D"),
+    "2": NOTE_TO_SEMI.get("AB"),
+  };
+
+  function stripVariantSuffix(s) {
+    return s.replace(/_(1|2)$/i, "");
+  }
+
+  function selectVariantForRoot(rootSemi) {
+    if (rootSemi >= NOTE_TO_SEMI.get("D") && rootSemi <= NOTE_TO_SEMI.get("G")) return "1";
+    return "2";
+  }
+
+  function upwardTransposeFromVariant(rootSemi, variant) {
+    const base = REF_VARIANT_BASES[variant];
+    if (base == null) return 0;
+    return ((rootSemi - base) + 12) % 12;
+  }
+
   function parseChordToken(tokRaw) {
     const tok = normalizeAccidentals(tokRaw.trim());
     const m = tok.match(/^([A-Ga-g])([#b]?)(.*)$/);
@@ -1029,13 +1049,13 @@ if (typeof globalThis !== "undefined") {
     const qualRaw = (m[3]||"").trim();
     const qualKey = normalizeQuality(qualRaw);
     if (!qualKey) throw new Error(`Calidad faltante en "${tokRaw}". Ej: Dm7, G9, A7alt, Cmaj7.`);
-    const semiUpward = NOTE_TO_SEMI.get(root.toUpperCase());
-    if (semiUpward === undefined) throw new Error(`Fundamental inválida: "${root}"`);
+    const rootSemi = NOTE_TO_SEMI.get(root.toUpperCase());
+    if (rootSemi === undefined) throw new Error(`Fundamental inválida: "${root}"`);
 
-    // Upward from C only until F# (0..6). For G..B, transpose downward from C.
-    const transpose = semiUpward > 6 ? semiUpward - 12 : semiUpward;
+    const refVariant = selectVariantForRoot(rootSemi);
+    const transpose = upwardTransposeFromVariant(rootSemi, refVariant);
 
-    return { root, quality: qualKey, transpose };
+    return { root, rootSemi, quality: qualKey, transpose, refVariant };
   }
 
   function normalizeQuality(q) {
@@ -1043,6 +1063,7 @@ if (typeof globalThis !== "undefined") {
     // Sin alias ni conversiones (solo trim).
     let s = (q || "").trim();
     s = normalizeAccidentals(s);
+    s = stripVariantSuffix(s);
     if (!s) return null;
     return s;
   }
@@ -1171,7 +1192,7 @@ if (typeof globalThis !== "undefined") {
     // -------------------------
   let midiAccess = null;
   let midiOutputs = [];
-  let refByQuality = new Map(); // qualityKey -> {ppq, events, windowsPerFile, tickPerEighth, winTicks}
+  let refByQuality = new Map(); // qualityKey -> { variants: Map<"1"|"2", {ppq, events, windowsPerFile, tickPerEighth, winTicks}> }
   let refPpq = null;
   let folderLoaded = false;
 
@@ -1185,7 +1206,7 @@ if (typeof globalThis !== "undefined") {
     return [...v];
   }
 
-  function indexReferenceFile(qualityKey, midiObj) {
+  function indexReferenceFile(qualityKey, variant, midiObj) {
     const ppq = midiObj.ppq;
     if (refPpq === null) refPpq = ppq;
     if (ppq !== refPpq) throw new Error(`PPQ inconsistente. Esperaba ${refPpq}, encontré ${ppq}.`);
@@ -1267,7 +1288,9 @@ if (typeof globalThis !== "undefined") {
     }
 
 
-    refByQuality.set(qualityKey, {
+    const existing = refByQuality.get(qualityKey);
+    const variants = existing?.variants || new Map();
+    variants.set(variant, {
       ppq,
       tickPerEighth,
       winTicks,
@@ -1275,6 +1298,8 @@ if (typeof globalThis !== "undefined") {
       firstNoteOnRel,
       events
     });
+
+    refByQuality.set(qualityKey, { variants });
   }
 
   async function loadFolderViaPicker() {
@@ -1341,13 +1366,20 @@ if (typeof globalThis !== "undefined") {
         // No soportamos espacios en la "calidad" porque el parser separa por whitespace.
         if (/\s/.test(base)) { skipped.push(fullName); continue; }
 
-        if (refByQuality.has(base)) { dups.push(base); }
+        const m = base.match(/^(.*)_([12])$/);
+        if (!m) { skipped.push(fullName); continue; }
+        const qualityKey = normalizeQuality(m[1]);
+        const variant = m[2];
+        if (!qualityKey) { skipped.push(fullName); continue; }
+
+        const existing = refByQuality.get(qualityKey);
+        if (existing?.variants?.has(variant)) { dups.push(`${qualityKey}_${variant}`); }
 
         try{
           const buf = await f.arrayBuffer();
           const midi = parseMidi(buf);
-          indexReferenceFile(base, midi);
-          found.push(base);
+          indexReferenceFile(qualityKey, variant, midi);
+          found.push(`${qualityKey}_${variant}`);
         } catch(err) {
           skipped.push(fullName);
           continue;
@@ -1395,8 +1427,17 @@ if (typeof globalThis !== "undefined") {
     debug: {}
   };
 
-  function ensureQualityLoaded(q) {
-    if (!refByQuality.has(q)) throw new Error(`No tengo el MIDI de referencia para "${q}".`);
+  function ensureQualityLoaded(q, variant) {
+    const entry = refByQuality.get(q);
+    if (!entry) throw new Error(`No tengo el MIDI de referencia para "${q}".`);
+    if (variant && !entry.variants?.has(variant)) {
+      throw new Error(`No tengo el MIDI de referencia para "${q}_${variant}".`);
+    }
+  }
+
+  function getReferenceForSegment(seg) {
+    ensureQualityLoaded(seg.quality, seg.refVariant);
+    return refByQuality.get(seg.quality)?.variants?.get(seg.refVariant);
   }
 
   function channelEvent(tick, status, d1, d2, order=3) {
@@ -2234,8 +2275,7 @@ if (typeof globalThis !== "undefined") {
 
     // generate segment by segment
     for (const seg of segments) {
-      ensureQualityLoaded(seg.quality);
-      const ref = refByQuality.get(seg.quality);
+      const ref = getReferenceForSegment(seg);
 
       const startTickOut = seg.startEighth * tickPerEighth;
       const durTicks = seg.durEighth * tickPerEighth;
@@ -2349,7 +2389,7 @@ if (typeof globalThis !== "undefined") {
           let note = e.d1;
           let vel = e.d2 ?? 0;
 
-          // transpose from C (up to +6, roots G..B go downward)
+          // transpose upward from the chosen reference root
           note = note + seg.transpose;
           note = raiseBelowFloor(note);
           if (note < 0 || note > 127) continue;
@@ -2412,7 +2452,7 @@ if (typeof globalThis !== "undefined") {
 
       if (endTickOut > maxTick) maxTick = endTickOut;
       const transpLabel = seg.transpose >= 0 ? `+${seg.transpose}` : `${seg.transpose}`;
-      log(`Seg: ${seg.token}  q=${seg.quality}  srcWin=${srcWindow+1}/${ref.windowsPerFile}  transp=${transpLabel}`, "OK");
+      log(`Seg: ${seg.token}  q=${seg.quality}_${seg.refVariant}  srcWin=${srcWindow+1}/${ref.windowsPerFile}  transp=${transpLabel}`, "OK");
     }
 
     // Final global panic
@@ -2421,7 +2461,7 @@ if (typeof globalThis !== "undefined") {
 
     const segmentsForBass = segments.map(s => ({
       token: s.token,
-      transpose: s.transpose, // semitonos relativos desde C (G..B bajan una octava)
+        transpose: s.transpose, // semitonos relativos desde la raíz del archivo de referencia elegido
       startTick: s.startEighth * tickPerEighth,
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
