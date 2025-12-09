@@ -318,13 +318,6 @@ color:var(--txt);
           </label>
 
           <div style="height:12px"></div>
-          <div class="label">Límite inferior para subir 8va</div>
-          <div class="row" style="gap:14px; align-items:flex-end">
-            <input id="raiseFloor" type="number" min="0" max="120" value="58" class="inputNumber" title="Notas por debajo de este valor se transportan +12 al generar" />
-            <div class="mini">Las notas por debajo de este límite se transportan una octava arriba.</div>
-          </div>
-
-          <div style="height:12px"></div>
           <label class="row" style="gap:10px; align-items:center">
             <input type="checkbox" id="skipClosed" />
             <span class="mini">Cerrado</span>
@@ -1017,7 +1010,6 @@ if (typeof globalThis !== "undefined") {
   const densityVal = el("densityVal");
   const densityProgressive = el("densityProgressive");
   const progressiveSkips = el("progressiveSkips");
-  const raiseFloor = el("raiseFloor");
   const skipClosed = el("skipClosed");
   const skip2Simple = el("skip2Simple");
   const skip2Oct = el("skip2Oct");
@@ -1560,39 +1552,6 @@ if (typeof globalThis !== "undefined") {
     return { tick, status: status & 255, d1: d1 & 127, d2: (d2==null?0:(d2&127)), order };
   }
 
-  let raiseFloorValue = 58; // Default A#3/Bb3 floor (MIDI number)
-  function setRaiseFloorValue(raw) {
-    let v = parseInt(raw, 10);
-    if (!Number.isFinite(v)) v = 58;
-    v = Math.max(0, Math.min(120, v));
-    raiseFloorValue = v;
-    raiseFloor.value = String(v);
-  }
-
-  function raiseBelowFloor(note) {
-    if (note < raiseFloorValue) return note + 12;
-    return note;
-  }
-
-  function applyRaiseFloor(events) {
-    if (!events?.length) return events;
-
-    let changed = false;
-    const mapped = events.map((ev) => {
-      const status = ev.status & 0xF0;
-      const isNoteOn = status === 0x90;
-      const isNoteOff = status === 0x80 || (status === 0x90 && (ev.d2 ?? 0) === 0);
-      if (!isNoteOn && !isNoteOff) return ev;
-
-      const raised = raiseBelowFloor(ev.d1 ?? 0);
-      if (raised === (ev.d1 ?? 0)) return ev;
-      changed = true;
-      return { ...ev, d1: raised };
-    });
-
-    return changed ? mapped : events;
-  }
-
   function enforceChordsOnly(events) {
     if (!events?.length) return events;
 
@@ -2040,6 +1999,8 @@ if (typeof globalThis !== "undefined") {
   function normalizeExportEvents(events) {
     if (!events?.length) return [];
 
+    const MIN_EXPORT_NOTE = 41; // F2
+
     const sanitized = sanitizeChannelEvents(events);
 
     const active = new Map();
@@ -2058,6 +2019,8 @@ if (typeof globalThis !== "undefined") {
         // cuadrícula de corcheas en los archivos de referencia. No deben exportarse.
         const isAnchor = note === 0; // eliminar siempre la nota grave dummy
         if (isAnchor) return false;
+
+        if (note < MIN_EXPORT_NOTE) return false;
 
         const key = `${e.status & 0x0F}-${note}`;
         if (isNoteOn) {
@@ -2476,7 +2439,6 @@ if (typeof globalThis !== "undefined") {
 
         let note = (e.d1 ?? 0) + seg.transpose;
         let vel = e.d2 ?? 0;
-        note = raiseBelowFloor(note);
         if (note < 0 || note > 127) continue;
 
         const key = ch + "-" + note;
@@ -2522,7 +2484,6 @@ if (typeof globalThis !== "undefined") {
 
           // transpose upward from the chosen reference root
           note = note + seg.transpose;
-          note = raiseBelowFloor(note);
           if (note < 0 || note > 127) continue;
 
           const key = ch + "-" + note;
@@ -2597,8 +2558,7 @@ if (typeof globalThis !== "undefined") {
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
 
-    const floored = applyRaiseFloor(out);
-    const chordsOnly = usingSoloing ? floored : enforceChordsOnly(floored);
+    const chordsOnly = usingSoloing ? out : enforceChordsOnly(out);
     const progressiveProfile = usingSoloing ? null : getProgressiveDensityProfile(segments);
     const densityFactor = usingSoloing ? 1 : (densityProgressive.checked ? 1 : getDensityFactor());
     const densityApplied = usingSoloing ? chordsOnly : applyDensityFilter(chordsOnly, segments, tickPerEighth, densityFactor, progressiveProfile);
@@ -2841,8 +2801,6 @@ if (typeof globalThis !== "undefined") {
   globalTranspose.addEventListener("input", applyGlobalTranspose);
   repeatCount.addEventListener("input", () => getRepeatTimes());
   clampGlobalTranspose();
-  setRaiseFloorValue(raiseFloor.value);
-  raiseFloor.addEventListener("input", () => setRaiseFloorValue(raiseFloor.value));
   function clearManualSkips() {
     if (skip2Simple) skip2Simple.checked = false;
     if (skip2Oct) skip2Oct.checked = false;
@@ -2854,7 +2812,7 @@ if (typeof globalThis !== "undefined") {
   }
 
   function setAdvancedControlsEnabled(enabled) {
-    const controls = [density, densityProgressive, progressiveSkips, raiseFloor, skipClosed, skip2Simple, skip2Oct, skipSpread];
+    const controls = [density, densityProgressive, progressiveSkips, skipClosed, skip2Simple, skip2Oct, skipSpread];
     for (const ctrl of controls) {
       if (!ctrl) continue;
       ctrl.disabled = !enabled;
