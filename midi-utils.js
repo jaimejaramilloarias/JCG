@@ -425,18 +425,12 @@ export function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
       ? sortedDur.slice(0, 2)
       : sortedDur.slice(0, Math.max(1, sortedDur.length - 2));
     const shortAvg = shortPool.reduce((sum,d)=> sum + d.dur, 0) / shortPool.length;
-    const hardLimit = tickPerEighth * Math.max(1, maxEighths);
-
-    const outliers = sortedDur.slice(shortPool.length).filter(d => {
-      const ratioBad = d.dur > shortAvg * 2.5;
-      const absoluteBad = d.dur > hardLimit;
-      return ratioBad && absoluteBad;
-    }).slice(0, 2);
-
     const targetDur = Math.max(shortAvg, tickPerEighth);
-    for (const o of outliers) {
-      const newOffTick = Math.max(o.onTick + 1, Math.round(o.onTick + targetDur));
-      trimmedOffTicks.set(o.offIdx, newOffTick);
+    const longNotes = sortedDur.filter(d => d.dur > targetDur);
+
+    for (const note of longNotes) {
+      const newOffTick = Math.max(note.onTick + 1, Math.round(note.onTick + targetDur));
+      trimmedOffTicks.set(note.offIdx, newOffTick);
     }
   }
 
