@@ -420,17 +420,41 @@ function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
   }
 
   if (durations.length) {
+    const hardLimit = tickPerEighth * Math.max(1, maxEighths);
+
     const sortedDur = durations.slice().sort((a,b)=> a.dur - b.dur);
-    const shortPool = (sortedDur.length === 3)
+    const globalShortPool = (sortedDur.length === 3)
       ? sortedDur.slice(0, 2)
       : sortedDur.slice(0, Math.max(1, sortedDur.length - 2));
-    const shortAvg = shortPool.reduce((sum,d)=> sum + d.dur, 0) / shortPool.length;
-    const targetDur = Math.max(shortAvg, tickPerEighth);
-    const longNotes = sortedDur.filter(d => d.dur > targetDur);
+    const globalShortAvg = globalShortPool.reduce((sum,d)=> sum + d.dur, 0) / globalShortPool.length;
 
-    for (const note of longNotes) {
-      const newOffTick = Math.max(note.onTick + 1, Math.round(note.onTick + targetDur));
-      trimmedOffTicks.set(note.offIdx, newOffTick);
+    const byOnTick = new Map();
+    for (const info of durations) {
+      if (!byOnTick.has(info.onTick)) byOnTick.set(info.onTick, []);
+      byOnTick.get(info.onTick).push(info);
+    }
+
+    for (const group of byOnTick.values()) {
+      const sortedGroup = group.slice().sort((a,b)=> a.dur - b.dur);
+      const shortPool = (sortedGroup.length === 3)
+        ? sortedGroup.slice(0, 2)
+        : sortedGroup.slice(0, Math.max(1, sortedGroup.length - 2));
+      const shortAvg = shortPool.reduce((sum,d)=> sum + d.dur, 0) / shortPool.length;
+
+      const refAvg = (sortedGroup.length > 1) ? shortAvg : globalShortAvg;
+      const targetDur = Math.min(hardLimit, Math.max(refAvg, tickPerEighth));
+
+      for (const cand of sortedGroup) {
+        if (cand.dur <= targetDur) continue;
+
+        const ratioBad = cand.dur > targetDur * 1.75;
+        const absoluteBad = cand.dur > hardLimit;
+        if (!ratioBad && !absoluteBad) continue;
+
+        const desiredTick = Math.max(cand.onTick + 1, Math.round(cand.onTick + targetDur));
+        const cappedTick = Math.min(desiredTick, cand.onTick + hardLimit);
+        trimmedOffTicks.set(cand.offIdx, cappedTick);
+      }
     }
   }
 
