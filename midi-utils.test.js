@@ -88,7 +88,7 @@ test('disableUnsupportedMidiMessages deja únicamente Note On/Off con nota y vel
   deepStrictEqual(filtered.map(e => e.d2), [100, 90, 0]);
 });
 
-test('dropLongNotesAndSustain recorta notas desproporcionadas y elimina sustain', () => {
+test('dropLongNotesAndSustain recorta al promedio de notas cortas y elimina sustain', () => {
   const tickPerEighth = 60;
   const events = [
     { tick: 0, status: 0x90, d1: 60, d2: 90 },
@@ -110,4 +110,7 @@ test('dropLongNotesAndSustain recorta notas desproporcionadas y elimina sustain'
 
   const off62 = filtered.find(e => (e.status & 0xF0) === 0x80 && e.d1 === 62);
   strictEqual(off62.tick, 240);
+
+  const off64 = filtered.find(e => (e.status & 0xF0) === 0x80 && e.d1 === 64);
+  strictEqual(off64.tick, 690); // recorta incluso notas moderadamente largas al promedio corto
 });
