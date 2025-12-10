@@ -2588,32 +2588,42 @@ if (typeof globalThis !== "undefined") {
       const carryVel = new Map();    // "ch-note" -> last velocity
       const winBase = srcWindow * ref.winTicks;
 
+      const hasNoteOnAtStart = srcEvents.some((ev) => {
+        const status = ev.status & 0xF0;
+        const vel = (ev.d2 ?? 0) & 0x7F;
+        return ev.tick === srcStart && status === 0x90 && vel > 0;
+      });
+
       // --- Carryover: si en el patrón hay notas sostenidas que empezaron antes de srcStart,
       // las activamos al inicio del segmento para que el acorde suene "completo".
-      for (const e of srcEvents) {
-        if (e.tick < winBase || e.tick >= srcStart) continue;
+      // Sin embargo, si al momento exacto del inicio no hay ningún Note On, dejamos silencio
+      // para evitar que se arrastre el acorde previo en anticipaciones.
+      if (hasNoteOnAtStart) {
+        for (const e of srcEvents) {
+          if (e.tick < winBase || e.tick >= srcStart) continue;
 
-        const status = e.status & 255;
-        const hi = status & 0xF0;
-        const ch = status & 0x0F;
+          const status = e.status & 255;
+          const hi = status & 0xF0;
+          const ch = status & 0x0F;
 
-        if (hi !== 0x80 && hi !== 0x90) continue;
+          if (hi !== 0x80 && hi !== 0x90) continue;
 
-        let note = (e.d1 ?? 0) + seg.transpose;
-        let vel = e.d2 ?? 0;
-        if (note < 0 || note > 127) continue;
+          let note = (e.d1 ?? 0) + seg.transpose;
+          let vel = e.d2 ?? 0;
+          if (note < 0 || note > 127) continue;
 
-        const key = ch + "-" + note;
-        const isOn = (hi === 0x90) && vel > 0;
-        const isOff = (hi === 0x80) || ((hi === 0x90) && vel === 0);
+          const key = ch + "-" + note;
+          const isOn = (hi === 0x90) && vel > 0;
+          const isOff = (hi === 0x80) || ((hi === 0x90) && vel === 0);
 
-        if (isOn) {
-          const cnt = activeCount.get(key) || 0;
-          activeCount.set(key, cnt + 1);
-          carryVel.set(key, vel);
-        } else if (isOff) {
-          const cnt = activeCount.get(key) || 0;
-          if (cnt > 0) activeCount.set(key, cnt - 1);
+          if (isOn) {
+            const cnt = activeCount.get(key) || 0;
+            activeCount.set(key, cnt + 1);
+            carryVel.set(key, vel);
+          } else if (isOff) {
+            const cnt = activeCount.get(key) || 0;
+            if (cnt > 0) activeCount.set(key, cnt - 1);
+          }
         }
       }
 
