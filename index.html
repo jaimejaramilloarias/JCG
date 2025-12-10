@@ -458,6 +458,7 @@ color:var(--txt);
 
 
 <script type="module" src="./salsa-utils.js"></script>
+<script type="module" src="./soloing-utils.js"></script>
 <script>
 // -- MIDI utils embebidos para funcionar sin servidor (file://)
 // Copiado de midi-utils.browser.js
@@ -1426,7 +1427,7 @@ if (typeof globalThis !== "undefined") {
     for (const e of events) if ((e.tick|0) < minTick) minTick = (e.tick|0);
     const anchors = [];
     const pushDummyNote = (tick) => {
-      anchors.push({ tick, status: 0x90, d1: 0, d2: 1 });
+      anchors.push({ tick, status: 0x90, d1: 0, d2: 0 });
       anchors.push({ tick, status: 0x80, d1: 0, d2: 0 });
     };
     if (!Number.isFinite(minTick) || minTick > 0) pushDummyNote(0);
@@ -1471,6 +1472,20 @@ if (typeof globalThis !== "undefined") {
 
     if (anchors.length) {
       events = events.concat(anchors).sort((a,b)=> (a.tick - b.tick) || ((a.status&0xF0) - (b.status&0xF0)));
+    }
+
+    if (isSoloingVariant && window?.SoloingUtils?.prepareSoloingReference) {
+      const prepared = window.SoloingUtils.prepareSoloingReference({
+        ppq,
+        tickPerEighth,
+        winEights,
+        winTicks,
+        windowsPerFile,
+        events,
+        variant,
+        soloing: true,
+      });
+      if (prepared?.events?.length) events = prepared.events;
     }
 
     // Precomputo: evita seleccionar ventanas completamente silenciosas al azar.
