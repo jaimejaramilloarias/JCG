@@ -1877,11 +1877,25 @@ if (typeof globalThis !== "undefined") {
     return modes;
   }
 
-  function applyManualSkipModes(events, segments, tickPerEighth) {
-    const modes = getSelectedSkipModes();
-    if (!events?.length || !modes.length) return events;
+  function getEnabledAdvancedModes() {
+    const modes = [];
+    if (shells?.checked) modes.push("shells");
+    if (blockChords?.checked) modes.push("blockTop");
+    if (blockChordsFull?.checked) modes.push("blockFull");
+    if (skipClosed?.checked) modes.push("skipClosed");
+    if (skip2Simple?.checked) modes.push("skip2");
+    if (skip2Oct?.checked) modes.push("skip2Oct");
+    if (skipSpread?.checked) modes.push("spread");
+    return modes;
+  }
+
+  function applyManualSkipModes(events, segments, tickPerEighth, forcedModesBySeg=null) {
+    const modes = forcedModesBySeg ? [] : getSelectedSkipModes();
+    const hasModes = forcedModesBySeg ? Array.isArray(forcedModesBySeg) && forcedModesBySeg.length : modes.length;
+    if (!events?.length || !hasModes) return events;
     if (!segments?.length || !Number.isFinite(tickPerEighth)) {
-      return applySkipMode(events, choice(modes));
+      const mode = forcedModesBySeg ? forcedModesBySeg[0] : choice(modes);
+      return applySkipMode(events, mode);
     }
 
     const spans = segments.map((s) => ({
@@ -1913,9 +1927,19 @@ if (typeof globalThis !== "undefined") {
     const result = [];
     const orderedSegIndexes = [...grouped.keys()].sort((a, b) => a - b);
     for (const segIndex of orderedSegIndexes) {
-      const mode = choice(modes);
+      const forced = forcedModesBySeg ? forcedModesBySeg[segIndex] : null;
+      const mode = forced ?? choice(modes);
+      const skipMode = (mode === "skipClosed") ? null
+        : (mode === "skip2") ? "simple"
+        : (mode === "skip2Oct") ? "octavado"
+        : (mode === "spread") ? "spread"
+        : (forcedModesBySeg ? null : mode);
       const chunk = grouped.get(segIndex) || [];
-      const transformed = applySkipMode(chunk.slice(), mode);
+      if (!skipMode) {
+        result.push(...chunk);
+        continue;
+      }
+      const transformed = applySkipMode(chunk.slice(), skipMode);
       result.push(...transformed);
     }
 
@@ -1929,11 +1953,25 @@ if (typeof globalThis !== "undefined") {
     return events;
   }
 
-  function applyBlockChords(events) {
+  function applyBlockChords(events, segments=null, tickPerEighth=null, modeResolver=null) {
     const enableTop = !!blockChords?.checked;
     const enableFull = !!blockChordsFull?.checked;
-    if (!enableTop && !enableFull) return events;
+    if (!enableTop && !enableFull && !modeResolver) return events;
     if (!events?.length) return events;
+
+    const spans = (segments?.length && Number.isFinite(tickPerEighth)) ? segments.map((s) => ({
+      startTick: s.startEighth * tickPerEighth,
+      endTick: (s.startEighth + s.durEighth) * tickPerEighth,
+    })) : null;
+
+    const findSegmentIndex = (tick) => {
+      if (!spans) return -1;
+      for (let i = 0; i < spans.length; i++) {
+        const seg = spans[i];
+        if (tick >= seg.startTick && tick < seg.endTick) return i;
+      }
+      return -1;
+    };
 
     const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
     const byTickCh = new Map();
@@ -1945,21 +1983,27 @@ if (typeof globalThis !== "undefined") {
       const ch = status & 0x0F;
       const vel = e.d2 ?? 0;
       if (!(hi === 0x90 && vel > 0)) continue;
+      const segIndex = findSegmentIndex(e.tick);
+      const { top: segTop, full: segFull } = modeResolver?.(segIndex) ?? { top: enableTop, full: enableFull };
+      if (!segTop && !segFull) continue;
       const key = `${e.tick}|${ch}`;
       if (!byTickCh.has(key)) byTickCh.set(key, []);
-      byTickCh.get(key).push(e);
+      byTickCh.get(key).push({ ev: e, segTop, segFull });
     }
 
     const duplicates = [];
     for (const group of byTickCh.values()) {
       if (group.length < 2) continue;
-      const ordered = group.slice().sort((a, b) => (a.d1 ?? 0) - (b.d1 ?? 0));
-      if (enableTop) {
-        const top = ordered[ordered.length - 1];
+      const ordered = group.slice().sort((a, b) => (a.ev.d1 ?? 0) - (b.ev.d1 ?? 0));
+      const topOn = ordered.find((g) => g.segTop);
+      const fullOn = ordered.some((g) => g.segFull);
+
+      if (topOn) {
+        const top = ordered[ordered.length - 1].ev;
         duplicates.push({ src: top, note: clampNote((top.d1 ?? 0) - 12) });
       }
-      if (enableFull) {
-        for (const src of ordered) {
+      if (fullOn) {
+        for (const { ev: src } of ordered.filter((g) => g.segFull)) {
           duplicates.push({ src, note: clampNote((src.d1 ?? 0) + 12) });
         }
       }
@@ -2334,14 +2378,14 @@ if (typeof globalThis !== "undefined") {
     return result;
   }
 
-  function applySkipsAfterDensity(events, segments, tickPerEighth) {
+  function applySkipsAfterDensity(events, segments, tickPerEighth, forcedModes=null) {
     if (!events?.length) return events;
     if (progressiveSkips?.checked) return applyProgressiveSkips(events, segments, tickPerEighth);
 
-    return applyManualSkipModes(events, segments, tickPerEighth);
+    return applyManualSkipModes(events, segments, tickPerEighth, forcedModes);
   }
 
-  function applyShells(events, segments, tickPerEighth, densityBySegment=null) {
+  function applyShells(events, segments, tickPerEighth, densityBySegment=null, applySegPredicate=null) {
     if (!shells?.checked) return events;
     if (!events?.length) return events;
 
@@ -2366,6 +2410,7 @@ if (typeof globalThis !== "undefined") {
     };
 
     const shouldApplyForSeg = (segIndex) => {
+      if (applySegPredicate) return applySegPredicate(segIndex);
       if (profile && segIndex >= 0) {
         if (minProfile == null || minProfile >= 0.999) return false;
         return profile[segIndex] <= minProfile;
@@ -2830,13 +2875,33 @@ if (typeof globalThis !== "undefined") {
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
 
+    const advancedModes = usingSoloing ? [] : getEnabledAdvancedModes();
+    const advancedModeBySegment = (!usingSoloing && segments?.length && advancedModes.length >= 2)
+      ? segments.map(() => choice(advancedModes))
+      : null;
+
     const chordsOnly = usingSoloing ? out : enforceChordsOnly(out);
-    const blockAdjusted = usingSoloing ? chordsOnly : applyBlockChords(chordsOnly);
+    const blockResolver = advancedModeBySegment ? (segIndex) => {
+      const mode = (segIndex != null && segIndex >= 0) ? advancedModeBySegment[segIndex] : null;
+      return { top: mode === "blockTop", full: mode === "blockFull" };
+    } : null;
+    const blockAdjusted = usingSoloing ? chordsOnly : applyBlockChords(chordsOnly, segments, tickPerEighth, blockResolver);
     const progressiveProfile = usingSoloing ? null : getProgressiveDensityProfile(segments);
     const densityFactor = usingSoloing ? 1 : (densityProgressive.checked ? 1 : getDensityFactor());
     const densityApplied = usingSoloing ? blockAdjusted : applyDensityFilter(blockAdjusted, segments, tickPerEighth, densityFactor, progressiveProfile);
-    const shellsApplied = usingSoloing ? blockAdjusted : applyShells(densityApplied, segments, tickPerEighth, progressiveProfile);
-    const skipAdjusted = usingSoloing ? blockAdjusted : applySkipsAfterDensity(shellsApplied, segments, tickPerEighth);
+    const shellsApplied = usingSoloing ? blockAdjusted : applyShells(
+      densityApplied,
+      segments,
+      tickPerEighth,
+      progressiveProfile,
+      advancedModeBySegment ? (segIndex) => advancedModeBySegment[segIndex] === "shells" : null,
+    );
+    const skipAdjusted = usingSoloing ? blockAdjusted : applySkipsAfterDensity(
+      shellsApplied,
+      segments,
+      tickPerEighth,
+      advancedModeBySegment,
+    );
     const soloed = applySoloingMode(skipAdjusted, maxTick, ppq);
     const lengthLimited = enforceMaxNoteLength(soloed, tickPerEighth, 3);
     const cleaned = sanitizeEvents(lengthLimited);
