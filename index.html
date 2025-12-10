@@ -309,12 +309,12 @@ color:var(--txt);
           <div style="height:10px"></div>
           <label class="row" style="gap:10px; align-items:center">
             <input type="checkbox" id="densityProgressive" />
-            <span class="mini">Densidad progresiva</span>
+            <span class="mini">Densidad rítmica progresiva</span>
           </label>
 
           <label class="row" style="gap:10px; align-items:center; margin-top:2px">
             <input type="checkbox" id="progressiveSkips" />
-            <span class="mini">Skips/spreads progresivos</span>
+            <span class="mini">Shells/Spreads progresivos</span>
           </label>
 
           <div style="height:12px"></div>
@@ -3146,8 +3146,27 @@ if (typeof globalThis !== "undefined") {
     if (skipSpread) skipSpread.checked = false;
   }
 
+  function setSkipModeControlsEnabled(enabled) {
+    const controls = [
+      shells,
+      skipClosed,
+      blockChords,
+      blockChordsFull,
+      skip2Simple,
+      skip2Oct,
+      skipSpread,
+    ];
+
+    for (const ctrl of controls) {
+      if (!ctrl) continue;
+      ctrl.disabled = !enabled;
+      if (!enabled) ctrl.checked = false;
+    }
+  }
+
   function handleManualSkipsChange() {
     if (progressiveSkips) progressiveSkips.checked = false;
+    setSkipModeControlsEnabled(true);
   }
 
   function setAdvancedControlsEnabled(enabled) {
@@ -3180,10 +3199,19 @@ if (typeof globalThis !== "undefined") {
   skipClosed?.addEventListener("change", handleManualSkipsChange);
   progressiveSkips?.addEventListener("change", () => {
     if (progressiveSkips.checked) {
+      setSkipModeControlsEnabled(false);
       if (skipClosed) skipClosed.checked = false;
+      if (shells) shells.checked = false;
+      if (blockChords) blockChords.checked = false;
+      if (blockChordsFull) blockChordsFull.checked = false;
       clearManualSkips();
+      return;
     }
+
+    setSkipModeControlsEnabled(true);
   });
+
+  setSkipModeControlsEnabled(true);
 
   function resetAdvancedModes() {
     clearManualSkips();
