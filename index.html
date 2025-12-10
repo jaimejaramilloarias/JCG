@@ -338,6 +338,10 @@ color:var(--txt);
             <input type="checkbox" id="soloing" />
             <span class="mini">Soloing</span>
           </label>
+          <label class="row" style="gap:10px; align-items:center">
+            <input type="checkbox" id="salsa23" />
+            <span class="mini">Salsa 2-3</span>
+          </label>
         </details>
       </div>
     </section>
@@ -1015,6 +1019,7 @@ if (typeof globalThis !== "undefined") {
   const skip2Oct = el("skip2Oct");
   const skipSpread = el("skipSpread");
   const soloing = el("soloing");
+  const salsa23 = el("salsa23");
 
   function log(msg, cls="") {
     const line = cls ? `[${cls}] ${msg}` : msg;
@@ -1119,6 +1124,20 @@ if (typeof globalThis !== "undefined") {
     s = stripVariantSuffix(s);
     if (!s) return null;
     return s;
+  }
+
+  function parseReferenceFileName(fullName) {
+    const base = (fullName || "").replace(/\.[^.]+$/, "").trim();
+    if (!base || /\s/.test(base)) return null;
+
+    const match = base.match(/^(.*)_([12])$/);
+    if (!match) return null;
+
+    const [, rawQuality, variant] = match;
+    const qualityKey = normalizeQuality(rawQuality);
+    if (!qualityKey) return null;
+
+    return { qualityKey, variant };
   }
 
   function wrapSemi(semi) {
@@ -1467,18 +1486,10 @@ if (typeof globalThis !== "undefined") {
         const fullName = (f.name || "").trim();
         if (!fullName) { skipped.push("(sin nombre)"); continue; }
 
-        // Calidad = nombre de archivo SIN la última extensión (si la hay)
-        const base = fullName.replace(/\.[^.]+$/,"").trim();
-        if (!base) { skipped.push(fullName); continue; }
+        const parsed = parseReferenceFileName(fullName);
+        if (!parsed) { skipped.push(fullName); continue; }
 
-        // No soportamos espacios en la "calidad" porque el parser separa por whitespace.
-        if (/\s/.test(base)) { skipped.push(fullName); continue; }
-
-        const m = base.match(/^(.*)_([12])$/);
-        if (!m) { skipped.push(fullName); continue; }
-        const qualityKey = normalizeQuality(m[1]);
-        const variant = m[2];
-        if (!qualityKey) { skipped.push(fullName); continue; }
+        const { qualityKey, variant } = parsed;
 
         const existing = refByQuality.get(qualityKey);
         if (existing?.variants?.has(variant)) { dups.push(`${qualityKey}_${variant}`); }
@@ -1848,7 +1859,7 @@ if (typeof globalThis !== "undefined") {
   }
 
   function isSoloingMode() {
-    return !!soloing?.checked;
+    return !!(soloing?.checked || salsa23?.checked);
   }
 
   function applySoloingMode(events, endTick, ppqVal) {
