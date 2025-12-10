@@ -1101,7 +1101,7 @@ if (typeof globalThis !== "undefined") {
   };
 
   function stripVariantSuffix(s) {
-    return s.replace(/_(1|2)$/i, "");
+    return s.replace(/_(1|2|x24|x32)$/i, "");
   }
 
   function selectVariantForRoot(rootSemi) {
@@ -1115,6 +1115,20 @@ if (typeof globalThis !== "undefined") {
     return ((rootSemi - base) + 12) % 12;
   }
 
+  const SOLOING_BASE_SEMI = NOTE_TO_SEMI.get("F#");
+
+  function soloingTransposeFromRoot(rootSemi) {
+    if (SOLOING_BASE_SEMI == null || !Number.isFinite(rootSemi)) return 0;
+    return rootSemi - SOLOING_BASE_SEMI;
+  }
+
+  function selectSoloingVariant(qualityKey) {
+    const entry = refByQuality.get(qualityKey);
+    if (!entry?.variants?.size) return null;
+    const first = entry.variants.keys().next();
+    return first && !first.done ? first.value : null;
+  }
+
   function parseChordToken(tokRaw) {
     const tok = normalizeAccidentals(tokRaw.trim());
     const m = tok.match(/^([A-Ga-g])([#b]?)(.*)$/);
@@ -1126,8 +1140,9 @@ if (typeof globalThis !== "undefined") {
     const rootSemi = NOTE_TO_SEMI.get(root.toUpperCase());
     if (rootSemi === undefined) throw new Error(`Fundamental inválida: "${root}"`);
 
-    const refVariant = selectVariantForRoot(rootSemi);
-    const transpose = upwardTransposeFromVariant(rootSemi, refVariant);
+    const soloMode = isSoloingMode();
+    const refVariant = soloMode ? selectSoloingVariant(qualKey) : selectVariantForRoot(rootSemi);
+    const transpose = soloMode ? soloingTransposeFromRoot(rootSemi) : upwardTransposeFromVariant(rootSemi, refVariant);
 
     return { root, rootSemi, quality: qualKey, transpose, refVariant };
   }
@@ -1146,11 +1161,12 @@ if (typeof globalThis !== "undefined") {
     const base = (fullName || "").replace(/\.[^.]+$/, "").trim();
     if (!base || /\s/.test(base)) return null;
 
-    const match = base.match(/^(.*)_([12])$/);
+    const match = base.match(/^(.*)_(1|2|x24|x32)$/i);
     if (!match) return null;
 
-    const [, rawQuality, variant] = match;
+    const [, rawQuality, variantRaw] = match;
     const qualityKey = normalizeQuality(rawQuality);
+    const variant = (variantRaw || "").toLowerCase();
     if (!qualityKey) return null;
 
     return { qualityKey, variant };
@@ -1346,7 +1362,7 @@ if (typeof globalThis !== "undefined") {
     // -------------------------
   let midiAccess = null;
   let midiOutputs = [];
-  let refByQuality = new Map(); // qualityKey -> { variants: Map<"1"|"2", {ppq, events, windowsPerFile, tickPerEighth, winTicks}> }
+  let refByQuality = new Map(); // qualityKey -> { variants: Map<variantKey, {ppq, events, windowsPerFile, tickPerEighth, winTicks, winEights}> }
   let refPpq = null;
   let folderLoaded = false;
 
@@ -1395,6 +1411,8 @@ if (typeof globalThis !== "undefined") {
       throw new Error(`"${qualityKey}": PPQ inválido (${ppq}). Debe ser par para poder contar corcheas.`);
     }
 
+    const isSoloingVariant = variant === "x24" || variant === "x32";
+    const winEights = isSoloingVariant ? (variant === "x24" ? 8 : 32) : WINDOW_EIGHTS;
     const minTicks = WINDOW_EIGHTS * tickPerEighth; // 16 corcheas = 2 compases
 
     // Longitud real del archivo: no depende de Note On/Off; incluye silencios hasta End-Of-Track.
@@ -1438,13 +1456,13 @@ if (typeof globalThis !== "undefined") {
 
     const totalEighths = trackLenTicks / tickPerEighth;
 
-    // Requisito: múltiplos de 16 corcheas por archivo de referencia.
-    if ((totalEighths % WINDOW_EIGHTS) !== 0) {
-      throw new Error(`"${qualityKey}": longitud inválida. Debe ser múltiplo de ${WINDOW_EIGHTS} corcheas; encontré ${totalEighths}.`);
+    // Requisito: múltiplos de winEights corcheas por archivo de referencia.
+    if ((totalEighths % winEights) !== 0) {
+      throw new Error(`"${qualityKey}": longitud inválida. Debe ser múltiplo de ${winEights} corcheas; encontré ${totalEighths}.`);
     }
 
-    const windowsPerFile = totalEighths / WINDOW_EIGHTS;
-    const winTicks = WINDOW_EIGHTS * tickPerEighth; // ventana en ticks
+    const windowsPerFile = totalEighths / winEights;
+    const winTicks = winEights * tickPerEighth; // ventana en ticks
 
     // Dummy anchors en cada ventana para respetar la primera corchea aunque sea silencio.
     for (let w = 0; w < windowsPerFile; w++) {
@@ -1478,10 +1496,13 @@ if (typeof globalThis !== "undefined") {
     variants.set(variant, {
       ppq,
       tickPerEighth,
+      winEights,
       winTicks,
       windowsPerFile,
       firstNoteOnRel,
-      events
+      events,
+      variant,
+      soloing: isSoloingVariant,
     });
 
     refByQuality.set(qualityKey, { variants });
@@ -1610,18 +1631,29 @@ if (typeof globalThis !== "undefined") {
     if (variant && !entry.variants?.has(variant)) {
       throw new Error(`No tengo el MIDI de referencia para "${q}_${variant}".`);
     }
+    return entry;
   }
 
   function getReferenceForSegment(seg) {
-    ensureQualityLoaded(seg.quality, seg.refVariant);
-    const ref = refByQuality.get(seg.quality)?.variants?.get(seg.refVariant);
+    const entry = ensureQualityLoaded(seg.quality, seg.refVariant);
+    let variant = seg.refVariant;
+
+    if ((!variant || !entry?.variants?.has(variant)) && isSoloingMode()) {
+      variant = selectSoloingVariant(seg.quality);
+      if (variant) seg.refVariant = variant;
+    }
+
+    if (!variant || !entry?.variants?.has(variant)) {
+      throw new Error(`No tengo el MIDI de referencia para "${seg.quality}_${variant || '?'}".`);
+    }
+
+    const ref = entry?.variants?.get(variant);
 
     if (salsa23?.checked && window?.SalsaUtils?.prepareSalsaReference) {
       const prepared = window.SalsaUtils.prepareSalsaReference(ref);
 
       if (prepared && prepared !== ref) {
-        const entry = refByQuality.get(seg.quality);
-        entry?.variants?.set(seg.refVariant, prepared);
+        entry?.variants?.set(variant, prepared);
       }
 
       return prepared;
@@ -2661,14 +2693,14 @@ if (typeof globalThis !== "undefined") {
     if (refPpq == null) throw new Error("Primero carga la carpeta de referencias.");
     const ppq = refPpq;
     const tickPerEighth = ppq / 2;
-    const winTicks = 8 * ppq;
-
-    // Random seed por bloque de 2 compases en la línea de tiempo de salida
-    const totalBlocks = Math.ceil(totalEighth / WINDOW_EIGHTS);
-    const blockWindowSeed = [];
-    for (let b=0; b<totalBlocks; b++){
-      blockWindowSeed.push(randInt(0x100000000));
-    }
+    const blockWindowSeedByWin = new Map();
+    const blockSeedsFor = (winEights) => {
+      if (!blockWindowSeedByWin.has(winEights)) {
+        const blocks = Math.ceil(totalEighth / winEights);
+        blockWindowSeedByWin.set(winEights, Array.from({ length: blocks }, () => randInt(0x100000000)));
+      }
+      return blockWindowSeedByWin.get(winEights);
+    };
     const out = [];
     let maxTick = 0;
 
@@ -2678,24 +2710,35 @@ if (typeof globalThis !== "undefined") {
     for (const seg of segments) {
       const ref = getReferenceForSegment(seg);
 
+      const winEights = ref.winEights ?? WINDOW_EIGHTS;
       const startTickOut = seg.startEighth * tickPerEighth;
       const durTicks = seg.durEighth * tickPerEighth;
-      const windowOffsetTicks = (seg.startEighth % WINDOW_EIGHTS) * tickPerEighth;
+      const windowOffsetEighths = (usingSoloing && ref.variant === "x24") ? 0 : (seg.startEighth % winEights);
+      const windowOffsetTicks = windowOffsetEighths * tickPerEighth;
       const remainingWindowTicks = ref.winTicks - windowOffsetTicks;
       const effectiveSpan = Math.min(durTicks, remainingWindowTicks);
       const endTickOut = startTickOut + durTicks;
 
-      const block = Math.floor(seg.startEighth / WINDOW_EIGHTS);
+      const block = Math.floor(seg.startEighth / winEights);
 
       // Selección de ventana:
-      // - Si el archivo es EXACTAMENTE 16 corcheas (windowsPerFile===1), NO hay ventanas aleatorias.
-      // - Si el archivo tiene 32 corcheas o más (windowsPerFile>1), se elige una ventana por bloque de 16 corcheas.
+      // - Si el archivo es EXACTAMENTE winEights corcheas (windowsPerFile===1), NO hay ventanas aleatorias.
+      // - Si el archivo tiene más, se elige una ventana por bloque de winEights corcheas (o al azar en soloing x24).
       //   PERO: evitamos ventanas silenciosas (para que ningún acorde quede sin notas).
       let srcWindow;
       if (ref.windowsPerFile === 1) {
         srcWindow = 0;
+      } else if (usingSoloing && ref.variant === "x24") {
+        const attempts = ref.windowsPerFile;
+        for (let i = 0; i < attempts; i++) {
+          const cand = randInt(ref.windowsPerFile);
+          const noteHorizon = ref.firstNoteOnRel ? ref.firstNoteOnRel[cand] : Infinity;
+          if (noteHorizon < (windowOffsetTicks + effectiveSpan)) { srcWindow = cand; break; }
+        }
+        if (srcWindow == null) srcWindow = randInt(ref.windowsPerFile);
       } else {
-        const cand = (blockWindowSeed[block] % ref.windowsPerFile);
+        const seeds = blockSeedsFor(winEights);
+        const cand = ((seeds?.[block] ?? randInt(0x100000000)) % ref.windowsPerFile);
         srcWindow = cand;
 
         // Si la ventana candidata no tiene ningún NoteOn antes de que termine el acorde, buscamos otra.
