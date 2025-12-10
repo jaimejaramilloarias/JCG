@@ -1172,8 +1172,19 @@ if (typeof globalThis !== "undefined") {
 
     const tickPerEighth = ref.tickPerEighth ?? 0;
     const barsPerFile = ref.barsPerFile ?? 0;
+    const totalWindows = Math.max(1, ref.windowsPerFile ?? 1);
+    const winEights = ref.winEights ?? 32;
     const maxStartBar = Math.max(0, Math.floor(barsPerFile - 4));
     let segBar = Math.floor((seg.startEighth ?? 0) / 8);
+
+    const wrapWindow = () => {
+      const windowIndex = ((segBar % totalWindows) + totalWindows) % totalWindows;
+      return { windowStartEighth: windowIndex * winEights, windowIndex };
+    };
+
+    if (!Number.isFinite(barsPerFile) || !Number.isFinite(segBar) || winEights <= 0) {
+      return wrapWindow();
+    }
 
     // Si se supera la última ventana disponible (progresiones largas o con repeticiones),
     // reiniciamos el recorrido sobre el archivo de referencia en un punto aleatorio para
@@ -1183,10 +1194,16 @@ if (typeof globalThis !== "undefined") {
       if (loop > 0) {
         const offset = randInt(loop);
         segBar = (segBar + offset) % loop;
+      } else {
+        return wrapWindow();
       }
     }
     const minBar = Math.max(0, segBar - 3);
     const validStartBarMax = Math.min(maxStartBar, segBar);
+
+    if (minBar > validStartBarMax) {
+      return wrapWindow();
+    }
 
     const candidates = [];
     for (let bar = minBar; bar <= validStartBarMax; bar++) {
@@ -1212,7 +1229,7 @@ if (typeof globalThis !== "undefined") {
     const viable = candidates.filter((c) => c.score > 0);
     const pick = pickWindowWithHistory(`${qualityKey || "?"}_${ref.variant || "x32"}`, viable.length ? viable : candidates);
 
-    return pick || { windowStartEighth: minBar * 8, windowIndex: Math.floor((minBar * 8) / ref.winEights) };
+    return pick || wrapWindow();
   }
 
   function parseChordToken(tokRaw) {
