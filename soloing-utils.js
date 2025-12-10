@@ -1,5 +1,4 @@
-(function(){
-function prepareSoloingReference(ref) {
+export function prepareSoloingReference(ref) {
   if (!ref?.soloing) return ref;
   if (ref.soloingReady) return ref;
 
@@ -37,7 +36,8 @@ function prepareSoloingReference(ref) {
   return { ...ref, events, soloingReady: true };
 }
 
-if (typeof window !== "undefined") {
-  window.SoloingUtils = { prepareSoloingReference };
-}
+(function(){
+  if (typeof window !== "undefined") {
+    window.SoloingUtils = { prepareSoloingReference };
+  }
 })();
