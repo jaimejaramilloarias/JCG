@@ -8,6 +8,7 @@ import {
   parseMidi,
   sanitizeEvents
 } from './midi-utils.js';
+import { adjustSalsaSegments, prepareSalsaReference } from './salsa-utils.js';
 
 test('enforceMaxNoteLength corta las notas a un máximo de 3 corcheas y fuerza note off faltantes', () => {
   const ppq = 120;
@@ -130,4 +131,42 @@ test('dropLongNotesAndSustain promedia por acorde y recorta notas largas desalin
 
   const off67 = filtered.find(e => (e.status & 0xF0) === 0x80 && e.d1 === 67);
   strictEqual(off67.tick, 120); // se recorta a la media corta del acorde (antes quedaba largo)
+});
+
+test('adjustSalsaSegments aplica las anticipaciones del modo Salsa 2-3', () => {
+  const segments = [0, 4, 8, 12, 16].map((start, idx) => ({
+    startEighth: start,
+    durEighth: 4,
+    token: `A${idx + 1}`,
+    quality: 'A',
+    refVariant: '1',
+    transpose: 0
+  }));
+
+  const { segments: adjusted } = adjustSalsaSegments(segments, 24);
+
+  deepStrictEqual(adjusted.map(s => s.startEighth), [0, 3, 7, 11, 14]);
+  deepStrictEqual(adjusted.map(s => s.durEighth), [3, 4, 4, 3, 10]);
+});
+
+test('prepareSalsaReference ancla ventanas silenciosas con notas dummy sin sonido', () => {
+  const tickPerEighth = 60;
+  const winTicks = tickPerEighth * 16;
+  const events = [
+    { tick: tickPerEighth, status: 0x90, d1: 60, d2: 90 },
+    { tick: tickPerEighth * 2, status: 0x80, d1: 60, d2: 0 },
+  ];
+
+  const prepared = prepareSalsaReference({
+    tickPerEighth,
+    winTicks,
+    windowsPerFile: 4,
+    events,
+  });
+
+  const startAnchor = prepared.events.find(e => e.tick === 0 && (e.status & 0xF0) === 0x90);
+  const endAnchor = prepared.events.find(e => e.tick === winTicks && (e.status & 0xF0) === 0x80);
+
+  deepStrictEqual(startAnchor?.d2, 0);
+  deepStrictEqual(endAnchor?.d2, 0);
 });

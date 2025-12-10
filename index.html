@@ -449,6 +449,7 @@ color:var(--txt);
 </div>
 
 
+<script type="module" src="./salsa-utils.js"></script>
 <script>
 // -- MIDI utils embebidos para funcionar sin servidor (file://)
 // Copiado de midi-utils.browser.js
@@ -1315,32 +1316,11 @@ if (typeof globalThis !== "undefined") {
     if (!salsa23?.checked) return { segments, totalEighth };
     if (!segments?.length) return { segments, totalEighth };
 
-    const MIN_CHORD_EIGHTS = 4;
-    const adjusted = segments.map((s) => ({ ...s }));
-
-    for (let i = 1; i < adjusted.length; i++) {
-      const seg = adjusted[i];
-      const prevStart = adjusted[i - 1].startEighth;
-
-      if (seg.startEighth % WINDOW_EIGHTS !== 0) continue;
-
-      const minAllowed = prevStart + MIN_CHORD_EIGHTS;
-      const desired = seg.startEighth - 1; // un extra de anticipación (total 2 corcheas)
-      seg.startEighth = Math.max(minAllowed, desired);
+    if (window?.SalsaUtils?.adjustSalsaSegments) {
+      return window.SalsaUtils.adjustSalsaSegments(segments, totalEighth);
     }
 
-    for (let i = 1; i < adjusted.length; i++) {
-      if (adjusted[i].startEighth <= adjusted[i - 1].startEighth) {
-        adjusted[i].startEighth = adjusted[i - 1].startEighth + 1;
-      }
-    }
-
-    for (let i = 0; i < adjusted.length - 1; i++) {
-      adjusted[i].durEighth = adjusted[i + 1].startEighth - adjusted[i].startEighth;
-    }
-    adjusted[adjusted.length - 1].durEighth = totalEighth - adjusted[adjusted.length - 1].startEighth;
-
-    return { segments: adjusted, totalEighth };
+    return { segments, totalEighth };
   }
 
   function getRepeatTimes() {
@@ -1624,7 +1604,20 @@ if (typeof globalThis !== "undefined") {
 
   function getReferenceForSegment(seg) {
     ensureQualityLoaded(seg.quality, seg.refVariant);
-    return refByQuality.get(seg.quality)?.variants?.get(seg.refVariant);
+    const ref = refByQuality.get(seg.quality)?.variants?.get(seg.refVariant);
+
+    if (salsa23?.checked && window?.SalsaUtils?.prepareSalsaReference) {
+      const prepared = window.SalsaUtils.prepareSalsaReference(ref);
+
+      if (prepared && prepared !== ref) {
+        const entry = refByQuality.get(seg.quality);
+        entry?.variants?.set(seg.refVariant, prepared);
+      }
+
+      return prepared;
+    }
+
+    return ref;
   }
 
   function channelEvent(tick, status, d1, d2, order=3) {
