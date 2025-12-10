@@ -1063,6 +1063,25 @@ if (typeof globalThis !== "undefined") {
   function choice(arr) { return arr[randInt(arr.length)]; }
   const randUnit = () => randInt(0x100000000) / 0x100000000;
 
+  const SOLOING_RECENT_WINDOW_HISTORY = 3;
+  const soloingWindowHistory = new Map(); // variantKey -> [windowId,...]
+
+  function rememberSoloingWindow(variantKey, windowId) {
+    if (variantKey == null || windowId == null) return;
+    const history = soloingWindowHistory.get(variantKey) || [];
+    const next = [windowId, ...history.filter((w) => w !== windowId)].slice(0, SOLOING_RECENT_WINDOW_HISTORY);
+    soloingWindowHistory.set(variantKey, next);
+  }
+
+  function pickWindowWithHistory(variantKey, candidates) {
+    if (!candidates?.length) return null;
+    const history = soloingWindowHistory.get(variantKey) || [];
+    const fresh = candidates.filter((c) => !history.includes(c.id));
+    const chosen = choice(fresh.length ? fresh : candidates);
+    rememberSoloingWindow(variantKey, chosen.id);
+    return chosen;
+  }
+
   // Bajo (solo playback): convierte semitonos desde C a una nota entre C1(24) y C3(48)
   function bassNoteFromTranspose(semi) {
     let note = 36 + (semi % 12); // base C2=36
@@ -1128,6 +1147,61 @@ if (typeof globalThis !== "undefined") {
     if (!entry?.variants?.size) return null;
     const first = entry.variants.keys().next();
     return first && !first.done ? first.value : null;
+  }
+
+  function firstNoteOnFrom(ref, windowStartTick) {
+    const noteOnTicks = ref?.noteOnTicks;
+    if (!noteOnTicks?.length || typeof windowStartTick !== "number") return Infinity;
+    const limit = windowStartTick + (ref?.winTicks ?? 0);
+    if (!Number.isFinite(limit) || limit <= windowStartTick) return Infinity;
+
+    let lo = 0;
+    let hi = noteOnTicks.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (noteOnTicks[mid] < windowStartTick) lo = mid + 1; else hi = mid;
+    }
+
+    const tick = noteOnTicks[lo];
+    if (tick == null || tick >= limit) return Infinity;
+    return tick - windowStartTick;
+  }
+
+  function selectSoloingX32Window(ref, seg, qualityKey) {
+    if (!ref || !seg) return { windowStartEighth: 0, windowIndex: 0 };
+
+    const tickPerEighth = ref.tickPerEighth ?? 0;
+    const barsPerFile = ref.barsPerFile ?? 0;
+    const maxStartBar = Math.max(0, Math.floor(barsPerFile - 4));
+    const segBar = Math.floor((seg.startEighth ?? 0) / 8);
+    const minBar = Math.max(0, segBar - 3);
+    const validStartBarMax = Math.min(maxStartBar, segBar);
+
+    const candidates = [];
+    for (let bar = minBar; bar <= validStartBarMax; bar++) {
+      const startEighth = bar * 8;
+      const windowOffsetEighths = (seg.startEighth ?? 0) - startEighth;
+      if (windowOffsetEighths < 0 || windowOffsetEighths >= ref.winEights) continue;
+
+      const windowStartTick = startEighth * tickPerEighth;
+      const windowOffsetTicks = windowOffsetEighths * tickPerEighth;
+      const remainingWindowTicks = (ref.winTicks ?? 0) - windowOffsetTicks;
+      const effectiveSpan = Math.min(seg.durEighth * tickPerEighth, remainingWindowTicks);
+      const noteHorizon = firstNoteOnFrom(ref, windowStartTick);
+      const withinSpan = noteHorizon < (windowOffsetTicks + effectiveSpan);
+
+      candidates.push({
+        id: `bar-${bar}`,
+        windowStartEighth: startEighth,
+        windowIndex: Math.floor(startEighth / ref.winEights),
+        score: withinSpan ? 1 : 0,
+      });
+    }
+
+    const viable = candidates.filter((c) => c.score > 0);
+    const pick = pickWindowWithHistory(`${qualityKey || "?"}_${ref.variant || "x32"}`, viable.length ? viable : candidates);
+
+    return pick || { windowStartEighth: minBar * 8, windowIndex: Math.floor((minBar * 8) / ref.winEights) };
   }
 
   function parseChordToken(tokRaw) {
@@ -1394,6 +1468,7 @@ if (typeof globalThis !== "undefined") {
 
     let events = [];
     let trackLenTicks = 0;
+    const noteOnTicks = [];
 
     for (const tr of tracks) {
       const channelEvents = (tr.events || []).filter((e) => {
@@ -1402,6 +1477,12 @@ if (typeof globalThis !== "undefined") {
       });
 
       if (channelEvents.length) events.push(...channelEvents);
+
+      for (const ev of channelEvents) {
+        const status = (ev.status ?? 0) & 0xF0;
+        const vel = (ev.d2 ?? 0) & 0x7F;
+        if (status === 0x90 && vel > 0) noteOnTicks.push(ev.tick | 0);
+      }
 
       const end = (typeof tr.endTick === "number" && tr.endTick > 0) ? (tr.endTick | 0) : null;
       if (end != null) trackLenTicks = Math.max(trackLenTicks, end);
@@ -1460,6 +1541,7 @@ if (typeof globalThis !== "undefined") {
     }
 
     const totalEighths = trackLenTicks / tickPerEighth;
+    const totalBars = totalEighths / 8;
 
     // Requisito: múltiplos de winEights corcheas por archivo de referencia.
     if ((totalEighths % winEights) !== 0) {
@@ -1495,17 +1577,14 @@ if (typeof globalThis !== "undefined") {
     // Precomputo: evita seleccionar ventanas completamente silenciosas al azar.
     // Guardamos, por ventana de 16 corcheas, el primer NoteOn (vel>0) relativo a la ventana.
     // Si no hay notas en una ventana, queda Infinity.
+    noteOnTicks.sort((a, b) => a - b);
+
     const firstNoteOnRel = new Array(windowsPerFile).fill(Infinity);
-    for (const e of events) {
-      const status = (e.status ?? 0) & 255;
-      const hi = status & 0xF0;
-      const vel = (e.d2 ?? 0) & 127;
-      if (hi === 0x90 && vel > 0) {
-        const w = Math.floor((e.tick|0) / winTicks);
-        if (w >= 0 && w < windowsPerFile) {
-          const rel = (e.tick|0) - (w * winTicks);
-          if (rel < firstNoteOnRel[w]) firstNoteOnRel[w] = rel;
-        }
+    for (const t of noteOnTicks) {
+      const w = Math.floor(t / winTicks);
+      if (w >= 0 && w < windowsPerFile) {
+        const rel = t - (w * winTicks);
+        if (rel < firstNoteOnRel[w]) firstNoteOnRel[w] = rel;
       }
     }
 
@@ -1517,8 +1596,10 @@ if (typeof globalThis !== "undefined") {
       tickPerEighth,
       winEights,
       winTicks,
+      barsPerFile: totalBars,
       windowsPerFile,
       firstNoteOnRel,
+      noteOnTicks,
       events,
       variant,
       soloing: isSoloingVariant,
@@ -2732,30 +2813,49 @@ if (typeof globalThis !== "undefined") {
       const winEights = ref.winEights ?? WINDOW_EIGHTS;
       const startTickOut = seg.startEighth * tickPerEighth;
       const durTicks = seg.durEighth * tickPerEighth;
-      const windowOffsetEighths = (usingSoloing && ref.variant === "x24") ? 0 : (seg.startEighth % winEights);
-      const windowOffsetTicks = windowOffsetEighths * tickPerEighth;
-      const remainingWindowTicks = ref.winTicks - windowOffsetTicks;
-      const effectiveSpan = Math.min(durTicks, remainingWindowTicks);
       const endTickOut = startTickOut + durTicks;
+
+      let windowOffsetEighths;
+      let windowOffsetTicks;
+      let remainingWindowTicks;
+      let effectiveSpan;
+      let windowBaseEighth;
+      let srcWindow;
 
       const block = Math.floor(seg.startEighth / winEights);
 
       // Selección de ventana:
       // - Si el archivo es EXACTAMENTE winEights corcheas (windowsPerFile===1), NO hay ventanas aleatorias.
-      // - Si el archivo tiene más, se elige una ventana por bloque de winEights corcheas (o al azar en soloing x24).
+      // - Si el archivo tiene más, se elige una ventana por bloque de winEights corcheas (o al azar en soloing x24/x32).
       //   PERO: evitamos ventanas silenciosas (para que ningún acorde quede sin notas).
-      let srcWindow;
-      if (ref.windowsPerFile === 1) {
+      if (usingSoloing && ref.variant === "x32") {
+        const { windowStartEighth, windowIndex } = selectSoloingX32Window(ref, seg, seg.quality);
+        windowBaseEighth = windowStartEighth;
+        windowOffsetEighths = seg.startEighth - windowBaseEighth;
+        srcWindow = windowIndex;
+      } else if (ref.windowsPerFile === 1) {
         srcWindow = 0;
+        windowOffsetEighths = (usingSoloing && ref.variant === "x24") ? 0 : (seg.startEighth % winEights);
+        windowBaseEighth = 0;
       } else if (usingSoloing && ref.variant === "x24") {
+        windowOffsetEighths = 0;
         const attempts = ref.windowsPerFile;
         for (let i = 0; i < attempts; i++) {
           const cand = randInt(ref.windowsPerFile);
+          windowOffsetTicks = 0;
+          remainingWindowTicks = ref.winTicks;
+          effectiveSpan = Math.min(durTicks, remainingWindowTicks);
           const noteHorizon = ref.firstNoteOnRel ? ref.firstNoteOnRel[cand] : Infinity;
           if (noteHorizon < (windowOffsetTicks + effectiveSpan)) { srcWindow = cand; break; }
         }
         if (srcWindow == null) srcWindow = randInt(ref.windowsPerFile);
+        windowBaseEighth = srcWindow * winEights;
       } else {
+        windowOffsetEighths = seg.startEighth % winEights;
+        windowOffsetTicks = windowOffsetEighths * tickPerEighth;
+        remainingWindowTicks = ref.winTicks - windowOffsetTicks;
+        effectiveSpan = Math.min(durTicks, remainingWindowTicks);
+
         const seeds = blockSeedsFor(winEights);
         const cand = ((seeds?.[block] ?? randInt(0x100000000)) % ref.windowsPerFile);
         srcWindow = cand;
@@ -2770,11 +2870,18 @@ if (typeof globalThis !== "undefined") {
             if (altHorizon < (windowOffsetTicks + effectiveSpan)) { srcWindow = w; break; }
           }
         }
+        windowBaseEighth = srcWindow * winEights;
+      }
+
+      if (windowOffsetTicks == null) {
+        windowOffsetTicks = windowOffsetEighths * tickPerEighth;
+        remainingWindowTicks = ref.winTicks - windowOffsetTicks;
+        effectiveSpan = Math.min(durTicks, remainingWindowTicks);
       }
 
       // Regla: al cambiar de acorde, se debe usar el material desde el INICIO de la ventana elegida.
       // Manteniendo el offset real dentro de la ventana según la posición de la progresión.
-      const srcStart = (srcWindow * ref.winTicks) + windowOffsetTicks;
+      const srcStart = (windowBaseEighth * tickPerEighth) + windowOffsetTicks;
       const srcEnd = srcStart + durTicks;
 
       // Archivo de referencia con UNA SOLA PISTA
@@ -2793,7 +2900,7 @@ if (typeof globalThis !== "undefined") {
       // Conteo por nota para evitar artefactos si aparece NoteOn repetido antes de su NoteOff
       const activeCount = new Map(); // "ch-note" -> int
       const carryVel = new Map();    // "ch-note" -> last velocity
-      const winBase = srcWindow * ref.winTicks;
+      const winBase = windowBaseEighth * tickPerEighth;
 
       const hasNoteOnAtStart = srcEvents.some((ev) => {
         const status = ev.status & 0xF0;
