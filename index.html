@@ -1311,6 +1311,38 @@ if (typeof globalThis !== "undefined") {
     return { segments: out, totalEighth: totalEighth * t };
   }
 
+  function applySalsaWindowAnticipation(segments, totalEighth) {
+    if (!salsa23?.checked) return { segments, totalEighth };
+    if (!segments?.length) return { segments, totalEighth };
+
+    const MIN_CHORD_EIGHTS = 4;
+    const adjusted = segments.map((s) => ({ ...s }));
+
+    for (let i = 1; i < adjusted.length; i++) {
+      const seg = adjusted[i];
+      const prevStart = adjusted[i - 1].startEighth;
+
+      if (seg.startEighth % WINDOW_EIGHTS !== 0) continue;
+
+      const minAllowed = prevStart + MIN_CHORD_EIGHTS;
+      const desired = seg.startEighth - 1; // un extra de anticipación (total 2 corcheas)
+      seg.startEighth = Math.max(minAllowed, desired);
+    }
+
+    for (let i = 1; i < adjusted.length; i++) {
+      if (adjusted[i].startEighth <= adjusted[i - 1].startEighth) {
+        adjusted[i].startEighth = adjusted[i - 1].startEighth + 1;
+      }
+    }
+
+    for (let i = 0; i < adjusted.length - 1; i++) {
+      adjusted[i].durEighth = adjusted[i + 1].startEighth - adjusted[i].startEighth;
+    }
+    adjusted[adjusted.length - 1].durEighth = totalEighth - adjusted[adjusted.length - 1].startEighth;
+
+    return { segments: adjusted, totalEighth };
+  }
+
   function getRepeatTimes() {
     let n = parseInt(repeatCount.value, 10);
     if (!Number.isFinite(n)) n = 1;
@@ -2486,7 +2518,8 @@ if (typeof globalThis !== "undefined") {
 
     const { segments: baseSegments, totalEighth: baseTotalEighth } = parseProgression(text);
     const repeatTimes = getRepeatTimes();
-    const { segments, totalEighth } = repeatSegments(baseSegments, baseTotalEighth, repeatTimes);
+    const repeated = repeatSegments(baseSegments, baseTotalEighth, repeatTimes);
+    const { segments, totalEighth } = applySalsaWindowAnticipation(repeated.segments, repeated.totalEighth);
     if (refPpq == null) throw new Error("Primero carga la carpeta de referencias.");
     const ppq = refPpq;
     const tickPerEighth = ppq / 2;
