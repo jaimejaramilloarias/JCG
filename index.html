@@ -1391,8 +1391,22 @@ if (typeof globalThis !== "undefined") {
     }
 
     // El MIDI de referencia debe venir cuantizado a corcheas, aunque haya silencios.
-    if ((trackLenTicks % tickPerEighth) !== 0) {
-      throw new Error(`"${qualityKey}": longitud no cuantizada a corcheas. Ajusta el final del archivo a una corchea exacta.`);
+    const lenRemainder = trackLenTicks % tickPerEighth;
+    if (lenRemainder !== 0) {
+      // Algunos archivos (p.ej. Salsa) vienen con ligeros microajustes en el último evento
+      // que descuadran la cuantización por unos pocos ticks. Si la desviación es mínima,
+      // la ajustamos automáticamente para permitir la carga de la carpeta completa.
+      const tolerance = Math.min(24, Math.max(2, Math.floor(tickPerEighth * 0.1)));
+      const snapDown = lenRemainder;
+      const snapUp = tickPerEighth - lenRemainder;
+
+      if (snapDown <= tolerance || snapUp <= tolerance) {
+        const adjustedLen = snapDown <= snapUp ? (trackLenTicks - snapDown) : (trackLenTicks + snapUp);
+        trackLenTicks = adjustedLen;
+        events = events.map((e) => (e.tick > trackLenTicks ? { ...e, tick: trackLenTicks } : e));
+      } else {
+        throw new Error(`"${qualityKey}": longitud no cuantizada a corcheas. Ajusta el final del archivo a una corchea exacta.`);
+      }
     }
 
     const totalEighths = trackLenTicks / tickPerEighth;
