@@ -1,8 +1,8 @@
-import { strictEqual, ok } from 'node:assert';
+import { deepStrictEqual, strictEqual, ok } from 'node:assert';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { parseMidi } from './midi-utils.js';
-import { prepareSoloingReference } from './soloing-utils.js';
+import { adjustSoloingWindowTranspose, prepareSoloingReference } from './soloing-utils.js';
 
 function loadSoloingReference(path, winEights) {
   const buf = readFileSync(path);
@@ -72,4 +72,32 @@ test('prepareSoloingReference agrega notas dummy silenciosas en ventanas sin act
     (e) => e.tick === (win3End - tickPerEighth) && e.d1 === 0 && (e.status & 0xF0) === 0x90 && e.d2 === 0,
   );
   strictEqual(dummyAtWin3Tail, false);
+});
+
+test('prepareSoloingReference captura primeras y últimas notas por ventana', () => {
+  const ref = {
+    soloing: true,
+    events: [
+      { tick: 0, status: 0x90, d1: 60, d2: 90 },
+      { tick: 120, status: 0x80, d1: 60, d2: 0 },
+      { tick: 480, status: 0x90, d1: 64, d2: 100 },
+      { tick: 600, status: 0x80, d1: 64, d2: 0 },
+      { tick: 700, status: 0x90, d1: 67, d2: 80 },
+    ],
+    tickPerEighth: 120,
+    winTicks: 480,
+    windowsPerFile: 2,
+  };
+
+  const prepared = prepareSoloingReference(ref);
+
+  strictEqual(prepared.soloingWindowAnchors.length, 2);
+  deepStrictEqual(prepared.soloingWindowAnchors[0], { first: 60, last: 60 });
+  deepStrictEqual(prepared.soloingWindowAnchors[1], { first: 64, last: 67 });
+});
+
+test('adjustSoloingWindowTranspose reduce saltos mayores a una octava', () => {
+  strictEqual(adjustSoloingWindowTranspose(72, 60, 0), 0, 'No ajusta cuando la distancia es una octava o menos');
+  strictEqual(adjustSoloingWindowTranspose(60, 84, 0), -12, 'Baja una octava para acercar notas distantes');
+  strictEqual(adjustSoloingWindowTranspose(72, 48, 0), 12, 'Sube una octava cuando la siguiente ventana está muy abajo');
 });

@@ -1177,6 +1177,11 @@ if (typeof globalThis !== "undefined") {
     });
   };
 
+  const adjustSoloingWindowTranspose = (prevNote, nextFirstNote, baseTranspose) => {
+    if (!window?.SoloingUtils?.adjustSoloingWindowTranspose) return baseTranspose;
+    return window.SoloingUtils.adjustSoloingWindowTranspose(prevNote, nextFirstNote, baseTranspose);
+  };
+
   function parseChordToken(tokRaw) {
     const tok = normalizeAccidentals(tokRaw.trim());
     const m = tok.match(/^([A-Ga-g])([#b]?)(.*)$/);
@@ -2778,6 +2783,8 @@ if (typeof globalThis !== "undefined") {
     let maxTick = 0;
 
     const usingSoloing = isSoloingMode();
+    const appliedTransposeBySegment = [];
+    let prevSoloingWindowLastNote = null;
 
     // generate segment by segment
     for (const seg of segments) {
@@ -2852,6 +2859,16 @@ if (typeof globalThis !== "undefined") {
         effectiveSpan = Math.min(durTicks, remainingWindowTicks);
       }
 
+      const windowAnchors = ref.soloingWindowAnchors;
+      const windowAnchor = (Array.isArray(windowAnchors) && srcWindow != null) ? windowAnchors[srcWindow] : null;
+      const firstAnchorNote = windowAnchor?.first;
+      const lastAnchorNote = windowAnchor?.last;
+
+      const segmentTranspose = usingSoloing
+        ? adjustSoloingWindowTranspose(prevSoloingWindowLastNote, firstAnchorNote, seg.transpose)
+        : seg.transpose;
+      appliedTransposeBySegment.push(segmentTranspose);
+
       // Regla: al cambiar de acorde, se debe usar el material desde el INICIO de la ventana elegida.
       // Manteniendo el offset real dentro de la ventana según la posición de la progresión.
       const srcStart = (windowBaseEighth * tickPerEighth) + windowOffsetTicks;
@@ -2895,7 +2912,7 @@ if (typeof globalThis !== "undefined") {
 
           if (hi !== 0x80 && hi !== 0x90) continue;
 
-          let note = (e.d1 ?? 0) + seg.transpose;
+          let note = (e.d1 ?? 0) + segmentTranspose;
           let vel = e.d2 ?? 0;
           if (note < 0 || note > 127) continue;
 
@@ -2942,7 +2959,7 @@ if (typeof globalThis !== "undefined") {
           let vel = e.d2 ?? 0;
 
           // transpose upward from the chosen reference root
-          note = note + seg.transpose;
+          note = note + segmentTranspose;
           if (note < 0 || note > 127) continue;
 
           const key = ch + "-" + note;
@@ -3002,17 +3019,23 @@ if (typeof globalThis !== "undefined") {
       addPanicAtTick(out, endTickOut, endChannels, 1);
 
       if (endTickOut > maxTick) maxTick = endTickOut;
-      const transpLabel = seg.transpose >= 0 ? `+${seg.transpose}` : `${seg.transpose}`;
+      const transpLabel = segmentTranspose >= 0 ? `+${segmentTranspose}` : `${segmentTranspose}`;
       log(`Seg: ${seg.token}  q=${seg.quality}_${seg.refVariant}  srcWin=${srcWindow+1}/${ref.windowsPerFile}  transp=${transpLabel}`, "OK");
+
+      if (usingSoloing) {
+        prevSoloingWindowLastNote = Number.isFinite(lastAnchorNote)
+          ? lastAnchorNote + segmentTranspose
+          : null;
+      }
     }
 
     // Final global panic
     const allCh = new Set([...Array(16)].map((_,i)=>i));
     addPanicAtTick(out, maxTick, allCh, 1);
 
-    const segmentsForBass = segments.map(s => ({
+    const segmentsForBass = segments.map((s, idx) => ({
       token: s.token,
-        transpose: s.transpose, // semitonos relativos desde la raíz del archivo de referencia elegido
+        transpose: appliedTransposeBySegment[idx] ?? s.transpose, // semitonos relativos desde la raíz del archivo de referencia elegido
       startTick: s.startEighth * tickPerEighth,
       endTick: (s.startEighth + s.durEighth) * tickPerEighth
     }));
