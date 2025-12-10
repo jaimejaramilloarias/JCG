@@ -6,7 +6,16 @@ export function prepareSoloingReference(ref) {
   const winTicks = ref.winTicks;
   const tickPerEighth = ref.tickPerEighth;
   const totalWindows = ref.windowsPerFile;
-  const anchors = Array.from({ length: totalWindows || 0 }, () => ({ first: null, firstTick: null, last: null, lastTick: null }));
+  const anchors = Array.from({ length: totalWindows || 0 }, () => ({
+    first: null,
+    firstTick: null,
+    last: null,
+    lastTick: null,
+    firstOff: null,
+    firstOffTick: null,
+    lastOff: null,
+    lastOffTick: null,
+  }));
 
   const pushDummy = (tickOn, tickOff) => {
     const on = { tick: tickOn, status: 0x90, d1: 0, d2: 0 };
@@ -36,25 +45,39 @@ export function prepareSoloingReference(ref) {
 
   for (const e of events) {
     const status = (e.status ?? 0) & 0xF0;
-    const vel = (e.d2 ?? 0) & 0x7F;
-    if (status !== 0x90 || vel <= 0) continue;
-
     const win = Math.floor((e.tick ?? 0) / winTicks);
     if (win < 0 || win >= totalWindows) continue;
     const note = (e.d1 ?? 0) & 0x7F;
     const anchor = anchors[win];
 
-    if (anchor.firstTick == null || e.tick < anchor.firstTick) {
-      anchor.firstTick = e.tick;
-      anchor.first = note;
-    }
-    if (anchor.lastTick == null || e.tick >= anchor.lastTick) {
-      anchor.lastTick = e.tick;
-      anchor.last = note;
+    if (status === 0x90) {
+      const vel = (e.d2 ?? 0) & 0x7F;
+      if (vel <= 0) continue;
+
+      if (anchor.firstTick == null || e.tick < anchor.firstTick) {
+        anchor.firstTick = e.tick;
+        anchor.first = note;
+      }
+      if (anchor.lastTick == null || e.tick >= anchor.lastTick) {
+        anchor.lastTick = e.tick;
+        anchor.last = note;
+      }
+    } else if (status === 0x80) {
+      if (anchor.firstOffTick == null || e.tick < anchor.firstOffTick) {
+        anchor.firstOffTick = e.tick;
+        anchor.firstOff = note;
+      }
+      if (anchor.lastOffTick == null || e.tick >= anchor.lastOffTick) {
+        anchor.lastOffTick = e.tick;
+        anchor.lastOff = note;
+      }
     }
   }
 
-  const soloingWindowAnchors = anchors.map(({ first, last }) => ({ first, last }));
+  const soloingWindowAnchors = anchors.map(({ first, last, firstOff, lastOff }) => ({
+    first: first ?? firstOff,
+    last: last ?? lastOff,
+  }));
 
   return { ...ref, events, soloingWindowAnchors, soloingReady: true };
 }
@@ -62,16 +85,24 @@ export function prepareSoloingReference(ref) {
 export function adjustSoloingWindowTranspose(prevNote, nextFirstNote, baseTranspose = 0) {
   if (!Number.isFinite(prevNote) || !Number.isFinite(nextFirstNote)) return baseTranspose;
 
-  const target = nextFirstNote + baseTranspose;
-  const interval = target - prevNote;
-  if (Math.abs(interval) <= 12) return baseTranspose;
+  const limit = 11;
+  let transpose = baseTranspose;
+  let target = nextFirstNote + transpose;
+  let interval = target - prevNote;
 
-  const down = target - 12;
-  const up = target + 12;
-  const downGap = Math.abs(down - prevNote);
-  const upGap = Math.abs(up - prevNote);
+  while (interval > limit) {
+    transpose -= 12;
+    target -= 12;
+    interval -= 12;
+  }
 
-  return baseTranspose + (downGap <= upGap ? -12 : 12);
+  while (interval < -limit) {
+    transpose += 12;
+    target += 12;
+    interval += 12;
+  }
+
+  return transpose;
 }
 
 (function(){

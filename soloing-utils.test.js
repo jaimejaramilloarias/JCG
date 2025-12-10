@@ -96,8 +96,30 @@ test('prepareSoloingReference captura primeras y últimas notas por ventana', ()
   deepStrictEqual(prepared.soloingWindowAnchors[1], { first: 64, last: 67 });
 });
 
-test('adjustSoloingWindowTranspose reduce saltos mayores a una octava', () => {
-  strictEqual(adjustSoloingWindowTranspose(72, 60, 0), 0, 'No ajusta cuando la distancia es una octava o menos');
-  strictEqual(adjustSoloingWindowTranspose(60, 84, 0), -12, 'Baja una octava para acercar notas distantes');
-  strictEqual(adjustSoloingWindowTranspose(72, 48, 0), 12, 'Sube una octava cuando la siguiente ventana está muy abajo');
+test('adjustSoloingWindowTranspose reduce saltos mayores a una séptima mayor', () => {
+  strictEqual(adjustSoloingWindowTranspose(72, 60, 0), 12, 'Ajusta hacia arriba cuando la distancia supera 11 semitonos');
+  strictEqual(adjustSoloingWindowTranspose(60, 84, 0), -24, 'Puede necesitar más de una octava para respetar la distancia máxima');
+  strictEqual(adjustSoloingWindowTranspose(72, 48, 0), 24, 'Sube tantas octavas como sea necesario para acercar la siguiente ventana');
+});
+
+test('prepareSoloingReference usa NoteOff en los bordes cuando no hay NoteOn', () => {
+  const ref = {
+    soloing: true,
+    events: [
+      // Ventana 0: actividad normal
+      { tick: 0, status: 0x90, d1: 60, d2: 90 },
+      { tick: 120, status: 0x80, d1: 60, d2: 0 },
+      // Ventana 1: sin NoteOn, solo NoteOff al inicio y al final
+      { tick: 480, status: 0x80, d1: 65, d2: 0 },
+      { tick: 700, status: 0x80, d1: 67, d2: 0 },
+    ],
+    tickPerEighth: 120,
+    winTicks: 480,
+    windowsPerFile: 2,
+  };
+
+  const prepared = prepareSoloingReference(ref);
+
+  deepStrictEqual(prepared.soloingWindowAnchors[0], { first: 60, last: 60 });
+  deepStrictEqual(prepared.soloingWindowAnchors[1], { first: 65, last: 67 });
 });
