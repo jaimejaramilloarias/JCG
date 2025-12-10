@@ -1,4 +1,5 @@
-export function prepareSoloingReference(ref) {
+(function(){
+function prepareSoloingReference(ref) {
   if (!ref?.soloing) return ref;
   if (ref.soloingReady) return ref;
 
@@ -39,3 +40,4 @@ export function prepareSoloingReference(ref) {
 if (typeof window !== "undefined") {
   window.SoloingUtils = { prepareSoloingReference };
 }
+})();
