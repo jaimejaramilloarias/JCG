@@ -1173,7 +1173,18 @@ if (typeof globalThis !== "undefined") {
     const tickPerEighth = ref.tickPerEighth ?? 0;
     const barsPerFile = ref.barsPerFile ?? 0;
     const maxStartBar = Math.max(0, Math.floor(barsPerFile - 4));
-    const segBar = Math.floor((seg.startEighth ?? 0) / 8);
+    let segBar = Math.floor((seg.startEighth ?? 0) / 8);
+
+    // Si se supera la última ventana disponible (progresiones largas o con repeticiones),
+    // reiniciamos el recorrido sobre el archivo de referencia en un punto aleatorio para
+    // evitar silencios prolongados y patrones repetitivos.
+    if (segBar > maxStartBar) {
+      const loop = maxStartBar + 1;
+      if (loop > 0) {
+        const offset = randInt(loop);
+        segBar = (segBar + offset) % loop;
+      }
+    }
     const minBar = Math.max(0, segBar - 3);
     const validStartBarMax = Math.min(maxStartBar, segBar);
 
