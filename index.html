@@ -1235,7 +1235,9 @@ if (typeof globalThis !== "undefined") {
   // | X Y | -> 4 + 4 eighths
   // Anything else -> error (by spec)
   // -------------------------
-  function parseProgression(text) {
+  function parseProgression(text, opts = {}) {
+    const { syncopate = true } = opts;
+
     const raw = text.replace(/\r/g,"").trim();
     if (!raw) throw new Error("Escribe una progresión.");
     const parts = raw.split("|").map(s => s.trim()).filter(Boolean);
@@ -1285,38 +1287,40 @@ if (typeof globalThis !== "undefined") {
 
     const totalEighthNominal = startEighth;
 
-    // 2) "Síncopa jazz" CON REGLA DE MÍNIMO:
-    //    - Intentamos adelantar cada cambio 1 corchea.
-    //    - Pero garantizamos que cada acorde dure al menos MEDIO COMPÁS (4 corcheas).
-    //      (Esto evita acordes de 3 corcheas cuando hay 2 acordes por compás.)
-    const MIN_CHORD_EIGHTS = 4;
+    if (syncopate) {
+      // 2) "Síncopa jazz" CON REGLA DE MÍNIMO:
+      //    - Intentamos adelantar cada cambio 1 corchea.
+      //    - Pero garantizamos que cada acorde dure al menos MEDIO COMPÁS (4 corcheas).
+      //      (Esto evita acordes de 3 corcheas cuando hay 2 acordes por compás.)
+      const MIN_CHORD_EIGHTS = 4;
 
-    if (segments.length >= 2) {
-      // Proponemos nuevos inicios (adelantados 1 corchea), pero sin violar el mínimo.
-      for (let i = 1; i < segments.length; i++) {
-        const prevStart = segments[i-1].startEighth;
-        const proposed = Math.max(0, segments[i].startEighth - 1);
-        const minAllowed = prevStart + MIN_CHORD_EIGHTS;
-        segments[i].startEighth = Math.max(proposed, minAllowed);
-      }
-
-      // Asegura inicios estrictamente crecientes (por seguridad)
-      for (let i = 1; i < segments.length; i++) {
-        if (segments[i].startEighth <= segments[i-1].startEighth) {
-          segments[i].startEighth = segments[i-1].startEighth + 1;
+      if (segments.length >= 2) {
+        // Proponemos nuevos inicios (adelantados 1 corchea), pero sin violar el mínimo.
+        for (let i = 1; i < segments.length; i++) {
+          const prevStart = segments[i-1].startEighth;
+          const proposed = Math.max(0, segments[i].startEighth - 1);
+          const minAllowed = prevStart + MIN_CHORD_EIGHTS;
+          segments[i].startEighth = Math.max(proposed, minAllowed);
         }
-      }
 
-      // Recalcula duraciones: cada acorde dura hasta el siguiente inicio.
-      for (let i = 0; i < segments.length - 1; i++) {
-        segments[i].durEighth = segments[i+1].startEighth - segments[i].startEighth;
-      }
-      segments[segments.length - 1].durEighth = totalEighthNominal - segments[segments.length - 1].startEighth;
+        // Asegura inicios estrictamente crecientes (por seguridad)
+        for (let i = 1; i < segments.length; i++) {
+          if (segments[i].startEighth <= segments[i-1].startEighth) {
+            segments[i].startEighth = segments[i-1].startEighth + 1;
+          }
+        }
 
-      // Safety: evita duraciones raras y respeta mínimo
-      for (const s of segments) {
-        if (s.durEighth <= 0) s.durEighth = 1;
-        if (s.durEighth < MIN_CHORD_EIGHTS) s.durEighth = MIN_CHORD_EIGHTS;
+        // Recalcula duraciones: cada acorde dura hasta el siguiente inicio.
+        for (let i = 0; i < segments.length - 1; i++) {
+          segments[i].durEighth = segments[i+1].startEighth - segments[i].startEighth;
+        }
+        segments[segments.length - 1].durEighth = totalEighthNominal - segments[segments.length - 1].startEighth;
+
+        // Safety: evita duraciones raras y respeta mínimo
+        for (const s of segments) {
+          if (s.durEighth <= 0) s.durEighth = 1;
+          if (s.durEighth < MIN_CHORD_EIGHTS) s.durEighth = MIN_CHORD_EIGHTS;
+        }
       }
     }
 
@@ -2701,7 +2705,7 @@ if (typeof globalThis !== "undefined") {
   function generateMidiFromProgression(text) {
     clearLog();
 
-    const { segments: baseSegments, totalEighth: baseTotalEighth } = parseProgression(text);
+    const { segments: baseSegments, totalEighth: baseTotalEighth } = parseProgression(text, { syncopate: !isSoloingMode() });
     const repeatTimes = getRepeatTimes();
     const repeated = repeatSegments(baseSegments, baseTotalEighth, repeatTimes);
     const { segments, totalEighth } = applySalsaWindowAnticipation(repeated.segments, repeated.totalEighth);
