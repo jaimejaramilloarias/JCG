@@ -1,6 +1,7 @@
+(function(){
 const SALSA_WINDOW_EIGHTS = 16;
 
-export function adjustSalsaSegments(segments, totalEighth) {
+function adjustSalsaSegments(segments, totalEighth) {
   if (!Array.isArray(segments) || !segments.length) return { segments, totalEighth };
 
   const adjusted = segments.map((s) => ({ ...s }));
@@ -32,7 +33,7 @@ export function adjustSalsaSegments(segments, totalEighth) {
   return { segments: adjusted, totalEighth };
 }
 
-export function prepareSalsaReference(ref) {
+function prepareSalsaReference(ref) {
   if (!ref) return ref;
   if (ref.windowsPerFile !== 4) {
     throw new Error("Los MIDIs de Salsa 2-3 deben tener exactamente 64 corcheas (4 ventanas).");
@@ -79,3 +80,4 @@ export function prepareSalsaReference(ref) {
 if (typeof window !== "undefined") {
   window.SalsaUtils = { adjustSalsaSegments, prepareSalsaReference };
 }
+})();
