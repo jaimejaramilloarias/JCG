@@ -319,6 +319,10 @@ color:var(--txt);
 
           <div style="height:12px"></div>
           <label class="row" style="gap:10px; align-items:center">
+            <input type="checkbox" id="shells" />
+            <span class="mini">Shells</span>
+          </label>
+          <label class="row" style="gap:10px; align-items:center">
             <input type="checkbox" id="skipClosed" />
             <span class="mini">Cerrado</span>
           </label>
@@ -1014,6 +1018,7 @@ if (typeof globalThis !== "undefined") {
   const densityVal = el("densityVal");
   const densityProgressive = el("densityProgressive");
   const progressiveSkips = el("progressiveSkips");
+  const shells = el("shells");
   const skipClosed = el("skipClosed");
   const skip2Simple = el("skip2Simple");
   const skip2Oct = el("skip2Oct");
@@ -2211,6 +2216,95 @@ if (typeof globalThis !== "undefined") {
     return applyManualSkipModes(events, segments, tickPerEighth);
   }
 
+  function applyShells(events, segments, tickPerEighth, densityBySegment=null) {
+    if (!shells?.checked) return events;
+    if (!events?.length) return events;
+
+    const hasSegments = Array.isArray(segments) && Number.isFinite(tickPerEighth);
+    const spans = hasSegments ? segments.map((s) => ({
+      startTick: s.startEighth * tickPerEighth,
+      endTick: (s.startEighth + s.durEighth) * tickPerEighth,
+    })) : [];
+
+    const clampDensity = (v) => Math.max(0, Math.min(1, v));
+    const hasProfile = Array.isArray(densityBySegment) && densityBySegment.length === segments?.length;
+    const profile = hasProfile ? densityBySegment.map(clampDensity) : null;
+    const minProfile = profile ? Math.min(...profile) : null;
+
+    const findSegmentIndex = (tick) => {
+      if (!hasSegments) return -1;
+      for (let i = 0; i < spans.length; i++) {
+        const seg = spans[i];
+        if (tick >= seg.startTick && tick < seg.endTick) return i;
+      }
+      return -1;
+    };
+
+    const shouldApplyForSeg = (segIndex) => {
+      if (profile && segIndex >= 0) {
+        if (minProfile == null || minProfile >= 0.999) return false;
+        return profile[segIndex] <= minProfile;
+      }
+      if (profile) return false;
+      return true;
+    };
+
+    const sorted = events.map((e, idx) => ({ e, idx, segIndex: findSegmentIndex(e.tick) }))
+      .sort((a, b) => (a.e.tick - b.e.tick) || ((a.e.order ?? 0) - (b.e.order ?? 0)));
+
+    const noteOnByTick = new Map(); // key: `${segIndex}|${tick}` -> [{idx, note}]
+
+    for (const { e, idx, segIndex } of sorted) {
+      const status = e.status & 0xF0;
+      const vel = e.d2 ?? 0;
+      if (!(status === 0x90 && vel > 0)) continue;
+      if (!shouldApplyForSeg(segIndex)) continue;
+
+      const key = `${segIndex}|${e.tick}`;
+      if (!noteOnByTick.has(key)) noteOnByTick.set(key, []);
+      noteOnByTick.get(key).push({ idx, note: e.d1 ?? 0 });
+    }
+
+    const toDrop = new Set();
+    for (const arr of noteOnByTick.values()) {
+      if (arr.length < 2) continue;
+      const ordered = arr.slice().sort((a, b) => (a.note - b.note) || (a.idx - b.idx));
+      toDrop.add(ordered[1].idx);
+    }
+
+    if (!toDrop.size) return events;
+
+    const active = new Map(); // key: "ch-note" -> stack of idx
+    const keyOf = (ch, note) => `${ch}-${note}`;
+
+    for (const { e, idx } of sorted) {
+      const status = e.status & 0xF0;
+      const ch = e.status & 0x0F;
+      const note = e.d1 ?? 0;
+      const vel = e.d2 ?? 0;
+      const isOn = status === 0x90 && vel > 0;
+      const isOff = status === 0x80 || (status === 0x90 && vel === 0);
+
+      if (!isOn && !isOff) continue;
+
+      const key = keyOf(ch, note);
+
+      if (isOn) {
+        if (!active.has(key)) active.set(key, []);
+        active.get(key).push(idx);
+      } else if (isOff) {
+        const stack = active.get(key);
+        if (stack?.length) {
+          const onIdx = stack.shift();
+          if (!stack.length) active.delete(key);
+          if (toDrop.has(onIdx)) toDrop.add(idx);
+        }
+      }
+    }
+
+    return events.filter((_, idx) => !toDrop.has(idx));
+  }
+
   function getDensityFactor() {
     let v = parseInt(density.value, 10);
     if (!Number.isFinite(v)) v = 100;
@@ -2604,7 +2698,8 @@ if (typeof globalThis !== "undefined") {
     const progressiveProfile = usingSoloing ? null : getProgressiveDensityProfile(segments);
     const densityFactor = usingSoloing ? 1 : (densityProgressive.checked ? 1 : getDensityFactor());
     const densityApplied = usingSoloing ? chordsOnly : applyDensityFilter(chordsOnly, segments, tickPerEighth, densityFactor, progressiveProfile);
-    const skipAdjusted = usingSoloing ? chordsOnly : applySkipsAfterDensity(densityApplied, segments, tickPerEighth);
+    const shellsApplied = usingSoloing ? chordsOnly : applyShells(densityApplied, segments, tickPerEighth, progressiveProfile);
+    const skipAdjusted = usingSoloing ? chordsOnly : applySkipsAfterDensity(shellsApplied, segments, tickPerEighth);
     const soloed = applySoloingMode(skipAdjusted, maxTick, ppq);
     const lengthLimited = enforceMaxNoteLength(soloed, tickPerEighth, 3);
     const cleaned = sanitizeEvents(lengthLimited);
@@ -2854,7 +2949,7 @@ if (typeof globalThis !== "undefined") {
   }
 
   function setAdvancedControlsEnabled(enabled) {
-    const controls = [density, densityProgressive, progressiveSkips, skipClosed, skip2Simple, skip2Oct, skipSpread];
+    const controls = [density, densityProgressive, progressiveSkips, shells, skipClosed, skip2Simple, skip2Oct, skipSpread];
     for (const ctrl of controls) {
       if (!ctrl) continue;
       ctrl.disabled = !enabled;
@@ -2876,18 +2971,34 @@ if (typeof globalThis !== "undefined") {
       clearManualSkips();
     }
   });
-  soloing?.addEventListener("change", () => {
-    const active = soloing.checked;
-    setAdvancedControlsEnabled(!active);
-    if (active) {
-      clearManualSkips();
-      if (skipClosed) skipClosed.checked = false;
-      if (progressiveSkips) progressiveSkips.checked = false;
-      if (densityProgressive) densityProgressive.checked = false;
-      density.value = "100";
-      updateDensityLabel();
-    }
-  });
+
+  function resetAdvancedModes() {
+    clearManualSkips();
+    if (shells) shells.checked = false;
+    if (skipClosed) skipClosed.checked = false;
+    if (progressiveSkips) progressiveSkips.checked = false;
+    if (densityProgressive) densityProgressive.checked = false;
+    density.value = "100";
+    updateDensityLabel();
+  }
+
+  function handleExclusiveModesChange() {
+    const salsaActive = !!salsa23?.checked;
+    const soloActive = !!soloing?.checked;
+    const hasExclusive = salsaActive || soloActive;
+
+    if (salsaActive && soloing) soloing.checked = false;
+    if (soloActive && salsa23) salsa23.checked = false;
+
+    setAdvancedControlsEnabled(!hasExclusive);
+    if (soloing) soloing.disabled = salsaActive;
+    if (salsa23) salsa23.disabled = soloActive;
+
+    if (hasExclusive) resetAdvancedModes();
+  }
+
+  soloing?.addEventListener("change", handleExclusiveModesChange);
+  salsa23?.addEventListener("change", handleExclusiveModesChange);
 
   // Ayuda (modal)
   const helpModal = el("helpModal");
