@@ -1338,13 +1338,30 @@ if (typeof globalThis !== "undefined") {
     if (refPpq === null) refPpq = ppq;
     if (ppq !== refPpq) throw new Error(`PPQ inconsistente. Esperaba ${refPpq}, encontré ${ppq}.`);
 
-    // Requisito: UNA SOLA PISTA por archivo de referencia.
-    if (!midiObj.tracks || midiObj.tracks.length !== 1) {
-      throw new Error(`"${qualityKey}": el MIDI debe tener 1 sola pista. Encontré ${midiObj.tracks ? midiObj.tracks.length : 0}.`);
+    // Aceptamos múltiples pistas (p.ej. tempo + notas). Fusionamos todo en una sola lista de eventos de canal.
+    const tracks = midiObj.tracks || [];
+    if (!tracks.length) {
+      throw new Error(`"${qualityKey}": el MIDI no tiene pistas con eventos.`);
     }
 
-    const tr = midiObj.tracks[0];
-    let events = tr.events ? [...tr.events] : [];
+    let events = [];
+    let trackLenTicks = 0;
+
+    for (const tr of tracks) {
+      const channelEvents = (tr.events || []).filter((e) => {
+        const status = (e.status ?? 0) & 0xF0;
+        return status >= 0x80 && status <= 0xE0; // NoteOn/Off, aftertouch, control change, program change, pitch bend
+      });
+
+      if (channelEvents.length) events.push(...channelEvents);
+
+      const end = (typeof tr.endTick === "number" && tr.endTick > 0) ? (tr.endTick | 0) : null;
+      if (end != null) trackLenTicks = Math.max(trackLenTicks, end);
+    }
+
+    if (!events.length) {
+      throw new Error(`"${qualityKey}": no encontré eventos de canal en las pistas.`);
+    }
 
     const tickPerEighth = ppq / 2;
     if ((ppq % 2) !== 0) {
@@ -1357,7 +1374,7 @@ if (typeof globalThis !== "undefined") {
     let maxTick = 0;
     for (const e of events) if ((e.tick|0) > maxTick) maxTick = e.tick|0;
 
-    const trackLenTicks = (typeof tr.endTick === "number" && tr.endTick > 0) ? (tr.endTick|0) : maxTick;
+    if (!trackLenTicks) trackLenTicks = maxTick;
 
     // Dummy anchor si el archivo arranca en silencio: evita cortes y asegura conteo desde la primera corchea.
     let minTick = Infinity;
