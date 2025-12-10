@@ -5,13 +5,19 @@ export function adjustSalsaSegments(segments, totalEighth) {
 
   const adjusted = segments.map((s) => ({ ...s }));
 
+  let lastWindow = null;
   for (let i = 0; i < adjusted.length; i++) {
     const seg = adjusted[i];
-    if (seg.startEighth <= 0) continue;
+    const windowIdx = Math.floor(seg.startEighth / SALSA_WINDOW_EIGHTS);
+    const isFirstInWindow = windowIdx !== lastWindow;
+    if (seg.startEighth <= 0) {
+      lastWindow = windowIdx;
+      continue;
+    }
 
-    const inWindow = seg.startEighth % SALSA_WINDOW_EIGHTS;
-    const shift = inWindow === 0 ? 2 : 1;
+    const shift = isFirstInWindow ? 2 : 1;
     seg.startEighth = Math.max(0, seg.startEighth - shift);
+    lastWindow = windowIdx;
 
     if (i > 0 && seg.startEighth <= adjusted[i - 1].startEighth) {
       seg.startEighth = adjusted[i - 1].startEighth + 1;

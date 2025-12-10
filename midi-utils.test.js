@@ -149,6 +149,22 @@ test('adjustSalsaSegments aplica las anticipaciones del modo Salsa 2-3', () => {
   deepStrictEqual(adjusted.map(s => s.durEighth), [3, 4, 4, 3, 10]);
 });
 
+test('adjustSalsaSegments anticipa 2 corcheas el primer acorde de cada ventana', () => {
+  const segments = [0, 4, 8, 12, 17].map((start, idx) => ({
+    startEighth: start,
+    durEighth: 4,
+    token: `B${idx + 1}`,
+    quality: 'A',
+    refVariant: '1',
+    transpose: 0
+  }));
+
+  const { segments: adjusted } = adjustSalsaSegments(segments, 24);
+
+  deepStrictEqual(adjusted.map(s => s.startEighth), [0, 3, 7, 11, 15]);
+  deepStrictEqual(adjusted.map(s => s.durEighth), [3, 4, 4, 4, 9]);
+});
+
 test('prepareSalsaReference ancla ventanas silenciosas con notas dummy sin sonido', () => {
   const tickPerEighth = 60;
   const winTicks = tickPerEighth * 16;
