@@ -1212,10 +1212,11 @@ if (typeof globalThis !== "undefined") {
   }
 
   function parseReferenceFileName(fullName) {
-    const base = (fullName || "").replace(/\.[^.]+$/, "").trim();
-    if (!base || /\s/.test(base)) return null;
+    const base = (fullName || "").replace(/\.[^.]+$/, "");
+    const normalizedBase = base.trim().replace(/\s+/g, "_");
+    if (!normalizedBase) return null;
 
-    const match = base.match(/^(.*)_(1|2|x24|x32)$/i);
+    const match = normalizedBase.match(/^(.*)_(1|2|x24|x32)$/i);
     if (!match) return null;
 
     const [, rawQuality, variantRaw] = match;
