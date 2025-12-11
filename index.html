@@ -1194,7 +1194,7 @@ if (typeof globalThis !== "undefined") {
     const rootSemi = NOTE_TO_SEMI.get(root.toUpperCase());
     if (rootSemi === undefined) throw new Error(`Fundamental inválida: "${root}"`);
 
-    const soloMode = isSoloingMode();
+    const soloMode = !!soloing?.checked;
     const refVariant = soloMode ? selectSoloingVariant(qualKey) : selectVariantForRoot(rootSemi);
     const transpose = soloMode ? soloingTransposeFromRoot(rootSemi) : upwardTransposeFromVariant(rootSemi, refVariant);
 
@@ -1213,7 +1213,11 @@ if (typeof globalThis !== "undefined") {
 
   function parseReferenceFileName(fullName) {
     const base = (fullName || "").replace(/\.[^.]+$/, "");
-    const normalizedBase = base.trim().replace(/\s+/g, "_");
+    const normalizedBase = base
+      .trim()
+      .replace(/[()]/g, "")
+      .replace(/[\s-]+/g, "_")
+      .replace(/_+/g, "_");
     if (!normalizedBase) return null;
 
     const match = normalizedBase.match(/^(.*)_(1|2|x24|x32)$/i);
