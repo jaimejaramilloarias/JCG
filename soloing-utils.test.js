@@ -123,3 +123,28 @@ test('prepareSoloingReference usa NoteOff en los bordes cuando no hay NoteOn', (
   deepStrictEqual(prepared.soloingWindowAnchors[0], { first: 60, last: 60 });
   deepStrictEqual(prepared.soloingWindowAnchors[1], { first: 65, last: 67 });
 });
+
+test('prepareSoloingReference ignora notas dummy al elegir anclas', () => {
+  const tickPerEighth = 120;
+  const winTicks = 480;
+  const ref = {
+    soloing: true,
+    events: [
+      { tick: 0, status: 0x90, d1: 0, d2: 0, dummy: true },
+      { tick: 0, status: 0x80, d1: 0, d2: 0, dummy: true },
+      { tick: winTicks, status: 0x80, d1: 70, d2: 0 },
+      { tick: winTicks, status: 0x90, d1: 72, d2: 100 },
+      { tick: winTicks + 120, status: 0x80, d1: 72, d2: 0 },
+    ],
+    tickPerEighth,
+    winTicks,
+    windowsPerFile: 2,
+  };
+
+  const prepared = prepareSoloingReference(ref);
+
+  deepStrictEqual(prepared.soloingWindowAnchors, [
+    { first: 70, last: 70 },
+    { first: 72, last: 72 },
+  ]);
+});
