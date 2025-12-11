@@ -127,6 +127,13 @@ color:var(--txt);
     .advancedBox{margin-top:14px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background: rgba(14,22,38,.45);}
     .advancedBox summary{cursor:pointer; font-weight:700; color:var(--muted); letter-spacing:.2px; text-transform:uppercase; font-size:11px;}
     .advancedBox[open]{padding-bottom:12px}
+    .tabs{display:flex; flex-direction:column; gap:10px;}
+    .tabList{display:flex; gap:8px; flex-wrap:wrap;}
+    .tabBtn{border:1px solid rgba(35,50,74,.9); background: rgba(255,255,255,.05); color:var(--txt); padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; font-size:11px; letter-spacing:.3px; text-transform:uppercase; transition: border-color .15s ease, background .15s ease, color .15s ease;}
+    .tabBtn[aria-selected="true"], .tabBtn.active{border-color: rgba(125,211,252,.65); background: rgba(125,211,252,.10); color: var(--txt);}
+    .tabBtn:hover{border-color: rgba(125,211,252,.45); background: rgba(255,255,255,.07);}
+    .tabPanel{display:none; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background: rgba(14,22,38,.55);}
+    .tabPanel.active{display:block}
     .warn{color: #fbbf24}
     .ok{color: var(--ok)}
     .bad{color: var(--bad)}
@@ -298,63 +305,79 @@ color:var(--txt);
         <details class="advancedBox">
           <summary>Menú avanzado</summary>
           <div style="height:8px"></div>
-          <div class="label">Despoblado / denso</div>
-          <div class="sliderRow">
-            <div class="mini" style="width:90px">Despoblado</div>
-            <input id="density" type="range" min="0" max="100" value="100" />
-            <div class="mini" style="width:60px; text-align:right">Denso</div>
-            <div class="mono" style="width:56px; text-align:right" id="densityVal">100%</div>
-            <div class="mini" style="width:60px; text-align:right">Spread</div>
+          <div class="tabs" id="advancedTabs">
+            <div class="tabList" role="tablist" aria-label="Menú avanzado">
+              <button class="tabBtn active" type="button" role="tab" aria-selected="true" aria-controls="tabComping" id="tabCompingBtn" data-advanced-tab="comping">Comping</button>
+              <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="tabSoloing" id="tabSoloingBtn" data-advanced-tab="soloing">Soloing</button>
+              <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="tabSalsa" id="tabSalsaBtn" data-advanced-tab="salsa">Salsa 2-3</button>
+            </div>
+
+            <div class="tabPanel active" id="tabComping" role="tabpanel" aria-labelledby="tabCompingBtn" data-advanced-panel="comping">
+              <div class="label">Despoblado / denso</div>
+              <div class="sliderRow">
+                <div class="mini" style="width:90px">Despoblado</div>
+                <input id="density" type="range" min="0" max="100" value="100" />
+                <div class="mini" style="width:60px; text-align:right">Denso</div>
+                <div class="mono" style="width:56px; text-align:right" id="densityVal">100%</div>
+                <div class="mini" style="width:60px; text-align:right">Spread</div>
+              </div>
+
+              <div style="height:10px"></div>
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="densityProgressive" />
+                <span class="mini">Densidad rítmica progresiva</span>
+              </label>
+
+              <label class="row" style="gap:10px; align-items:center; margin-top:2px">
+                <input type="checkbox" id="progressiveSkips" />
+                <span class="mini">Shells/Spreads progresivos</span>
+              </label>
+
+              <div style="height:12px"></div>
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="shells" />
+                <span class="mini">Shells</span>
+              </label>
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="skipClosed" />
+                <span class="mini">Cerrado</span>
+              </label>
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="blockChords" />
+                <span class="mini">Block chords</span>
+              </label>
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="blockChordsFull" />
+                <span class="mini">Block chords full</span>
+              </label>
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="skip2Simple" />
+                <span class="mini">Skip 2</span>
+              </label>
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="skip2Oct" />
+                <span class="mini">Skip 2 octavado</span>
+              </label>
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="skipSpread" />
+                <span class="mini">Spreads</span>
+              </label>
+            </div>
+
+            <div class="tabPanel" id="tabSoloing" role="tabpanel" aria-labelledby="tabSoloingBtn" data-advanced-panel="soloing">
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="soloing" />
+                <span class="mini">Soloing</span>
+              </label>
+            </div>
+
+            <div class="tabPanel" id="tabSalsa" role="tabpanel" aria-labelledby="tabSalsaBtn" data-advanced-panel="salsa">
+              <label class="row" style="gap:10px; align-items:center">
+                <input type="checkbox" id="salsa23" />
+                <span class="mini">Salsa 2-3</span>
+              </label>
+            </div>
           </div>
-
-          <div style="height:10px"></div>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="densityProgressive" />
-            <span class="mini">Densidad rítmica progresiva</span>
-          </label>
-
-          <label class="row" style="gap:10px; align-items:center; margin-top:2px">
-            <input type="checkbox" id="progressiveSkips" />
-            <span class="mini">Shells/Spreads progresivos</span>
-          </label>
-
-          <div style="height:12px"></div>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="shells" />
-            <span class="mini">Shells</span>
-          </label>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="skipClosed" />
-            <span class="mini">Cerrado</span>
-          </label>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="blockChords" />
-            <span class="mini">Block chords</span>
-          </label>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="blockChordsFull" />
-            <span class="mini">Block chords full</span>
-          </label>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="skip2Simple" />
-            <span class="mini">Skip 2</span>
-          </label>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="skip2Oct" />
-            <span class="mini">Skip 2 octavado</span>
-          </label>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="skipSpread" />
-            <span class="mini">Spreads</span>
-          </label>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="soloing" />
-            <span class="mini">Soloing</span>
-          </label>
-          <label class="row" style="gap:10px; align-items:center">
-            <input type="checkbox" id="salsa23" />
-            <span class="mini">Salsa 2-3</span>
-          </label>
         </details>
       </div>
     </section>
@@ -1039,6 +1062,32 @@ if (typeof globalThis !== "undefined") {
   const skipSpread = el("skipSpread");
   const soloing = el("soloing");
   const salsa23 = el("salsa23");
+  const advancedTabButtons = Array.from(document.querySelectorAll("[data-advanced-tab]"));
+  const advancedTabPanels = Array.from(document.querySelectorAll("[data-advanced-panel]"));
+
+  function setAdvancedTab(tab) {
+    if (!tab) return;
+    advancedTabButtons.forEach((btn) => {
+      const isActive = btn?.dataset?.advancedTab === tab;
+      btn?.classList.toggle("active", isActive);
+      if (btn) {
+        btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        btn.setAttribute("tabindex", isActive ? "0" : "-1");
+      }
+    });
+
+    advancedTabPanels.forEach((panel) => {
+      const isActive = panel?.dataset?.advancedPanel === tab;
+      panel?.classList.toggle("active", isActive);
+      panel?.toggleAttribute("hidden", !isActive);
+    });
+  }
+
+  advancedTabButtons.forEach((btn) => {
+    btn?.addEventListener("click", () => setAdvancedTab(btn.dataset?.advancedTab));
+  });
+
+  setAdvancedTab("comping");
 
   function log(msg, cls="") {
     const line = cls ? `[${cls}] ${msg}` : msg;
