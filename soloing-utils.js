@@ -18,8 +18,8 @@ export function prepareSoloingReference(ref) {
   }));
 
   const pushDummy = (tickOn, tickOff) => {
-    const on = { tick: tickOn, status: 0x90, d1: 0, d2: 0 };
-    const off = { tick: tickOff, status: 0x80, d1: 0, d2: 0 };
+    const on = { tick: tickOn, status: 0x90, d1: 0, d2: 0, dummy: true };
+    const off = { tick: tickOff, status: 0x80, d1: 0, d2: 0, dummy: true };
     events.push(on, off);
   };
 
@@ -48,28 +48,39 @@ export function prepareSoloingReference(ref) {
     const win = Math.floor((e.tick ?? 0) / winTicks);
     if (win < 0 || win >= totalWindows) continue;
     const note = (e.d1 ?? 0) & 0x7F;
-    const anchor = anchors[win];
 
-    if (status === 0x90) {
-      const vel = (e.d2 ?? 0) & 0x7F;
-      if (vel <= 0) continue;
+    if (e.dummy) continue;
 
-      if (anchor.firstTick == null || e.tick < anchor.firstTick) {
-        anchor.firstTick = e.tick;
-        anchor.first = note;
-      }
-      if (anchor.lastTick == null || e.tick >= anchor.lastTick) {
-        anchor.lastTick = e.tick;
-        anchor.last = note;
-      }
-    } else if (status === 0x80) {
-      if (anchor.firstOffTick == null || e.tick < anchor.firstOffTick) {
-        anchor.firstOffTick = e.tick;
-        anchor.firstOff = note;
-      }
-      if (anchor.lastOffTick == null || e.tick >= anchor.lastOffTick) {
-        anchor.lastOffTick = e.tick;
-        anchor.lastOff = note;
+    const windows = [win];
+    if (status === 0x80 && win > 0 && (e.tick % winTicks) === 0) {
+      windows.push(win - 1);
+    }
+
+    for (const w of windows) {
+      const anchor = anchors[w];
+      if (!anchor) continue;
+
+      if (status === 0x90) {
+        const vel = (e.d2 ?? 0) & 0x7F;
+        if (vel <= 0) continue;
+
+        if (anchor.firstTick == null || e.tick < anchor.firstTick) {
+          anchor.firstTick = e.tick;
+          anchor.first = note;
+        }
+        if (anchor.lastTick == null || e.tick >= anchor.lastTick) {
+          anchor.lastTick = e.tick;
+          anchor.last = note;
+        }
+      } else if (status === 0x80) {
+        if (anchor.firstOffTick == null || e.tick < anchor.firstOffTick) {
+          anchor.firstOffTick = e.tick;
+          anchor.firstOff = note;
+        }
+        if (anchor.lastOffTick == null || e.tick >= anchor.lastOffTick) {
+          anchor.lastOffTick = e.tick;
+          anchor.lastOff = note;
+        }
       }
     }
   }
