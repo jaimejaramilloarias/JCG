@@ -72,6 +72,29 @@ test('buildMidiFile exporta un solo track en formato 0', () => {
   strictEqual(parsed.tracks[0].events.length, 2);
 });
 
+test('la longitud se calcula solo con tracks que contienen eventos de canal', async () => {
+  const { parseMidi } = await import('./midi-utils.js');
+  const fs = await import('node:fs');
+
+  const buf = fs.readFileSync('JCG_reference_midi_files/Soloing/ton_minor_x32.mid');
+  const midi = parseMidi(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+
+  let trackLenTicks = 0;
+  for (const tr of midi.tracks) {
+    const channelEvents = (tr.events || []).filter((e) => {
+      const status = (e.status ?? 0) & 0xF0;
+      return status >= 0x80 && status <= 0xE0;
+    });
+
+    if (!channelEvents.length) continue;
+
+    const end = (typeof tr.endTick === 'number' && tr.endTick > 0) ? (tr.endTick | 0) : null;
+    if (end != null) trackLenTicks = Math.max(trackLenTicks, end);
+  }
+
+  strictEqual(trackLenTicks, 61440);
+});
+
 test('disableUnsupportedMidiMessages deja únicamente Note On/Off con nota y velocidad', () => {
   const events = [
     { tick: 0, status: 0x90, d1: 60, d2: 100 },
