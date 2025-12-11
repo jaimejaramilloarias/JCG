@@ -1518,7 +1518,7 @@ if (typeof globalThis !== "undefined") {
       }
 
       const end = (typeof tr.endTick === "number" && tr.endTick > 0) ? (tr.endTick | 0) : null;
-      if (end != null) trackLenTicks = Math.max(trackLenTicks, end);
+      if (channelEvents.length && end != null) trackLenTicks = Math.max(trackLenTicks, end);
     }
 
     if (!events.length) {
