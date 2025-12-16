@@ -33,11 +33,6 @@ color:var(--txt);
     header{display:flex; align-items:flex-end; justify-content:space-between; gap:14px; margin-bottom:18px}
     h1{margin:0; font-size:32px; letter-spacing:.2px; font-weight:800}
     .sub{color:var(--muted); font-size:12px; margin-top:6px}
-    .grid{
-      display:grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap:16px;
-    }
     .card{
       background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.035));
       border:1px solid var(--line);
@@ -45,6 +40,14 @@ color:var(--txt);
       box-shadow: var(--shadow);
       overflow:hidden;
     }
+    .megaCard{padding:4px 4px 16px;}
+    .megaHd{border-bottom:1px solid rgba(35,50,74,.7); background: rgba(24,34,56,.65);}
+    .megaBd{display:flex; flex-direction:column; gap:14px; padding:14px;}
+    .controlBar{display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px; align-items:stretch;}
+    .controlCluster{border:1px solid var(--line); border-radius:12px; padding:10px 12px; background: rgba(14,22,38,.55); display:flex; flex-direction:column; gap:8px;}
+    .clusterTitle{font-size:12px; color:var(--muted); letter-spacing:.3px; text-transform:uppercase; font-weight:800;}
+    .clusterActions{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+    .miniStat{font-size:12px; color:var(--muted); margin-left:auto;}
     .card .hd{
       padding:14px 14px 10px;
       border-bottom:1px solid rgba(35,50,74,.8);
@@ -134,6 +137,12 @@ color:var(--txt);
     .tabBtn:hover{border-color: rgba(125,211,252,.45); background: rgba(255,255,255,.07);}
     .tabPanel{display:none; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background: rgba(14,22,38,.55);}
     .tabPanel.active{display:block}
+    .mainTabs .tabPanel{background: transparent; border:1px dashed rgba(35,50,74,.9);}
+    .sectionGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap:12px;}
+    .sectionCard{border:1px solid var(--line); border-radius:12px; padding:10px 12px; background: rgba(14,22,38,.55); display:flex; flex-direction:column; gap:10px;}
+    .sectionTitle{font-size:12px; color:var(--muted); letter-spacing:.3px; text-transform:uppercase; font-weight:800;}
+    .inlineStats{display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:12px; color:var(--muted);}
+    .pillRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
     .warn{color: #fbbf24}
     .ok{color: var(--ok)}
     .bad{color: var(--bad)}
@@ -169,14 +178,9 @@ color:var(--txt);
     }
 
     @media (max-width: 980px){
-      .grid{grid-template-columns: 1fr}
+      .controlBar{grid-template-columns: 1fr;}
     }
   
-    /* Requested UI changes (no deletion, only hiding) */
-    #swingBlock{display:none}
-    #logBlock{display:none}
-    #ppqPill{display:none}
-
     /* Modal: solid (no translucency) */
     .modalCard{background: var(--panel) !important;}
 
@@ -249,10 +253,6 @@ color:var(--txt);
         <span class="dot bad" id="dotReady"></span>
         <span id="readyText">No listo</span>
       </div>
-      <div class="pill" id="ppqPill" title="PPQ detectado en los archivos de referencia">
-        <small>PPQ</small>
-        <span class="mono" id="ppqText">—</span>
-      </div>
     </div>
     <div class="topActions">
       <button class="btn ghost helpBtn" id="btnHelp" title="Abrir ayuda">
@@ -262,195 +262,223 @@ color:var(--txt);
     </div>
   </header>
 
-  <div class="grid">
-    <section class="card">
-      <div class="hd">
-        <div class="title">Progresión</div>
-        <div class="row">
-<button class="btn primary" id="btnRegenerate" title="Generar de nuevo con variación aleatoria">Regenerar</button>
-          <button class="btn" id="btnClean" title="Insertar NoteOff en notas demasiado largas y limpiar artefactos">Limpiar artefactos MIDI</button>
-          <button class="btn purple" id="btnExport" title="Exportar el MIDI generado">Exportar</button>
+  <div class="card megaCard">
+    <div class="hd megaHd">
+      <div class="title">Panel principal</div>
+      <div class="mini">Organizado en pestañas compactas para editar progresión, escuchar y exportar.</div>
+    </div>
+    <div class="megaBd">
+      <div class="controlBar">
+        <div class="controlCluster">
+          <div class="clusterTitle">Generación y export</div>
+          <div class="clusterActions">
+            <button class="btn primary" id="btnRegenerate" title="Generar de nuevo con variación aleatoria">Regenerar</button>
+            <button class="btn" id="btnClean" title="Insertar NoteOff en notas demasiado largas y limpiar artefactos">Limpiar artefactos</button>
+            <button class="btn purple" id="btnExport" title="Exportar el MIDI generado">Exportar</button>
+          </div>
+          <div class="inlineStats">
+            <span class="mini">Afecta al MIDI generado (no al playback en vivo).</span>
+          </div>
+        </div>
+        <div class="controlCluster">
+          <div class="clusterTitle">Playback inmediato</div>
+          <div class="clusterActions">
+            <button class="btn primary" id="btnPlay" title="Reproducir el MIDI generado por el puerto seleccionado">Reproducir</button>
+            <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
+            <div class="miniStat" id="midiStatus">Salida MIDI: —</div>
+          </div>
+          <div class="inlineStats">
+            <span>Tempo actual: <span class="mono" id="tempoValInline">120</span> BPM</span>
+            <span class="mini">Ajusta detalles en la pestaña Playback.</span>
+          </div>
         </div>
       </div>
-      <div class="bd">
-        <div class="label">Repeticiones</div>
-        <div class="row" style="gap:14px; align-items:flex-end">
-          <input id="repeatCount" type="number" min="1" max="64" value="1" class="inputNumber" title="Número de veces que se repetirá la progresión en el MIDI generado" />
-          <div class="mini">Cuántas veces se repetirá la progresión al reproducir o exportar el MIDI.</div>
+
+      <div class="tabs mainTabs">
+        <div class="tabList" role="tablist" aria-label="Panel principal">
+          <button class="tabBtn active" type="button" role="tab" aria-selected="true" aria-controls="mainProgression" id="mainProgressionTab" data-main-tab="progression">Progresión</button>
+          <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="mainPlayback" id="mainPlaybackTab" data-main-tab="playback">Playback / Export</button>
+          <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="mainDiag" id="mainDiagTab" data-main-tab="diagnostico">Diagnóstico</button>
         </div>
 
-        <div style="height:10px"></div>
-
-        <div class="label">Transposición</div>
-        <div class="row" style="gap:14px; align-items:flex-end">
-          <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
-          <div class="mini">Ajusta las fundamentales del cifrado sin alterar la selección ni transposición de los archivos de referencia.</div>
-        </div>
-
-        <div style="height:10px"></div>
-
-        <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
-
-        <div style="height:12px"></div>
-
-        <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
-        <div class="chips" id="qualityChips"></div>
-
-
-        <div class="hint">
-          <div><b>Calidades:</b> aparecen en la lista después de cargar tus patrones.</div>
-          <div style="margin-top:6px">Usa exactamente las calidades que ves (ej: <code>G7alt</code>, <code>F13(b9)</code>).</div>
-        </div>
-
-        <details class="advancedBox">
-          <summary>Menú avanzado</summary>
-          <div style="height:8px"></div>
-          <div class="tabs" id="advancedTabs">
-            <div class="tabList" role="tablist" aria-label="Menú avanzado">
-              <button class="tabBtn active" type="button" role="tab" aria-selected="true" aria-controls="tabComping" id="tabCompingBtn" data-advanced-tab="comping">Comping</button>
-              <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="tabSoloing" id="tabSoloingBtn" data-advanced-tab="soloing">Soloing</button>
-              <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="tabSalsa" id="tabSalsaBtn" data-advanced-tab="salsa">Salsa 2-3</button>
-            </div>
-
-            <div class="tabPanel active" id="tabComping" role="tabpanel" aria-labelledby="tabCompingBtn" data-advanced-panel="comping">
-              <div class="label">Despoblado / denso</div>
-              <div class="sliderRow">
-                <div class="mini" style="width:90px">Despoblado</div>
-                <input id="density" type="range" min="0" max="100" value="100" />
-                <div class="mini" style="width:60px; text-align:right">Denso</div>
-                <div class="mono" style="width:56px; text-align:right" id="densityVal">100%</div>
-                <div class="mini" style="width:60px; text-align:right">Spread</div>
+        <div class="tabPanel active" id="mainProgression" role="tabpanel" aria-labelledby="mainProgressionTab" data-main-panel="progression">
+          <div class="sectionGrid">
+            <div class="sectionCard">
+              <div class="sectionTitle">Configuración rápida</div>
+              <div class="label">Repeticiones</div>
+              <div class="row" style="gap:14px; align-items:flex-end">
+                <input id="repeatCount" type="number" min="1" max="64" value="1" class="inputNumber" title="Número de veces que se repetirá la progresión en el MIDI generado" />
+                <div class="mini">Cuántas veces se repetirá la progresión al reproducir o exportar el MIDI.</div>
               </div>
 
-              <div style="height:10px"></div>
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="densityProgressive" />
-                <span class="mini">Densidad rítmica progresiva</span>
-              </label>
-
-              <label class="row" style="gap:10px; align-items:center; margin-top:2px">
-                <input type="checkbox" id="progressiveSkips" />
-                <span class="mini">Shells/Spreads progresivos</span>
-              </label>
-
-              <div style="height:12px"></div>
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="shells" />
-                <span class="mini">Shells</span>
-              </label>
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="skipClosed" />
-                <span class="mini">Cerrado</span>
-              </label>
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="blockChords" />
-                <span class="mini">Block chords</span>
-              </label>
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="blockChordsFull" />
-                <span class="mini">Block chords full</span>
-              </label>
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="skip2Simple" />
-                <span class="mini">Skip 2</span>
-              </label>
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="skip2Oct" />
-                <span class="mini">Skip 2 octavado</span>
-              </label>
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="skipSpread" />
-                <span class="mini">Spreads</span>
-              </label>
+              <div class="label" style="margin-top:10px">Transposición</div>
+              <div class="row" style="gap:14px; align-items:flex-end">
+                <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
+                <div class="mini">Ajusta las fundamentales del cifrado sin alterar la selección ni transposición de los archivos de referencia.</div>
+              </div>
             </div>
 
-            <div class="tabPanel" id="tabSoloing" role="tabpanel" aria-labelledby="tabSoloingBtn" data-advanced-panel="soloing">
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="soloing" />
-                <span class="mini">Soloing</span>
-              </label>
-            </div>
-
-            <div class="tabPanel" id="tabSalsa" role="tabpanel" aria-labelledby="tabSalsaBtn" data-advanced-panel="salsa">
-              <label class="row" style="gap:10px; align-items:center">
-                <input type="checkbox" id="salsa23" />
-                <span class="mini">Salsa 2-3</span>
-              </label>
+            <div class="sectionCard">
+              <div class="sectionTitle">Progresión y calidades</div>
+              <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
+              <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
+              <div class="chips" id="qualityChips"></div>
+              <div class="hint">
+                <div><b>Calidades:</b> aparecen en la lista después de cargar tus patrones.</div>
+                <div style="margin-top:6px">Usa exactamente las calidades que ves (ej: <code>G7alt</code>, <code>F13(b9)</code>).</div>
+              </div>
             </div>
           </div>
-        </details>
+
+          <details class="advancedBox">
+            <summary>Menú avanzado</summary>
+            <div style="height:8px"></div>
+            <div class="tabs" id="advancedTabs">
+              <div class="tabList" role="tablist" aria-label="Menú avanzado">
+                <button class="tabBtn active" type="button" role="tab" aria-selected="true" aria-controls="tabComping" id="tabCompingBtn" data-advanced-tab="comping">Comping</button>
+                <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="tabSoloing" id="tabSoloingBtn" data-advanced-tab="soloing">Soloing</button>
+                <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="tabSalsa" id="tabSalsaBtn" data-advanced-tab="salsa">Salsa 2-3</button>
+              </div>
+
+              <div class="tabPanel active" id="tabComping" role="tabpanel" aria-labelledby="tabCompingBtn" data-advanced-panel="comping">
+                <div class="label">Despoblado / denso</div>
+                <div class="sliderRow">
+                  <div class="mini" style="width:90px">Despoblado</div>
+                  <input id="density" type="range" min="0" max="100" value="100" />
+                  <div class="mini" style="width:60px; text-align:right">Denso</div>
+                  <div class="mono" style="width:56px; text-align:right" id="densityVal">100%</div>
+                  <div class="mini" style="width:60px; text-align:right">Spread</div>
+                </div>
+
+                <div style="height:10px"></div>
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="densityProgressive" />
+                  <span class="mini">Densidad rítmica progresiva</span>
+                </label>
+
+                <label class="row" style="gap:10px; align-items:center; margin-top:2px">
+                  <input type="checkbox" id="progressiveSkips" />
+                  <span class="mini">Shells/Spreads progresivos</span>
+                </label>
+
+                <div style="height:12px"></div>
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="shells" />
+                  <span class="mini">Shells</span>
+                </label>
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="skipClosed" />
+                  <span class="mini">Cerrado</span>
+                </label>
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="blockChords" />
+                  <span class="mini">Block chords</span>
+                </label>
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="blockChordsFull" />
+                  <span class="mini">Block chords full</span>
+                </label>
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="skip2Simple" />
+                  <span class="mini">Skip 2</span>
+                </label>
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="skip2Oct" />
+                  <span class="mini">Skip 2 octavado</span>
+                </label>
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="skipSpread" />
+                  <span class="mini">Spreads</span>
+                </label>
+              </div>
+
+              <div class="tabPanel" id="tabSoloing" role="tabpanel" aria-labelledby="tabSoloingBtn" data-advanced-panel="soloing">
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="soloing" />
+                  <span class="mini">Soloing</span>
+                </label>
+              </div>
+
+              <div class="tabPanel" id="tabSalsa" role="tabpanel" aria-labelledby="tabSalsaBtn" data-advanced-panel="salsa">
+                <label class="row" style="gap:10px; align-items:center">
+                  <input type="checkbox" id="salsa23" />
+                  <span class="mini">Salsa 2-3</span>
+                </label>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="tabPanel" id="mainPlayback" role="tabpanel" aria-labelledby="mainPlaybackTab" data-main-panel="playback">
+          <div class="sectionGrid">
+            <div class="sectionCard">
+              <div class="sectionTitle">Fuentes de referencia</div>
+              <div class="label">Carpeta MIDI de referencia</div>
+              <div class="row">
+                <button class="btn" id="btnPickFolder" title="Cargar carpeta con archivos MIDI de referencia">Cargar carpeta</button>
+                <input id="folderFallback" type="file" webkitdirectory multiple style="display:none" />
+              </div>
+              <div class="mini" id="folderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
+            </div>
+
+            <div class="sectionCard">
+              <div class="sectionTitle">Salida y preview</div>
+              <div class="label">Puerto MIDI de salida</div>
+              <select id="midiOut" title="Elige el puerto MIDI de salida (destino) para la reproducción"></select>
+              <div class="mini" id="ppqPill" style="margin-top:10px">PPQ: <span class="mono" id="ppqText">—</span></div>
+            </div>
+          </div>
+
+          <div class="sectionGrid">
+            <div class="sectionCard">
+              <div class="sectionTitle">Tempo y feel (solo playback)</div>
+              <div class="label">Tempo (BPM)</div>
+              <div class="sliderRow">
+                <input id="tempo" type="range" min="40" max="240" value="120" />
+                <div class="mono" style="width:56px; text-align:right" id="tempoVal">120</div>
+              </div>
+
+              <div id="swingBlock">
+                <div class="label" style="margin-top:12px">Swing (%)</div>
+                <div class="sliderRow">
+                  <input id="swing" type="range" min="50" max="75" value="50" />
+                  <div class="mono" style="width:56px; text-align:right" id="swingVal">50</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sectionCard">
+              <div class="sectionTitle">Apoyo de bajo (solo playback)</div>
+              <div class="label">Bajo (velocidad 0–67) <span class="mini" title="El bajo no se exporta, solo suena al previsualizar">(no exporta)</span></div>
+              <div class="sliderRow">
+                <input id="bassVel" type="range" min="0" max="67" value="42" title="Velocidad MIDI del bajo (0–67). Solo afecta la reproducción en la app." />
+                <div class="mono" style="width:56px; text-align:right" id="bassVelVal">42</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabPanel" id="mainDiag" role="tabpanel" aria-labelledby="mainDiagTab" data-main-panel="diagnostico">
+          <div class="sectionGrid">
+            <div class="sectionCard">
+              <div class="sectionTitle">Diagnóstico en vivo</div>
+              <div id="logBlock">
+                <div class="label">Log</div>
+                <div class="log" id="log"></div>
+              </div>
+            </div>
+            <div class="sectionCard">
+              <div class="sectionTitle">Ayudas rápidas</div>
+              <div class="hint">
+                Si WebMIDI o “cargar carpeta” no aparecen, abre esto desde <code>http://localhost</code>.
+                En mac: <code>python3 -m http.server 8000</code> y abre <code>http://localhost:8000</code>.
+              </div>
+              <div class="hint">El bloque de log se limpia cada vez que regeneras la progresión.</div>
+            </div>
+          </div>
+        </div>
       </div>
-    </section>
-
-    <aside class="card">
-      <div class="hd"><div class="title">Salida / Preview</div></div>
-      <div class="bd">
-        <div class="split">
-          <div>
-            <div class="label">Carpeta MIDI de referencia</div>
-            <div class="row">
-              <button class="btn" id="btnPickFolder" title="Cargar carpeta con archivos MIDI de referencia">Cargar carpeta</button>
-              <input id="folderFallback" type="file" webkitdirectory multiple style="display:none" />
-            </div>
-            <div class="mini" id="folderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
-          </div>
-
-          <div>
-            <div class="label">Puerto MIDI de salida</div>
-            <select id="midiOut" title="Elige el puerto MIDI de salida (destino) para la reproducción"></select>
-            <div class="mini" id="midiStatus" style="margin-top:8px">Salida MIDI: —</div>
-          </div>
-        </div>
-
-        <div style="height:14px"></div>
-
-        <div class="label">Controles</div>
-        <div class="row">
-          <button class="btn primary" id="btnPlay" title="Reproducir el MIDI generado por el puerto seleccionado">Reproducir</button>
-          <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
-        </div>
-
-        <div style="height:14px"></div>
-
-        <div class="label">Tempo (BPM) — solo playback</div>
-        <div class="sliderRow">
-          <input id="tempo" type="range" min="40" max="240" value="120" />
-          <div class="mono" style="width:56px; text-align:right" id="tempoVal">120</div>
-        </div>
-
-        <div style="height:10px"></div>
-        <div id="swingBlock">
-
-        <div class="label">Swing (%) — solo playback</div>
-        <div class="sliderRow">
-          <input id="swing" type="range" min="50" max="75" value="50" />
-          <div class="mono" style="width:56px; text-align:right" id="swingVal">50</div>
-        </div>
-
-        <div style="height:10px"></div>
-        </div>
-
-
-        <div class="label">Bajo (velocidad 0–67) — solo playback <span class="mini" title="El bajo no se exporta, solo suena al previsualizar">(no exporta)</span></div>
-        <div class="sliderRow">
-          <input id="bassVel" type="range" min="0" max="67" value="42" title="Velocidad MIDI del bajo (0–67). Solo afecta la reproducción en la app." />
-          <div class="mono" style="width:56px; text-align:right" id="bassVelVal">42</div>
-        </div>
-
-        <div style="height:14px"></div>
-        <div id="logBlock">
-
-        <div class="label">Log</div>
-        <div class="log" id="log"></div>
-
-        <div class="hint">
-          Si WebMIDI o “cargar carpeta” no aparecen, abre esto desde <code>http://localhost</code>.
-          En mac: <code>python3 -m http.server 8000</code> y abre <code>http://localhost:8000</code>.
-        </div>
-        </div>
-
-      </div>
-    </aside>
+    </div>
   </div>
 </div>
 
@@ -1042,6 +1070,7 @@ if (typeof globalThis !== "undefined") {
   const midiStatus = el("midiStatus");
   const tempo = el("tempo");
   const tempoVal = el("tempoVal");
+  const tempoValInline = el("tempoValInline");
   const swing = el("swing");
   const swingVal = el("swingVal");
   const bassVel = el("bassVel");
@@ -1064,6 +1093,8 @@ if (typeof globalThis !== "undefined") {
   const salsa23 = el("salsa23");
   const advancedTabButtons = Array.from(document.querySelectorAll("[data-advanced-tab]"));
   const advancedTabPanels = Array.from(document.querySelectorAll("[data-advanced-panel]"));
+  const mainTabButtons = Array.from(document.querySelectorAll("[data-main-tab]"));
+  const mainTabPanels = Array.from(document.querySelectorAll("[data-main-panel]"));
 
   function setAdvancedTab(tab) {
     if (!tab) return;
@@ -1088,6 +1119,30 @@ if (typeof globalThis !== "undefined") {
   });
 
   setAdvancedTab("comping");
+
+  function setMainTab(tab) {
+    if (!tab) return;
+    mainTabButtons.forEach((btn) => {
+      const isActive = btn?.dataset?.mainTab === tab;
+      btn?.classList.toggle("active", isActive);
+      if (btn) {
+        btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        btn.setAttribute("tabindex", isActive ? "0" : "-1");
+      }
+    });
+
+    mainTabPanels.forEach((panel) => {
+      const isActive = panel?.dataset?.mainPanel === tab;
+      panel?.classList.toggle("active", isActive);
+      panel?.toggleAttribute("hidden", !isActive);
+    });
+  }
+
+  mainTabButtons.forEach((btn) => {
+    btn?.addEventListener("click", () => setMainTab(btn.dataset?.mainTab));
+  });
+
+  setMainTab("progression");
 
   function log(msg, cls="") {
     const line = cls ? `[${cls}] ${msg}` : msg;
@@ -3355,7 +3410,10 @@ if (typeof globalThis !== "undefined") {
     densityVal.textContent = densityProgressive.checked ? "20→100%" : `${density.value}%`;
   }
 
-  tempo.addEventListener("input", () => tempoVal.textContent = tempo.value);
+  tempo.addEventListener("input", () => {
+    tempoVal.textContent = tempo.value;
+    if (tempoValInline) tempoValInline.textContent = tempo.value;
+  });
   // swing desactivado
   bassVel.addEventListener("input", () => bassVelVal.textContent = bassVel.value);
   density.addEventListener("input", updateDensityLabel);
@@ -3584,6 +3642,7 @@ if (typeof globalThis !== "undefined") {
   setReady(false, "No listo");
   // init displayed values
   tempoVal.textContent = tempo.value;
+  if (tempoValInline) tempoValInline.textContent = tempo.value;
   // swing desactivado
   bassVelVal.textContent = bassVel.value;
   updateDensityLabel();
