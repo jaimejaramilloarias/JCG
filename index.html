@@ -1170,6 +1170,8 @@ if (typeof globalThis !== "undefined") {
   let audioNodes = [];
   let audioTimers = [];
   var midiStatusCache = "Salida MIDI: —";
+  let folderLoaded = false;
+  let audioFolderLoaded = false;
 
   function setAdvancedTab(tab) {
     if (!tab) return;
@@ -1690,8 +1692,6 @@ if (typeof globalThis !== "undefined") {
   let midiOutputs = [];
   let refByQuality = new Map(); // qualityKey -> { variants: Map<variantKey, {ppq, events, windowsPerFile, tickPerEighth, winTicks, winEights}> }
   let refPpq = null;
-  let folderLoaded = false;
-  let audioFolderLoaded = false;
   let audioCtx = null;
   let audioBuffersByQuality = new Map();
   let audioQualities = [];
