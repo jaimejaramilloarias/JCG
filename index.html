@@ -316,9 +316,10 @@
             <button class="btn primary" id="btnRegenerate" title="Generar de nuevo con variación aleatoria">Regenerar</button>
             <button class="btn" id="btnClean" title="Insertar NoteOff en notas demasiado largas y limpiar artefactos">Limpiar artefactos</button>
             <button class="btn purple" id="btnExport" title="Exportar el MIDI generado">Exportar</button>
+            <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado (modo Bolero)">Exportar audio</button>
           </div>
           <div class="inlineStats">
-            <span class="mini">Afecta al MIDI generado (no al playback en vivo).</span>
+            <span class="mini">El botón de audio exporta el playback Bolero al BPM actual.</span>
           </div>
         </div>
         <div class="controlCluster">
@@ -1214,6 +1215,9 @@ if (typeof globalThis !== "undefined") {
   let playOut = null;
   let audioNodes = [];
   let audioTimers = [];
+  let audioUrlsByQuality = new Map();
+  let activeRecorder = null;
+  let recorderStopTimer = null;
   var midiStatusCache = "Salida MIDI: —";
   let folderLoaded = false;
   let audioFolderLoaded = false;
@@ -1959,6 +1963,10 @@ if (typeof globalThis !== "undefined") {
   async function loadAudioFolder() {
     clearLog();
     audioBuffersByQuality.clear();
+    for (const url of audioUrlsByQuality.values()) {
+      URL.revokeObjectURL(url);
+    }
+    audioUrlsByQuality.clear();
     audioQualities = [];
     renderQualityChips();
 
@@ -1987,12 +1995,18 @@ if (typeof globalThis !== "undefined") {
         const qualityKey = parseAudioFileName(fullName);
         if (!qualityKey) { skipped.push(fullName); continue; }
 
-        if (audioBuffersByQuality.has(qualityKey)) dups.push(qualityKey);
+        if (audioBuffersByQuality.has(qualityKey)) {
+          dups.push(qualityKey);
+          const oldUrl = audioUrlsByQuality.get(qualityKey);
+          if (oldUrl) URL.revokeObjectURL(oldUrl);
+        }
 
         try {
           const buf = await f.arrayBuffer();
           const audioBuf = await ctx.decodeAudioData(buf.slice(0));
           audioBuffersByQuality.set(qualityKey, audioBuf);
+          const objectUrl = URL.createObjectURL(f);
+          audioUrlsByQuality.set(qualityKey, objectUrl);
           found.push(qualityKey);
         } catch (err) {
           skipped.push(fullName);
@@ -3518,36 +3532,60 @@ if (typeof globalThis !== "undefined") {
 
   function stopBoleroPlayback() {
     isAudioPlaying = false;
-    for (const t of audioTimers) clearTimeout(t);
+    for (const t of audioTimers) {
+      clearTimeout(t);
+      clearInterval(t);
+    }
     audioTimers = [];
     for (const node of audioNodes) {
-      try { node.source.stop(); } catch (_) {}
-      try { node.source.disconnect(); } catch (_) {}
-      try { node.gain.disconnect(); } catch (_) {}
+      if (node.audio) {
+        try { node.audio.pause(); } catch (_) {}
+        try { node.audio.currentTime = 0; } catch (_) {}
+      }
+      try { node.source?.disconnect(); } catch (_) {}
+      try { node.gain?.disconnect(); } catch (_) {}
     }
     audioNodes = [];
   }
 
+  function stopBoleroRecording() {
+    if (recorderStopTimer) {
+      clearTimeout(recorderStopTimer);
+      recorderStopTimer = null;
+    }
+    if (activeRecorder && activeRecorder.state !== "inactive") {
+      try { activeRecorder.stop(); } catch (_) {}
+    }
+    activeRecorder = null;
+    const exportBtn = el("btnExportAudio");
+    if (exportBtn) exportBtn.disabled = false;
+  }
+
   function scheduleBoleroChord({
     ctx,
-    buffer,
+    url,
     startTime,
     endTime,
     bufferOffset,
     loopStart,
     loopEnd,
     playbackRate,
+    recordDest,
   }) {
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.playbackRate.value = playbackRate;
-    source.loop = true;
-    source.loopStart = loopStart;
-    source.loopEnd = loopEnd;
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    audio.playbackRate = playbackRate;
+    audio.preservesPitch = true;
+    audio.mozPreservesPitch = true;
+    audio.webkitPreservesPitch = true;
+    audio.loop = false;
 
+    const source = ctx.createMediaElementSource(audio);
     const gain = ctx.createGain();
     gain.gain.value = 0;
-    source.connect(gain).connect(ctx.destination);
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    if (recordDest) gain.connect(recordDest);
 
     const duration = Math.max(0, endTime - startTime);
     const fade = Math.min(0.005, duration / 2);
@@ -3560,13 +3598,35 @@ if (typeof globalThis !== "undefined") {
       gain.gain.linearRampToValueAtTime(0, endTime);
     }
 
-    source.start(startTime, bufferOffset);
-    source.stop(endTime + 0.02);
-    audioNodes.push({ source, gain });
+    const startDelay = Math.max(0, (startTime - ctx.currentTime) * 1000);
+    const stopDelay = Math.max(0, (endTime - ctx.currentTime) * 1000 + 20);
+    const startTimer = setTimeout(() => {
+      audio.currentTime = bufferOffset;
+      audio.play().catch(() => {});
+      if (loopEnd > loopStart) {
+        const loopTimer = setInterval(() => {
+          if (audio.currentTime >= loopEnd) {
+            audio.currentTime = loopStart;
+          }
+        }, 50);
+        audioTimers.push(loopTimer);
+      }
+    }, startDelay);
+
+    const stopTimer = setTimeout(() => {
+      audio.pause();
+      audio.currentTime = 0;
+      try { source.disconnect(); } catch (_) {}
+      try { gain.disconnect(); } catch (_) {}
+    }, stopDelay);
+
+    audioTimers.push(startTimer, stopTimer);
+    audioNodes.push({ audio, source, gain });
   }
 
-  function getReferencePlaybackRate() {
-    return 1;
+  function getReferencePlaybackRate(bpm) {
+    if (!Number.isFinite(bpm) || bpm <= 0) return 1;
+    return bpm / REF_BPM_AUDIO;
   }
 
   async function playBoleroAudio() {
@@ -3582,7 +3642,7 @@ if (typeof globalThis !== "undefined") {
     const secPerEighth = (60 / bpm) / 2;
     const barSeconds = (60 / REF_BPM_AUDIO) * 4;
     const segmentSeconds = AUDIO_SEGMENT_BARS * barSeconds;
-    const playbackRate = getReferencePlaybackRate();
+    const playbackRate = getReferencePlaybackRate(bpm);
 
     let parsed;
     try {
@@ -3602,7 +3662,7 @@ if (typeof globalThis !== "undefined") {
     }
 
     for (const seg of segments) {
-      if (!audioBuffersByQuality.has(seg.quality)) {
+      if (!audioBuffersByQuality.has(seg.quality) || !audioUrlsByQuality.has(seg.quality)) {
         log(`No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
         return;
       }
@@ -3618,7 +3678,7 @@ if (typeof globalThis !== "undefined") {
     const base = ctx.currentTime + 0.12;
 
     for (const seg of segments) {
-      const buffer = audioBuffersByQuality.get(seg.quality);
+      const url = audioUrlsByQuality.get(seg.quality);
       const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
       const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
       const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
@@ -3631,7 +3691,7 @@ if (typeof globalThis !== "undefined") {
 
       scheduleBoleroChord({
         ctx,
-        buffer,
+        url,
         startTime,
         endTime,
         bufferOffset,
@@ -3651,6 +3711,7 @@ if (typeof globalThis !== "undefined") {
   function stopAllPlayback() {
     if (isPlaying) stopPlayback();
     if (isAudioPlaying) stopBoleroPlayback();
+    stopBoleroRecording();
   }
 
   function playFromUI() {
@@ -3811,6 +3872,137 @@ if (typeof globalThis !== "undefined") {
     a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 2000);
     log("Exportado: generated.mid (una sola pista/canal, tempo fijo 120; swing NO afecta exportación).", "OK");
+  }
+
+  function getBestAudioMimeType() {
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/ogg",
+    ];
+    for (const type of candidates) {
+      if (window.MediaRecorder?.isTypeSupported?.(type)) return type;
+    }
+    return "";
+  }
+
+  async function exportBoleroAudio() {
+    if (getPlaybackMode() !== "bolero") {
+      log("El export de audio solo está disponible en modo Bolero.", "WARN");
+      return;
+    }
+    if (!audioFolderLoaded || !audioBuffersByQuality.size || !audioUrlsByQuality.size) {
+      log("Carga una carpeta de WAVs para exportar audio.", "ERROR");
+      return;
+    }
+    if (!window.MediaRecorder) {
+      log("MediaRecorder no disponible en este navegador.", "ERROR");
+      return;
+    }
+
+    const ctx = ensureAudioContext();
+    await ctx.resume();
+
+    let parsed;
+    try {
+      parsed = parseProgression(el("prog").value, { syncopate: false });
+    } catch (err) {
+      log(String(err?.message || err), "ERROR");
+      return;
+    }
+
+    const bpm = parseInt(tempo.value, 10);
+    const secPerEighth = (60 / bpm) / 2;
+    const barSeconds = (60 / REF_BPM_AUDIO) * 4;
+    const segmentSeconds = AUDIO_SEGMENT_BARS * barSeconds;
+    const playbackRate = getReferencePlaybackRate(bpm);
+
+    const repeated = repeatSegments(parsed.segments, parsed.totalEighth, getRepeatTimes());
+    const segments = repeated.segments;
+    const totalEighth = repeated.totalEighth;
+
+    if (!segments.length) {
+      log("No hay acordes para exportar.", "ERROR");
+      return;
+    }
+
+    for (const seg of segments) {
+      if (!audioBuffersByQuality.has(seg.quality) || !audioUrlsByQuality.has(seg.quality)) {
+        log(`No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
+        return;
+      }
+      if (!ROOT_SEMI_TO_BAR_START.has(seg.rootSemi)) {
+        log(`Fundamental inválida para audio: ${seg.root}.`, "ERROR");
+        return;
+      }
+    }
+
+    if (isAudioPlaying) stopBoleroPlayback();
+    stopBoleroRecording();
+
+    const recordDest = ctx.createMediaStreamDestination();
+    const mimeType = getBestAudioMimeType();
+    const recorder = new MediaRecorder(recordDest.stream, mimeType ? { mimeType } : undefined);
+    activeRecorder = recorder;
+    const chunks = [];
+    recorder.ondataavailable = (evt) => {
+      if (evt.data?.size) chunks.push(evt.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const extension = (mimeType && mimeType.includes("ogg")) ? "ogg" : "webm";
+      anchor.href = url;
+      anchor.download = `bolero_${bpm}bpm.${extension}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      log(`Exportado audio: ${anchor.download}`, "OK");
+      stopBoleroRecording();
+    };
+
+    const exportBtn = el("btnExportAudio");
+    if (exportBtn) exportBtn.disabled = true;
+
+    isAudioPlaying = true;
+    const base = ctx.currentTime + 0.12;
+
+    recorder.start();
+
+    for (const seg of segments) {
+      const url = audioUrlsByQuality.get(seg.quality);
+      const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
+      const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
+      const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
+      const bufferOffset = (rootBarStart * barSeconds) + offsetSeconds;
+      const loopStart = rootBarStart * barSeconds;
+      const loopEnd = loopStart + segmentSeconds;
+
+      const startTime = base + (seg.startEighth * secPerEighth);
+      const endTime = startTime + (seg.durEighth * secPerEighth);
+
+      scheduleBoleroChord({
+        ctx,
+        url,
+        startTime,
+        endTime,
+        bufferOffset,
+        loopStart,
+        loopEnd,
+        playbackRate,
+        recordDest,
+      });
+    }
+
+    const totalDuration = totalEighth * secPerEighth;
+    recorderStopTimer = setTimeout(() => {
+      isAudioPlaying = false;
+      if (recorder.state !== "inactive") recorder.stop();
+      recorderStopTimer = null;
+    }, Math.ceil((totalDuration + 0.3) * 1000));
   }
 
   function cleanGenerated() {
@@ -4057,6 +4249,7 @@ if (typeof globalThis !== "undefined") {
 
   el("btnClean").addEventListener("click", cleanGenerated);
   el("btnExport").addEventListener("click", exportGenerated);
+  el("btnExportAudio").addEventListener("click", exportBoleroAudio);
 
   renderQualityChips(); // estado inicial
 
