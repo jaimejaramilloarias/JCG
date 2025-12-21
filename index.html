@@ -460,24 +460,31 @@
                 <input id="folderFallback" type="file" webkitdirectory multiple style="display:none" />
               </div>
               <div class="mini" id="folderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
-              <div class="label" style="margin-top:12px">Carpeta Audio (Bolero)</div>
-              <div class="row">
-                <button class="btn" id="btnPickAudioFolder" title="Cargar carpeta con archivos WAV para Bolero">Cargar carpeta</button>
-                <input id="audioFolderFallback" type="file" webkitdirectory multiple style="display:none" />
-              </div>
-              <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
             </div>
 
             <div class="sectionCard">
               <div class="sectionTitle">Salida y preview</div>
-              <div class="label">Modo de playback</div>
-              <select id="playbackMode" title="Elige el motor de reproducción">
-                <option value="midi">MIDI</option>
-                <option value="bolero">Bolero (Audio)</option>
-              </select>
-              <div class="label">Puerto MIDI de salida</div>
-              <select id="midiOut" title="Elige el puerto MIDI de salida (destino) para la reproducción"></select>
-              <div class="mini" id="ppqPill" style="margin-top:10px">PPQ: <span class="mono" id="ppqText">—</span></div>
+              <div class="tabs playbackTabs">
+                <div class="tabList" role="tablist" aria-label="Modo de playback">
+                  <button class="tabBtn active" type="button" role="tab" aria-selected="true" aria-controls="playbackMidiPanel" id="playbackMidiTab" data-playback-tab="midi">MIDI</button>
+                  <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="playbackBoleroPanel" id="playbackBoleroTab" data-playback-tab="bolero">Bolero</button>
+                </div>
+
+                <div class="tabPanel active" id="playbackMidiPanel" role="tabpanel" aria-labelledby="playbackMidiTab" data-playback-panel="midi">
+                  <div class="label">Puerto MIDI de salida</div>
+                  <select id="midiOut" title="Elige el puerto MIDI de salida (destino) para la reproducción"></select>
+                  <div class="mini" id="ppqPill" style="margin-top:10px">PPQ: <span class="mono" id="ppqText">—</span></div>
+                </div>
+
+                <div class="tabPanel" id="playbackBoleroPanel" role="tabpanel" aria-labelledby="playbackBoleroTab" data-playback-panel="bolero">
+                  <div class="label">Carpeta Audio (Bolero)</div>
+                  <div class="row">
+                    <button class="btn" id="btnPickAudioFolder" title="Cargar carpeta con archivos WAV para Bolero">Cargar carpeta</button>
+                    <input id="audioFolderFallback" type="file" webkitdirectory multiple style="display:none" />
+                  </div>
+                  <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1125,7 +1132,6 @@ if (typeof globalThis !== "undefined") {
   const audioFolderStatus = el("audioFolderStatus");
   const midiOutSel = el("midiOut");
   const midiStatus = el("midiStatus");
-  const playbackMode = el("playbackMode");
   const tempo = el("tempo");
   const tempoVal = el("tempoVal");
   const tempoValInline = el("tempoValInline");
@@ -1154,6 +1160,9 @@ if (typeof globalThis !== "undefined") {
   const advancedTabPanels = Array.from(document.querySelectorAll("[data-advanced-panel]"));
   const mainTabButtons = Array.from(document.querySelectorAll("[data-main-tab]"));
   const mainTabPanels = Array.from(document.querySelectorAll("[data-main-panel]"));
+  const playbackTabButtons = Array.from(document.querySelectorAll("[data-playback-tab]"));
+  const playbackTabPanels = Array.from(document.querySelectorAll("[data-playback-panel]"));
+  let currentPlaybackMode = "midi";
 
   function setAdvancedTab(tab) {
     if (!tab) return;
@@ -1203,6 +1212,34 @@ if (typeof globalThis !== "undefined") {
 
   setMainTab("progression");
 
+  function setPlaybackTab(tab) {
+    if (!tab) return;
+    currentPlaybackMode = tab;
+    stopAllPlayback();
+    playbackTabButtons.forEach((btn) => {
+      const isActive = btn?.dataset?.playbackTab === tab;
+      btn?.classList.toggle("active", isActive);
+      if (btn) {
+        btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        btn.setAttribute("tabindex", isActive ? "0" : "-1");
+      }
+    });
+
+    playbackTabPanels.forEach((panel) => {
+      const isActive = panel?.dataset?.playbackPanel === tab;
+      panel?.classList.toggle("active", isActive);
+      panel?.toggleAttribute("hidden", !isActive);
+    });
+
+    updatePlaybackModeUI();
+  }
+
+  playbackTabButtons.forEach((btn) => {
+    btn?.addEventListener("click", () => setPlaybackTab(btn.dataset?.playbackTab));
+  });
+
+  setPlaybackTab("midi");
+
   function log(msg, cls="") {
     const line = cls ? `[${cls}] ${msg}` : msg;
     logEl.textContent += line + "\n";
@@ -1218,7 +1255,7 @@ if (typeof globalThis !== "undefined") {
   }
 
   function getPlaybackMode() {
-    return playbackMode?.value || "midi";
+    return currentPlaybackMode || "midi";
   }
 
   function updateReadyState() {
@@ -3940,10 +3977,6 @@ if (typeof globalThis !== "undefined") {
 
   el("btnPickFolder").addEventListener("click", loadReferenceFolder);
   el("btnPickAudioFolder").addEventListener("click", loadAudioFolder);
-  playbackMode?.addEventListener("change", () => {
-    stopAllPlayback();
-    updatePlaybackModeUI();
-  });
 
   el("btnRegenerate").addEventListener("click", () => {
     try{
