@@ -1946,7 +1946,12 @@ if (typeof globalThis !== "undefined") {
     if (!audioCtx) {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) throw new Error("AudioContext no disponible en este navegador.");
-      audioCtx = new Ctx();
+      const options = { latencyHint: "playback", sampleRate: 48000 };
+      try {
+        audioCtx = new Ctx(options);
+      } catch (_) {
+        audioCtx = new Ctx();
+      }
     }
     return audioCtx;
   }
@@ -3575,6 +3580,7 @@ if (typeof globalThis !== "undefined") {
     const audio = new Audio(url);
     audio.preload = "auto";
     audio.playbackRate = playbackRate;
+    audio.defaultPlaybackRate = playbackRate;
     audio.preservesPitch = true;
     audio.mozPreservesPitch = true;
     audio.webkitPreservesPitch = true;
@@ -3588,14 +3594,26 @@ if (typeof globalThis !== "undefined") {
     if (recordDest) gain.connect(recordDest);
 
     const duration = Math.max(0, endTime - startTime);
-    const fade = Math.min(0.005, duration / 2);
+    const fade = Math.min(0.02, duration / 2);
     gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(1, startTime + fade);
-    if (duration > fade) {
-      gain.gain.setValueAtTime(1, Math.max(startTime + fade, endTime - fade));
-      gain.gain.linearRampToValueAtTime(0, endTime);
+    if (fade > 0) {
+      const fadeSamples = 64;
+      const curveIn = new Float32Array(fadeSamples);
+      const curveOut = new Float32Array(fadeSamples);
+      for (let i = 0; i < fadeSamples; i++) {
+        const t = i / (fadeSamples - 1);
+        curveIn[i] = Math.sin(t * Math.PI * 0.5);
+        curveOut[i] = Math.cos(t * Math.PI * 0.5);
+      }
+      gain.gain.setValueCurveAtTime(curveIn, startTime, fade);
+      if (duration > fade * 2) {
+        gain.gain.setValueAtTime(1, Math.max(startTime + fade, endTime - fade));
+        gain.gain.setValueCurveAtTime(curveOut, Math.max(startTime + fade, endTime - fade), fade);
+      } else {
+        gain.gain.setValueCurveAtTime(curveOut, Math.max(startTime + fade, endTime - fade), fade);
+      }
     } else {
-      gain.gain.linearRampToValueAtTime(0, endTime);
+      gain.gain.setValueAtTime(0, endTime);
     }
 
     const startDelay = Math.max(0, (startTime - ctx.currentTime) * 1000);
@@ -3876,9 +3894,11 @@ if (typeof globalThis !== "undefined") {
 
   function getBestAudioMimeType() {
     const candidates = [
+      "audio/webm;codecs=pcm",
+      "audio/ogg;codecs=flac",
       "audio/webm;codecs=opus",
-      "audio/webm",
       "audio/ogg;codecs=opus",
+      "audio/webm",
       "audio/ogg",
     ];
     for (const type of candidates) {
@@ -3943,7 +3963,9 @@ if (typeof globalThis !== "undefined") {
 
     const recordDest = ctx.createMediaStreamDestination();
     const mimeType = getBestAudioMimeType();
-    const recorder = new MediaRecorder(recordDest.stream, mimeType ? { mimeType } : undefined);
+    const recorderOptions = { audioBitsPerSecond: 320_000 };
+    if (mimeType) recorderOptions.mimeType = mimeType;
+    const recorder = new MediaRecorder(recordDest.stream, recorderOptions);
     activeRecorder = recorder;
     const chunks = [];
     recorder.ondataavailable = (evt) => {
