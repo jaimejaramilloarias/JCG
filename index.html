@@ -1124,6 +1124,51 @@ if (typeof globalThis !== "undefined") {
   // UI handles
   // -------------------------
   const el = (id) => document.getElementById(id);
+
+  // quality chips (dinámicos desde la carpeta)
+  const chips = el("qualityChips");
+
+  function insertAtCursor(textarea, txt) {
+    textarea.focus();
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    const before = textarea.value.slice(0, start);
+    const after = textarea.value.slice(end);
+
+    // SIN espacio previo: "C" + click "maj7" => "Cmaj7"
+    const needsSpaceAfter = after.length && !/^\s/.test(after);
+    const insert = txt + (needsSpaceAfter ? " " : "");
+
+    textarea.value = before + insert + after;
+    const pos = (before + insert).length;
+    textarea.selectionStart = textarea.selectionEnd = pos;
+  }
+
+  function renderQualityChips() {
+    chips.innerHTML = "";
+    const mode = getPlaybackMode();
+    const activeQualities = mode === "bolero" ? audioQualities : QUALITIES;
+    if (!activeQualities.length) {
+      const s = document.createElement("span");
+      s.className = "mini";
+      s.textContent = mode === "bolero"
+        ? "Carga una carpeta de audio para ver las calidades disponibles."
+        : "Carga una carpeta para ver las calidades disponibles.";
+      chips.appendChild(s);
+      return;
+    }
+
+    for (const q of activeQualities) {
+      const b = document.createElement("span");
+      b.className = "pill";
+      b.textContent = q;
+      b.title = "Clic: insertar la calidad exacta en el cuadro de progresión";
+      b.addEventListener("click", () => {
+        insertAtCursor(el("prog"), q);
+      });
+      chips.appendChild(b);
+    }
+  }
   const logEl = el("log");
   const dotReady = el("dotReady");
   const readyText = el("readyText");
@@ -3993,51 +4038,6 @@ if (typeof globalThis !== "undefined") {
 
   el("btnClean").addEventListener("click", cleanGenerated);
   el("btnExport").addEventListener("click", exportGenerated);
-
-  // quality chips (dinámicos desde la carpeta)
-  const chips = el("qualityChips");
-
-  function insertAtCursor(textarea, txt) {
-    textarea.focus();
-    const start = textarea.selectionStart ?? textarea.value.length;
-    const end = textarea.selectionEnd ?? textarea.value.length;
-    const before = textarea.value.slice(0, start);
-    const after = textarea.value.slice(end);
-
-    // SIN espacio previo: "C" + click "maj7" => "Cmaj7"
-    const needsSpaceAfter = after.length && !/^\s/.test(after);
-    const insert = txt + (needsSpaceAfter ? " " : "");
-
-    textarea.value = before + insert + after;
-    const pos = (before + insert).length;
-    textarea.selectionStart = textarea.selectionEnd = pos;
-  }
-
-  function renderQualityChips() {
-    chips.innerHTML = "";
-    const mode = getPlaybackMode();
-    const activeQualities = mode === "bolero" ? audioQualities : QUALITIES;
-    if (!activeQualities.length) {
-      const s = document.createElement("span");
-      s.className = "mini";
-      s.textContent = mode === "bolero"
-        ? "Carga una carpeta de audio para ver las calidades disponibles."
-        : "Carga una carpeta para ver las calidades disponibles.";
-      chips.appendChild(s);
-      return;
-    }
-
-    for (const q of activeQualities) {
-      const b = document.createElement("span");
-      b.className = "pill";
-      b.textContent = q;
-      b.title = "Clic: insertar la calidad exacta en el cuadro de progresión";
-      b.addEventListener("click", () => {
-        insertAtCursor(el("prog"), q);
-      });
-      chips.appendChild(b);
-    }
-  }
 
   renderQualityChips(); // estado inicial
 
