@@ -1169,7 +1169,7 @@ if (typeof globalThis !== "undefined") {
   let playOut = null;
   let audioNodes = [];
   let audioTimers = [];
-  let midiStatusCache = "Salida MIDI: —";
+  var midiStatusCache = "Salida MIDI: —";
 
   function setAdvancedTab(tab) {
     if (!tab) return;
@@ -1276,9 +1276,9 @@ if (typeof globalThis !== "undefined") {
   }
 
   function updateMidiStatus(html) {
-    midiStatusCache = html;
+    midiStatusCache = html ?? "Salida MIDI: —";
     if (getPlaybackMode() === "midi") {
-      midiStatus.innerHTML = html;
+      midiStatus.innerHTML = midiStatusCache;
     }
   }
 
@@ -1292,7 +1292,8 @@ if (typeof globalThis !== "undefined") {
     if (swingBlock) swingBlock.style.display = isMidi ? "" : "none";
 
     if (isMidi) {
-      midiStatus.innerHTML = midiStatusCache;
+      const status = midiStatusCache ?? "Salida MIDI: —";
+      midiStatus.innerHTML = status;
     } else {
       midiStatus.innerHTML = `<span class="mini">Bolero (Audio) activo</span>`;
     }
