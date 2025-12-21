@@ -454,9 +454,9 @@
           <div class="sectionGrid">
             <div class="sectionCard">
               <div class="sectionTitle">Fuentes de referencia</div>
-              <div class="label">Carpeta MIDI de referencia</div>
+              <div class="label">Carpeta de referencia (MIDI o audio)</div>
               <div class="row">
-                <button class="btn" id="btnPickFolder" title="Cargar carpeta con archivos MIDI de referencia">Cargar carpeta</button>
+                <button class="btn" id="btnPickFolder" title="Cargar carpeta con archivos MIDI o audio según el modo">Cargar carpeta</button>
                 <input id="folderFallback" type="file" webkitdirectory multiple style="display:none" />
               </div>
               <div class="mini" id="folderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
@@ -553,7 +553,7 @@
     <div class="modalBd">
       <p><b>Manual rápido</b></p>
       <ul>
-        <li><b>1) Cargar patrones:</b> pulsa <span class="kbd">Cargar carpeta</span> y elige la carpeta con tus patrones MIDI.</li>
+        <li><b>1) Cargar patrones:</b> pulsa <span class="kbd">Cargar carpeta</span> y elige la carpeta con tus patrones MIDI (o audio para Bolero).</li>
         <li><b>2) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
         <li><b>3) Calidades:</b> haz clic en la lista para insertar la calidad exacta.</li>
         <li><b>4) Regenerar:</b> crea una nueva variación.</li>
@@ -1964,6 +1964,7 @@ if (typeof globalThis !== "undefined") {
 
     audioFolderLoaded = false;
     audioFolderStatus.textContent = "Cargando…";
+    folderStatus.textContent = "Cargando…";
     updateReadyState();
 
     try {
@@ -1971,7 +1972,9 @@ if (typeof globalThis !== "undefined") {
       const { name, files } = await loadFolderViaPicker("audioFolderFallback");
       const folderFiles = files;
 
-      audioFolderStatus.textContent = `Carpeta: ${name} — ${folderFiles.length} archivo(s).`;
+      const statusLabel = `Carpeta (audio): ${name} — ${folderFiles.length} archivo(s).`;
+      audioFolderStatus.textContent = statusLabel;
+      folderStatus.textContent = statusLabel;
 
       const skipped = [];
       const dups = [];
@@ -2003,6 +2006,7 @@ if (typeof globalThis !== "undefined") {
       if (!audioQualities.length) {
         log("No encontré WAVs válidos. Revisa nombres y extensiones.", "ERROR");
         audioFolderStatus.textContent = "Sin carpeta cargada.";
+        folderStatus.textContent = "Sin carpeta cargada.";
         audioFolderLoaded = false;
         updateReadyState();
         return;
@@ -2024,10 +2028,12 @@ if (typeof globalThis !== "undefined") {
 
       log(`Cargados ${audioQualities.length} WAV(s) para Bolero.`, "OK");
       audioFolderLoaded = true;
+      folderStatus.textContent = audioFolderStatus.textContent;
       updateReadyState();
     } catch (err) {
       audioFolderLoaded = false;
       audioFolderStatus.textContent = "Error al cargar carpeta.";
+      folderStatus.textContent = "Error al cargar carpeta.";
       log(String(err?.message || err), "ERROR");
       updateReadyState();
     }
@@ -2107,6 +2113,15 @@ if (typeof globalThis !== "undefined") {
       renderQualityChips();
       log(String(err?.message || err), "ERROR");
     }
+  }
+
+  async function loadReferenceFolderByMode() {
+    if (getPlaybackMode() === "bolero") {
+      await loadAudioFolder();
+      return;
+    }
+
+    await loadReferenceFolder();
   }
 
   // -------------------------
@@ -4018,7 +4033,7 @@ if (typeof globalThis !== "undefined") {
     else playFromUI();
   });
 
-  el("btnPickFolder").addEventListener("click", loadReferenceFolder);
+  el("btnPickFolder").addEventListener("click", loadReferenceFolderByMode);
   el("btnPickAudioFolder").addEventListener("click", loadAudioFolder);
 
   el("btnRegenerate").addEventListener("click", () => {
