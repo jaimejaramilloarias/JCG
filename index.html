@@ -319,7 +319,7 @@
             <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado (modo Bolero)">Exportar audio</button>
           </div>
           <div class="inlineStats">
-            <span class="mini">El botón de audio exporta el playback Bolero al BPM actual.</span>
+            <span class="mini">El botón de audio exporta el playback Bolero al BPM fijo (90 BPM).</span>
           </div>
         </div>
         <div class="controlCluster">
@@ -497,6 +497,7 @@
                 <input id="tempo" type="range" min="40" max="240" value="120" />
                 <div class="mono" style="width:56px; text-align:right" id="tempoVal">120</div>
               </div>
+              <div class="mini" id="boleroTempoNote" style="margin-top:6px">En modo Bolero, el tempo está fijo en 90 BPM.</div>
 
               <div id="swingBlock">
                 <div class="label" style="margin-top:12px">Swing (%)</div>
@@ -1111,6 +1112,7 @@ if (typeof globalThis !== "undefined") {
   const TIME_SIG_DEN = 4;
   const REF_BPM_EXPORT = 120; // export tempo fixed
   const REF_BPM_AUDIO = 90;
+  const BOLERO_BPM = 90;
   const BARS_PER_AUDIO_FILE = 24;
   const EIGHTHS_PER_BAR = 8;
   const AUDIO_SEGMENT_BARS = 2;
@@ -1181,6 +1183,7 @@ if (typeof globalThis !== "undefined") {
   const tempo = el("tempo");
   const tempoVal = el("tempoVal");
   const tempoValInline = el("tempoValInline");
+  const boleroTempoNote = el("boleroTempoNote");
   const swing = el("swing");
   const swingVal = el("swingVal");
   const swingBlock = el("swingBlock");
@@ -1215,6 +1218,7 @@ if (typeof globalThis !== "undefined") {
   let playOut = null;
   let audioNodes = [];
   let audioTimers = [];
+  let cachedMidiTempo = parseInt(tempo?.value ?? "120", 10) || 120;
   let audioUrlsByQuality = new Map();
   let activeRecorder = null;
   let recorderStopTimer = null;
@@ -1333,6 +1337,12 @@ if (typeof globalThis !== "undefined") {
     }
   }
 
+  function syncTempoUI(value) {
+    if (tempo) tempo.value = String(value);
+    if (tempoVal) tempoVal.textContent = String(value);
+    if (tempoValInline) tempoValInline.textContent = String(value);
+  }
+
   function updatePlaybackModeUI() {
     const mode = getPlaybackMode();
     const isMidi = mode === "midi";
@@ -1341,6 +1351,17 @@ if (typeof globalThis !== "undefined") {
     bassVel.disabled = !isMidi;
     if (swing) swing.disabled = !isMidi;
     if (swingBlock) swingBlock.style.display = isMidi ? "" : "none";
+    if (tempo) {
+      if (isMidi) {
+        tempo.disabled = false;
+        syncTempoUI(cachedMidiTempo);
+      } else {
+        cachedMidiTempo = parseInt(tempo.value, 10) || cachedMidiTempo;
+        tempo.disabled = true;
+        syncTempoUI(BOLERO_BPM);
+      }
+    }
+    if (boleroTempoNote) boleroTempoNote.style.display = isMidi ? "none" : "";
 
     if (isMidi) {
       const status = midiStatusCache ?? "Salida MIDI: —";
@@ -3543,10 +3564,7 @@ if (typeof globalThis !== "undefined") {
     }
     audioTimers = [];
     for (const node of audioNodes) {
-      if (node.audio) {
-        try { node.audio.pause(); } catch (_) {}
-        try { node.audio.currentTime = 0; } catch (_) {}
-      }
+      try { node.source?.stop(0); } catch (_) {}
       try { node.source?.disconnect(); } catch (_) {}
       try { node.gain?.disconnect(); } catch (_) {}
     }
@@ -3568,25 +3586,21 @@ if (typeof globalThis !== "undefined") {
 
   function scheduleBoleroChord({
     ctx,
-    url,
+    buffer,
     startTime,
     endTime,
     bufferOffset,
     loopStart,
     loopEnd,
-    playbackRate,
     recordDest,
   }) {
-    const audio = new Audio(url);
-    audio.preload = "auto";
-    audio.playbackRate = playbackRate;
-    audio.defaultPlaybackRate = playbackRate;
-    audio.preservesPitch = true;
-    audio.mozPreservesPitch = true;
-    audio.webkitPreservesPitch = true;
-    audio.loop = false;
-
-    const source = ctx.createMediaElementSource(audio);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = loopEnd > loopStart;
+    if (source.loop) {
+      source.loopStart = loopStart;
+      source.loopEnd = loopEnd;
+    }
     const gain = ctx.createGain();
     gain.gain.value = 0;
     source.connect(gain);
@@ -3616,35 +3630,14 @@ if (typeof globalThis !== "undefined") {
       gain.gain.setValueAtTime(0, endTime);
     }
 
-    const startDelay = Math.max(0, (startTime - ctx.currentTime) * 1000);
-    const stopDelay = Math.max(0, (endTime - ctx.currentTime) * 1000 + 20);
-    const startTimer = setTimeout(() => {
-      audio.currentTime = bufferOffset;
-      audio.play().catch(() => {});
-      if (loopEnd > loopStart) {
-        const loopTimer = setInterval(() => {
-          if (audio.currentTime >= loopEnd) {
-            audio.currentTime = loopStart;
-          }
-        }, 50);
-        audioTimers.push(loopTimer);
-      }
-    }, startDelay);
-
-    const stopTimer = setTimeout(() => {
-      audio.pause();
-      audio.currentTime = 0;
+    const safeOffset = Math.max(0, bufferOffset || 0);
+    source.start(startTime, safeOffset);
+    source.stop(Math.max(endTime, startTime + 0.01) + 0.05);
+    source.onended = () => {
       try { source.disconnect(); } catch (_) {}
       try { gain.disconnect(); } catch (_) {}
-    }, stopDelay);
-
-    audioTimers.push(startTimer, stopTimer);
-    audioNodes.push({ audio, source, gain });
-  }
-
-  function getReferencePlaybackRate(bpm) {
-    if (!Number.isFinite(bpm) || bpm <= 0) return 1;
-    return bpm / REF_BPM_AUDIO;
+    };
+    audioNodes.push({ source, gain });
   }
 
   async function playBoleroAudio() {
@@ -3656,11 +3649,10 @@ if (typeof globalThis !== "undefined") {
     const ctx = ensureAudioContext();
     await ctx.resume();
 
-    const bpm = parseInt(tempo.value, 10);
+    const bpm = BOLERO_BPM;
     const secPerEighth = (60 / bpm) / 2;
     const barSeconds = (60 / REF_BPM_AUDIO) * 4;
     const segmentSeconds = AUDIO_SEGMENT_BARS * barSeconds;
-    const playbackRate = getReferencePlaybackRate(bpm);
 
     let parsed;
     try {
@@ -3696,12 +3688,13 @@ if (typeof globalThis !== "undefined") {
     const base = ctx.currentTime + 0.12;
 
     for (const seg of segments) {
-      const url = audioUrlsByQuality.get(seg.quality);
+      const buffer = audioBuffersByQuality.get(seg.quality);
       const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
       const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
       const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
-      const bufferOffset = (rootBarStart * barSeconds) + offsetSeconds;
-      const loopStart = rootBarStart * barSeconds;
+      const isFirstSegment = seg.startEighth === 0;
+      const bufferOffset = isFirstSegment ? 0 : (rootBarStart * barSeconds) + offsetSeconds;
+      const loopStart = isFirstSegment ? 0 : rootBarStart * barSeconds;
       const loopEnd = loopStart + segmentSeconds;
 
       const startTime = base + (seg.startEighth * secPerEighth);
@@ -3709,13 +3702,12 @@ if (typeof globalThis !== "undefined") {
 
       scheduleBoleroChord({
         ctx,
-        url,
+        buffer,
         startTime,
         endTime,
         bufferOffset,
         loopStart,
         loopEnd,
-        playbackRate,
       });
     }
 
@@ -3932,11 +3924,10 @@ if (typeof globalThis !== "undefined") {
       return;
     }
 
-    const bpm = parseInt(tempo.value, 10);
+    const bpm = BOLERO_BPM;
     const secPerEighth = (60 / bpm) / 2;
     const barSeconds = (60 / REF_BPM_AUDIO) * 4;
     const segmentSeconds = AUDIO_SEGMENT_BARS * barSeconds;
-    const playbackRate = getReferencePlaybackRate(bpm);
 
     const repeated = repeatSegments(parsed.segments, parsed.totalEighth, getRepeatTimes());
     const segments = repeated.segments;
@@ -3995,12 +3986,13 @@ if (typeof globalThis !== "undefined") {
     recorder.start();
 
     for (const seg of segments) {
-      const url = audioUrlsByQuality.get(seg.quality);
+      const buffer = audioBuffersByQuality.get(seg.quality);
       const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
       const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
       const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
-      const bufferOffset = (rootBarStart * barSeconds) + offsetSeconds;
-      const loopStart = rootBarStart * barSeconds;
+      const isFirstSegment = seg.startEighth === 0;
+      const bufferOffset = isFirstSegment ? 0 : (rootBarStart * barSeconds) + offsetSeconds;
+      const loopStart = isFirstSegment ? 0 : rootBarStart * barSeconds;
       const loopEnd = loopStart + segmentSeconds;
 
       const startTime = base + (seg.startEighth * secPerEighth);
@@ -4008,13 +4000,12 @@ if (typeof globalThis !== "undefined") {
 
       scheduleBoleroChord({
         ctx,
-        url,
+        buffer,
         startTime,
         endTime,
         bufferOffset,
         loopStart,
         loopEnd,
-        playbackRate,
         recordDest,
       });
     }
@@ -4094,6 +4085,7 @@ if (typeof globalThis !== "undefined") {
   tempo.addEventListener("input", () => {
     tempoVal.textContent = tempo.value;
     if (tempoValInline) tempoValInline.textContent = tempo.value;
+    cachedMidiTempo = parseInt(tempo.value, 10) || cachedMidiTempo;
   });
   // swing desactivado
   bassVel.addEventListener("input", () => bassVelVal.textContent = bassVel.value);
