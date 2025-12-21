@@ -3605,6 +3605,7 @@ if (typeof globalThis !== "undefined") {
     loopStart,
     loopEnd,
     recordDest,
+    trackNodes = true,
   }) {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
@@ -3649,7 +3650,9 @@ if (typeof globalThis !== "undefined") {
       try { source.disconnect(); } catch (_) {}
       try { gain.disconnect(); } catch (_) {}
     };
-    audioNodes.push({ source, gain });
+    if (trackNodes) {
+      audioNodes.push({ source, gain });
+    }
   }
 
   async function playBoleroAudio() {
@@ -3896,19 +3899,54 @@ if (typeof globalThis !== "undefined") {
     log("Exportado: generated.mid (una sola pista/canal, tempo fijo 120; swing NO afecta exportación).", "OK");
   }
 
-  function getBestAudioMimeType() {
-    const candidates = [
-      "audio/webm;codecs=pcm",
-      "audio/ogg;codecs=flac",
-      "audio/webm;codecs=opus",
-      "audio/ogg;codecs=opus",
-      "audio/webm",
-      "audio/ogg",
-    ];
-    for (const type of candidates) {
-      if (window.MediaRecorder?.isTypeSupported?.(type)) return type;
+  function encodeWavFromBuffer(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const length = buffer.length;
+    const bytesPerSample = 2;
+    const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = length * blockAlign;
+    const bufferSize = 44 + dataSize;
+    const wavBuffer = new ArrayBuffer(bufferSize);
+    const view = new DataView(wavBuffer);
+
+    const writeString = (offset, str) => {
+      for (let i = 0; i < str.length; i += 1) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bytesPerSample * 8, true);
+    writeString(36, "data");
+    view.setUint32(40, dataSize, true);
+
+    const channelData = [];
+    for (let ch = 0; ch < numChannels; ch += 1) {
+      channelData.push(buffer.getChannelData(ch));
     }
-    return "";
+
+    let offset = 44;
+    for (let i = 0; i < length; i += 1) {
+      for (let ch = 0; ch < numChannels; ch += 1) {
+        const sample = Math.max(-1, Math.min(1, channelData[ch][i]));
+        const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(offset, intSample, true);
+        offset += bytesPerSample;
+      }
+    }
+
+    return wavBuffer;
   }
 
   async function exportBoleroAudio() {
@@ -3920,14 +3958,6 @@ if (typeof globalThis !== "undefined") {
       log("Carga una carpeta de WAVs para exportar audio.", "ERROR");
       return;
     }
-    if (!window.MediaRecorder) {
-      log("MediaRecorder no disponible en este navegador.", "ERROR");
-      return;
-    }
-
-    const ctx = ensureAudioContext();
-    await ctx.resume();
-
     let parsed;
     try {
       parsed = parseProgression(el("prog").value, { syncopate: false, maxChordsPerBar: 4 });
@@ -3964,38 +3994,18 @@ if (typeof globalThis !== "undefined") {
     if (isAudioPlaying) stopBoleroPlayback();
     stopBoleroRecording();
 
-    const recordDest = ctx.createMediaStreamDestination();
-    const mimeType = getBestAudioMimeType();
-    const recorderOptions = { audioBitsPerSecond: 320_000 };
-    if (mimeType) recorderOptions.mimeType = mimeType;
-    const recorder = new MediaRecorder(recordDest.stream, recorderOptions);
-    activeRecorder = recorder;
-    const chunks = [];
-    recorder.ondataavailable = (evt) => {
-      if (evt.data?.size) chunks.push(evt.data);
-    };
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      const extension = (mimeType && mimeType.includes("ogg")) ? "ogg" : "webm";
-      anchor.href = url;
-      anchor.download = `bolero_${bpm}bpm.${extension}`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-      log(`Exportado audio: ${anchor.download}`, "OK");
-      stopBoleroRecording();
-    };
+    const buffers = [...audioBuffersByQuality.values()];
+    const sampleRate = buffers[0]?.sampleRate || 44100;
+    const numChannels = Math.max(1, ...buffers.map((buf) => buf.numberOfChannels || 1));
+    const totalDuration = totalEighth * secPerEighth;
+    const renderLength = Math.ceil((totalDuration + 0.4) * sampleRate);
+    const offlineCtx = new OfflineAudioContext(numChannels, renderLength, sampleRate);
 
     const exportBtn = el("btnExportAudio");
     if (exportBtn) exportBtn.disabled = true;
 
     isAudioPlaying = true;
-    const base = ctx.currentTime + 0.12;
-
-    recorder.start();
+    log("Renderizando audio en segundo plano…", "OK");
 
     for (const seg of segments) {
       const buffer = audioBuffersByQuality.get(seg.quality);
@@ -4007,27 +4017,44 @@ if (typeof globalThis !== "undefined") {
       const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
       const loopEnd = loopStart + segmentSeconds;
 
-      const startTime = base + (seg.startEighth * secPerEighth);
+      const startTime = seg.startEighth * secPerEighth;
       const endTime = startTime + (seg.durEighth * secPerEighth);
 
       scheduleBoleroChord({
-        ctx,
+        ctx: offlineCtx,
         buffer,
         startTime,
         endTime,
         bufferOffset,
         loopStart,
         loopEnd,
-        recordDest,
+        trackNodes: false,
       });
     }
 
-    const totalDuration = totalEighth * secPerEighth;
-    recorderStopTimer = setTimeout(() => {
+    let rendered;
+    try {
+      rendered = await offlineCtx.startRendering();
+    } catch (err) {
       isAudioPlaying = false;
-      if (recorder.state !== "inactive") recorder.stop();
-      recorderStopTimer = null;
-    }, Math.ceil((totalDuration + 0.3) * 1000));
+      if (exportBtn) exportBtn.disabled = false;
+      log(`Error al renderizar WAV: ${String(err?.message || err)}`, "ERROR");
+      return;
+    }
+
+    const wavBuffer = encodeWavFromBuffer(rendered);
+    const blob = new Blob([wavBuffer], { type: "audio/wav" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `bolero_${bpm}bpm.wav`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    isAudioPlaying = false;
+    if (exportBtn) exportBtn.disabled = false;
+    log(`Exportado audio: ${anchor.download}`, "OK");
   }
 
   function cleanGenerated() {
