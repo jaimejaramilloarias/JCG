@@ -3565,6 +3565,10 @@ if (typeof globalThis !== "undefined") {
     audioNodes.push({ source, gain });
   }
 
+  function getReferencePlaybackRate() {
+    return 1;
+  }
+
   async function playBoleroAudio() {
     if (!audioFolderLoaded || !audioBuffersByQuality.size) {
       log("Carga una carpeta de WAVs para el modo Bolero.", "ERROR");
@@ -3578,7 +3582,7 @@ if (typeof globalThis !== "undefined") {
     const secPerEighth = (60 / bpm) / 2;
     const barSeconds = (60 / REF_BPM_AUDIO) * 4;
     const segmentSeconds = AUDIO_SEGMENT_BARS * barSeconds;
-    const playbackRate = bpm / REF_BPM_AUDIO;
+    const playbackRate = getReferencePlaybackRate();
 
     let parsed;
     try {
