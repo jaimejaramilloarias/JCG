@@ -1623,13 +1623,15 @@ if (typeof globalThis !== "undefined") {
 
   // -------------------------
   // Progression parsing (bars with | |)
-  // Rules:
+  // Rules (default):
   // | X | -> 8 eighths
   // | X Y | -> 4 + 4 eighths
+  // | X Y Z | -> 4 + 2 + 2 eighths (bolero)
+  // | X Y Z W | -> 2 + 2 + 2 + 2 eighths (bolero)
   // Anything else -> error (by spec)
   // -------------------------
   function parseProgression(text, opts = {}) {
-    const { syncopate = true } = opts;
+    const { syncopate = true, maxChordsPerBar = 2 } = opts;
 
     const raw = text.replace(/\r/g,"").trim();
     if (!raw) throw new Error("Escribe una progresión.");
@@ -1640,26 +1642,36 @@ if (typeof globalThis !== "undefined") {
     let startEighth = 0;
     let lastBarChords = null;
 
-    const addBar = (barChords, source="") => {
+    const addBar = (barChords, source="", barIndex = 0) => {
       if (!barChords || !barChords.length) {
-        throw new Error(`Barra inválida: "${source || ''}". Solo 1 o 2 acordes por compás.`);
+        throw new Error(`Barra inválida: "${source || ''}". Solo 1 a ${maxChordsPerBar} acordes por compás.`);
       }
 
-      if (barChords.length !== 1 && barChords.length !== 2) {
-        throw new Error(`Barra inválida: "${source || barChords.join(' ')}". Solo 1 o 2 acordes por compás.`);
+      if (barChords.length < 1 || barChords.length > maxChordsPerBar) {
+        throw new Error(`Barra inválida: "${source || barChords.join(' ')}". Solo 1 a ${maxChordsPerBar} acordes por compás.`);
       }
 
-      const each = (barChords.length === 1) ? 8 : 4;
       const stored = [];
-      for (const c of barChords) {
+      const chordCount = barChords.length;
+      let durations;
+      if (chordCount === 1) durations = [8];
+      else if (chordCount === 2) durations = [4, 4];
+      else if (chordCount === 3) durations = [4, 2, 2];
+      else durations = [2, 2, 2, 2];
+
+      for (const [idx, c] of barChords.entries()) {
         const parsed = parseChordToken(c);
         segments.push({
           ...parsed,
           token: c,
           startEighth,
-          durEighth: each
+          durEighth: durations[idx],
+          barIndex,
+          barChordCount: chordCount,
+          barChordIndex: idx,
+          windowFromStart: chordCount === 4 || (chordCount === 3 && idx > 0),
         });
-        startEighth += each;
+        startEighth += durations[idx];
         stored.push(c);
       }
 
@@ -1667,15 +1679,15 @@ if (typeof globalThis !== "undefined") {
     };
 
     // 1) Construimos la progresión "recta" (sin síncopa):
-    for (const bar of parts) {
+    for (const [barIndex, bar] of parts.entries()) {
       if (bar === "%") {
         if (!lastBarChords) throw new Error("El signo % solo se puede usar después del primer compás.");
-        addBar(lastBarChords, bar);
+        addBar(lastBarChords, bar, barIndex);
         continue;
       }
 
       const chords = bar.split(/\s+/).map(s=>s.trim()).filter(Boolean);
-      addBar(chords, bar);
+      addBar(chords, bar, barIndex);
     }
 
     const totalEighthNominal = startEighth;
@@ -3656,7 +3668,7 @@ if (typeof globalThis !== "undefined") {
 
     let parsed;
     try {
-      parsed = parseProgression(el("prog").value, { syncopate: false });
+      parsed = parseProgression(el("prog").value, { syncopate: false, maxChordsPerBar: 4 });
     } catch (err) {
       log(String(err?.message || err), "ERROR");
       return;
@@ -3692,9 +3704,9 @@ if (typeof globalThis !== "undefined") {
       const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
       const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
       const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
-      const isFirstSegment = seg.startEighth === 0;
-      const bufferOffset = isFirstSegment ? 0 : (rootBarStart * barSeconds) + offsetSeconds;
-      const loopStart = isFirstSegment ? 0 : rootBarStart * barSeconds;
+      const startFromBeginning = !!seg.windowFromStart;
+      const loopStart = rootBarStart * barSeconds;
+      const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
       const loopEnd = loopStart + segmentSeconds;
 
       const startTime = base + (seg.startEighth * secPerEighth);
@@ -3918,7 +3930,7 @@ if (typeof globalThis !== "undefined") {
 
     let parsed;
     try {
-      parsed = parseProgression(el("prog").value, { syncopate: false });
+      parsed = parseProgression(el("prog").value, { syncopate: false, maxChordsPerBar: 4 });
     } catch (err) {
       log(String(err?.message || err), "ERROR");
       return;
@@ -3990,9 +4002,9 @@ if (typeof globalThis !== "undefined") {
       const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
       const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
       const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
-      const isFirstSegment = seg.startEighth === 0;
-      const bufferOffset = isFirstSegment ? 0 : (rootBarStart * barSeconds) + offsetSeconds;
-      const loopStart = isFirstSegment ? 0 : rootBarStart * barSeconds;
+      const startFromBeginning = !!seg.windowFromStart;
+      const loopStart = rootBarStart * barSeconds;
+      const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
       const loopEnd = loopStart + segmentSeconds;
 
       const startTime = base + (seg.startEighth * secPerEighth);
