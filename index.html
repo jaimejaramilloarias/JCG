@@ -1163,6 +1163,12 @@ if (typeof globalThis !== "undefined") {
   const playbackTabButtons = Array.from(document.querySelectorAll("[data-playback-tab]"));
   const playbackTabPanels = Array.from(document.querySelectorAll("[data-playback-panel]"));
   let currentPlaybackMode = "midi";
+  let isAudioPlaying = false;
+  let isPlaying = false;
+  let playTimers = [];
+  let playOut = null;
+  let audioNodes = [];
+  let audioTimers = [];
 
   function setAdvancedTab(tab) {
     if (!tab) return;
@@ -3445,13 +3451,6 @@ if (typeof globalThis !== "undefined") {
   // -------------------------
   // Playback (Bolero Audio)
   // -------------------------
-  let isAudioPlaying = false;
-  let isPlaying = false;
-  let playTimers = [];
-  let playOut = null;
-  let audioNodes = [];
-  let audioTimers = [];
-
   function isAnyPlaying() {
     return isPlaying || isAudioPlaying;
   }
