@@ -1169,6 +1169,7 @@ if (typeof globalThis !== "undefined") {
   let playOut = null;
   let audioNodes = [];
   let audioTimers = [];
+  let midiStatusCache = "Salida MIDI: —";
 
   function setAdvancedTab(tab) {
     if (!tab) return;
@@ -1693,7 +1694,6 @@ if (typeof globalThis !== "undefined") {
   let audioCtx = null;
   let audioBuffersByQuality = new Map();
   let audioQualities = [];
-  let midiStatusCache = "Salida MIDI: —";
 
   function makeKeyVariants(name) {
     const base = name.toLowerCase().trim().replace(/\.(mid|midi)$/,"");
