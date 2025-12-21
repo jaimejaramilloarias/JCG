@@ -460,10 +460,21 @@
                 <input id="folderFallback" type="file" webkitdirectory multiple style="display:none" />
               </div>
               <div class="mini" id="folderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
+              <div class="label" style="margin-top:12px">Carpeta Audio (Bolero)</div>
+              <div class="row">
+                <button class="btn" id="btnPickAudioFolder" title="Cargar carpeta con archivos WAV para Bolero">Cargar carpeta</button>
+                <input id="audioFolderFallback" type="file" webkitdirectory multiple style="display:none" />
+              </div>
+              <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
             </div>
 
             <div class="sectionCard">
               <div class="sectionTitle">Salida y preview</div>
+              <div class="label">Modo de playback</div>
+              <select id="playbackMode" title="Elige el motor de reproducción">
+                <option value="midi">MIDI</option>
+                <option value="bolero">Bolero (Audio)</option>
+              </select>
               <div class="label">Puerto MIDI de salida</div>
               <select id="midiOut" title="Elige el puerto MIDI de salida (destino) para la reproducción"></select>
               <div class="mini" id="ppqPill" style="margin-top:10px">PPQ: <span class="mono" id="ppqText">—</span></div>
@@ -1091,6 +1102,10 @@ if (typeof globalThis !== "undefined") {
   const TIME_SIG_NUM = 4;
   const TIME_SIG_DEN = 4;
   const REF_BPM_EXPORT = 120; // export tempo fixed
+  const REF_BPM_AUDIO = 90;
+  const BARS_PER_AUDIO_FILE = 24;
+  const EIGHTHS_PER_BAR = 8;
+  const AUDIO_SEGMENT_BARS = 2;
 
   // Ventana base: 16 corcheas (2 compases).
   // Si el archivo tiene 16 corcheas exactas, se usa completo (1 sola ventana).
@@ -1107,13 +1122,16 @@ if (typeof globalThis !== "undefined") {
   const readyText = el("readyText");
   const ppqText = el("ppqText");
   const folderStatus = el("folderStatus");
+  const audioFolderStatus = el("audioFolderStatus");
   const midiOutSel = el("midiOut");
   const midiStatus = el("midiStatus");
+  const playbackMode = el("playbackMode");
   const tempo = el("tempo");
   const tempoVal = el("tempoVal");
   const tempoValInline = el("tempoValInline");
   const swing = el("swing");
   const swingVal = el("swingVal");
+  const swingBlock = el("swingBlock");
   const bassVel = el("bassVel");
   const bassVelVal = el("bassVelVal");
   const repeatCount = el("repeatCount");
@@ -1199,6 +1217,46 @@ if (typeof globalThis !== "undefined") {
     readyText.textContent = text;
   }
 
+  function getPlaybackMode() {
+    return playbackMode?.value || "midi";
+  }
+
+  function updateReadyState() {
+    const mode = getPlaybackMode();
+    if (mode === "bolero") {
+      setReady(!!audioFolderLoaded, audioFolderLoaded ? "Listo" : "No listo");
+      return;
+    }
+
+    setReady(!!folderLoaded, folderLoaded ? "Listo" : "No listo");
+  }
+
+  function updateMidiStatus(html) {
+    midiStatusCache = html;
+    if (getPlaybackMode() === "midi") {
+      midiStatus.innerHTML = html;
+    }
+  }
+
+  function updatePlaybackModeUI() {
+    const mode = getPlaybackMode();
+    const isMidi = mode === "midi";
+
+    midiOutSel.disabled = !isMidi;
+    bassVel.disabled = !isMidi;
+    if (swing) swing.disabled = !isMidi;
+    if (swingBlock) swingBlock.style.display = isMidi ? "" : "none";
+
+    if (isMidi) {
+      midiStatus.innerHTML = midiStatusCache;
+    } else {
+      midiStatus.innerHTML = `<span class="mini">Bolero (Audio) activo</span>`;
+    }
+
+    updateReadyState();
+    renderQualityChips();
+  }
+
   // -------------------------
   // Random
   // -------------------------
@@ -1257,6 +1315,21 @@ if (typeof globalThis !== "undefined") {
 
   const SEMI_TO_NOTE_SHARP = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
   const SEMI_TO_NOTE_FLAT = ["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
+
+  const ROOT_SEMI_TO_BAR_START = new Map([
+    [NOTE_TO_SEMI.get("A"), 0],
+    [NOTE_TO_SEMI.get("A#"), 2],
+    [NOTE_TO_SEMI.get("B"), 4],
+    [NOTE_TO_SEMI.get("C"), 6],
+    [NOTE_TO_SEMI.get("C#"), 8],
+    [NOTE_TO_SEMI.get("D"), 10],
+    [NOTE_TO_SEMI.get("D#"), 12],
+    [NOTE_TO_SEMI.get("E"), 14],
+    [NOTE_TO_SEMI.get("F"), 16],
+    [NOTE_TO_SEMI.get("F#"), 18],
+    [NOTE_TO_SEMI.get("G"), 20],
+    [NOTE_TO_SEMI.get("G#"), 22],
+  ]);
 
   function normalizeAccidentals(s) {
     return s.replaceAll("♭","b").replaceAll("♯","#");
@@ -1573,6 +1646,11 @@ if (typeof globalThis !== "undefined") {
   let refByQuality = new Map(); // qualityKey -> { variants: Map<variantKey, {ppq, events, windowsPerFile, tickPerEighth, winTicks, winEights}> }
   let refPpq = null;
   let folderLoaded = false;
+  let audioFolderLoaded = false;
+  let audioCtx = null;
+  let audioBuffersByQuality = new Map();
+  let audioQualities = [];
+  let midiStatusCache = "Salida MIDI: —";
 
   function makeKeyVariants(name) {
     const base = name.toLowerCase().trim().replace(/\.(mid|midi)$/,"");
@@ -1740,7 +1818,7 @@ if (typeof globalThis !== "undefined") {
     refByQuality.set(qualityKey, { variants });
   }
 
-  async function loadFolderViaPicker() {
+  async function loadFolderViaPicker(fallbackId = "folderFallback") {
     // Prefer File System Access API if available
     if (window.showDirectoryPicker) {
       const dir = await window.showDirectoryPicker();
@@ -1761,7 +1839,7 @@ if (typeof globalThis !== "undefined") {
 
     // Fallback: <input webkitdirectory>
     return await new Promise((resolve, reject) => {
-      const input = el("folderFallback");
+      const input = el(fallbackId);
       input.onchange = () => {
         const list = [...input.files];
         if (!list.length) reject(new Error("No se encontraron archivos en esa carpeta."));
@@ -1769,6 +1847,101 @@ if (typeof globalThis !== "undefined") {
       };
       input.click();
     });
+  }
+
+  function ensureAudioContext() {
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) throw new Error("AudioContext no disponible en este navegador.");
+      audioCtx = new Ctx();
+    }
+    return audioCtx;
+  }
+
+  function parseAudioFileName(fullName) {
+    if (!fullName) return null;
+    if (!/\.wav$/i.test(fullName)) return null;
+    const base = fullName.replace(/\.[^.]+$/, "");
+    const qualityKey = normalizeQuality(base);
+    if (!qualityKey) return null;
+    return qualityKey;
+  }
+
+  async function loadAudioFolder() {
+    clearLog();
+    audioBuffersByQuality.clear();
+    audioQualities = [];
+    renderQualityChips();
+
+    audioFolderLoaded = false;
+    audioFolderStatus.textContent = "Cargando…";
+    updateReadyState();
+
+    try {
+      const ctx = ensureAudioContext();
+      const { name, files } = await loadFolderViaPicker("audioFolderFallback");
+      const folderFiles = files;
+
+      audioFolderStatus.textContent = `Carpeta: ${name} — ${folderFiles.length} archivo(s).`;
+
+      const skipped = [];
+      const dups = [];
+      const found = [];
+
+      for (const f of folderFiles) {
+        const fullName = (f.name || "").trim();
+        if (!fullName) { skipped.push("(sin nombre)"); continue; }
+
+        const qualityKey = parseAudioFileName(fullName);
+        if (!qualityKey) { skipped.push(fullName); continue; }
+
+        if (audioBuffersByQuality.has(qualityKey)) dups.push(qualityKey);
+
+        try {
+          const buf = await f.arrayBuffer();
+          const audioBuf = await ctx.decodeAudioData(buf.slice(0));
+          audioBuffersByQuality.set(qualityKey, audioBuf);
+          found.push(qualityKey);
+        } catch (err) {
+          skipped.push(fullName);
+        }
+      }
+
+      audioQualities = [...new Set(audioBuffersByQuality.keys())].sort((a,b)=>a.localeCompare(b, "en"));
+
+      renderQualityChips();
+
+      if (!audioQualities.length) {
+        log("No encontré WAVs válidos. Revisa nombres y extensiones.", "ERROR");
+        audioFolderStatus.textContent = "Sin carpeta cargada.";
+        audioFolderLoaded = false;
+        updateReadyState();
+        return;
+      }
+
+      if (skipped.length) {
+        log(`Archivos ignorados (no WAV / nombre inválido): ${skipped.join(", ")}`, "WARN");
+      }
+      if (dups.length) {
+        log(`Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
+      }
+
+      for (const [quality, buffer] of audioBuffersByQuality.entries()) {
+        const expectedSeconds = BARS_PER_AUDIO_FILE * (60 / REF_BPM_AUDIO) * 4;
+        if (buffer.duration + 0.1 < expectedSeconds) {
+          log(`"${quality}": duración corta (${buffer.duration.toFixed(2)}s). Esperaba ~${expectedSeconds.toFixed(2)}s.`, "WARN");
+        }
+      }
+
+      log(`Cargados ${audioQualities.length} WAV(s) para Bolero.`, "OK");
+      audioFolderLoaded = true;
+      updateReadyState();
+    } catch (err) {
+      audioFolderLoaded = false;
+      audioFolderStatus.textContent = "Error al cargar carpeta.";
+      log(String(err?.message || err), "ERROR");
+      updateReadyState();
+    }
   }
 
   async function loadReferenceFolder() {
@@ -1779,7 +1952,7 @@ if (typeof globalThis !== "undefined") {
     renderQualityChips();
 
     ppqText.textContent = "—";
-    setReady(false, "Cargando…");
+    if (getPlaybackMode() === "midi") setReady(false, "Cargando…");
     folderLoaded = false;
     folderStatus.textContent = "Cargando…";
 
@@ -1824,7 +1997,7 @@ if (typeof globalThis !== "undefined") {
 
       if (!QUALITIES.length) {
         log("No encontré calidades válidas. Revisa que los nombres de archivo no tengan espacios y que los archivos sean MIDI.", "ERROR");
-        setReady(false, "No listo");
+        updateReadyState();
         return;
       }
 
@@ -1837,9 +2010,9 @@ if (typeof globalThis !== "undefined") {
 
       log(`Cargadas ${QUALITIES.length} calidad(es) desde la carpeta.`, "OK");
       folderLoaded = true;
-      setReady(true, "Listo");
+      updateReadyState();
     } catch(err){
-      setReady(false, "No listo");
+      updateReadyState();
       folderStatus.textContent = "Error al cargar carpeta.";
       QUALITIES = [];
       renderQualityChips();
@@ -3233,6 +3406,160 @@ if (typeof globalThis !== "undefined") {
 
   }
   // -------------------------
+  // Playback (Bolero Audio)
+  // -------------------------
+  let isAudioPlaying = false;
+  let audioNodes = [];
+  let audioTimers = [];
+
+  function isAnyPlaying() {
+    return isPlaying || isAudioPlaying;
+  }
+
+  function stopBoleroPlayback() {
+    isAudioPlaying = false;
+    for (const t of audioTimers) clearTimeout(t);
+    audioTimers = [];
+    for (const node of audioNodes) {
+      try { node.source.stop(); } catch (_) {}
+      try { node.source.disconnect(); } catch (_) {}
+      try { node.gain.disconnect(); } catch (_) {}
+    }
+    audioNodes = [];
+  }
+
+  function scheduleBoleroChord({
+    ctx,
+    buffer,
+    startTime,
+    endTime,
+    bufferOffset,
+    loopStart,
+    loopEnd,
+    playbackRate,
+  }) {
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = playbackRate;
+    source.loop = true;
+    source.loopStart = loopStart;
+    source.loopEnd = loopEnd;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(gain).connect(ctx.destination);
+
+    const duration = Math.max(0, endTime - startTime);
+    const fade = Math.min(0.005, duration / 2);
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(1, startTime + fade);
+    if (duration > fade) {
+      gain.gain.setValueAtTime(1, Math.max(startTime + fade, endTime - fade));
+      gain.gain.linearRampToValueAtTime(0, endTime);
+    } else {
+      gain.gain.linearRampToValueAtTime(0, endTime);
+    }
+
+    source.start(startTime, bufferOffset);
+    source.stop(endTime + 0.02);
+    audioNodes.push({ source, gain });
+  }
+
+  async function playBoleroAudio() {
+    if (!audioFolderLoaded || !audioBuffersByQuality.size) {
+      log("Carga una carpeta de WAVs para el modo Bolero.", "ERROR");
+      return;
+    }
+
+    const ctx = ensureAudioContext();
+    await ctx.resume();
+
+    const bpm = parseInt(tempo.value, 10);
+    const secPerEighth = (60 / bpm) / 2;
+    const barSeconds = (60 / REF_BPM_AUDIO) * 4;
+    const segmentSeconds = AUDIO_SEGMENT_BARS * barSeconds;
+    const playbackRate = bpm / REF_BPM_AUDIO;
+
+    let parsed;
+    try {
+      parsed = parseProgression(el("prog").value, { syncopate: false });
+    } catch (err) {
+      log(String(err?.message || err), "ERROR");
+      return;
+    }
+
+    const repeated = repeatSegments(parsed.segments, parsed.totalEighth, getRepeatTimes());
+    const segments = repeated.segments;
+    const totalEighth = repeated.totalEighth;
+
+    if (!segments.length) {
+      log("No hay acordes para reproducir.", "ERROR");
+      return;
+    }
+
+    for (const seg of segments) {
+      if (!audioBuffersByQuality.has(seg.quality)) {
+        log(`No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
+        return;
+      }
+      if (!ROOT_SEMI_TO_BAR_START.has(seg.rootSemi)) {
+        log(`Fundamental inválida para audio: ${seg.root}.`, "ERROR");
+        return;
+      }
+    }
+
+    if (isAudioPlaying) stopBoleroPlayback();
+
+    isAudioPlaying = true;
+    const base = ctx.currentTime + 0.12;
+
+    for (const seg of segments) {
+      const buffer = audioBuffersByQuality.get(seg.quality);
+      const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
+      const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
+      const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
+      const bufferOffset = (rootBarStart * barSeconds) + offsetSeconds;
+      const loopStart = rootBarStart * barSeconds;
+      const loopEnd = loopStart + segmentSeconds;
+
+      const startTime = base + (seg.startEighth * secPerEighth);
+      const endTime = startTime + (seg.durEighth * secPerEighth);
+
+      scheduleBoleroChord({
+        ctx,
+        buffer,
+        startTime,
+        endTime,
+        bufferOffset,
+        loopStart,
+        loopEnd,
+        playbackRate,
+      });
+    }
+
+    const totalDuration = totalEighth * secPerEighth;
+    const doneTimer = setTimeout(() => {
+      isAudioPlaying = false;
+    }, Math.ceil((totalDuration + 0.2) * 1000));
+    audioTimers.push(doneTimer);
+  }
+
+  function stopAllPlayback() {
+    if (isPlaying) stopPlayback();
+    if (isAudioPlaying) stopBoleroPlayback();
+  }
+
+  function playFromUI() {
+    if (getPlaybackMode() === "bolero") {
+      stopAllPlayback();
+      playBoleroAudio();
+      return;
+    }
+
+    playGenerated();
+  }
+
+  // -------------------------
   // Playback (WebMIDI) with tempo + swing (only playback)
   // -------------------------
   function tickToMsSwung(tick, ppq, bpm, swingPct) {
@@ -3294,7 +3621,7 @@ if (typeof globalThis !== "undefined") {
     if (!out) { log("Selecciona un puerto MIDI de salida.", "ERROR"); return; }
     if (!generated?.events?.length) { log("Primero genera MIDI (Regenerar).", "ERROR"); return; }
 
-    if (isPlaying) stopPlayback();
+    if (isPlaying || isAudioPlaying) stopAllPlayback();
 
     isPlaying = true;
     playOut = out;
@@ -3408,17 +3735,17 @@ if (typeof globalThis !== "undefined") {
   async function initMIDI() {
     try{
       if (!navigator.requestMIDIAccess) {
-        midiStatus.innerHTML = `<span class="bad">MIDI no soportado en este navegador.</span>`;
+        updateMidiStatus(`<span class="bad">MIDI no soportado en este navegador.</span>`);
         midiOutSel.innerHTML = `<option value="">(sin MIDI)</option>`;
         return;
       }
       midiAccess = await navigator.requestMIDIAccess({ sysex: false });
-      midiStatus.innerHTML = `<span class="ok">MIDI listo.</span>`;
+      updateMidiStatus(`<span class="ok">MIDI listo.</span>`);
       refreshOutputs();
 
       midiAccess.onstatechange = () => refreshOutputs();
     } catch(err) {
-      midiStatus.innerHTML = `<span class="bad">MIDI bloqueado.</span>`;
+      updateMidiStatus(`<span class="bad">MIDI bloqueado.</span>`);
       log(String(err?.message || err), "ERROR");
     }
   }
@@ -3607,28 +3934,31 @@ if (typeof globalThis !== "undefined") {
     if (typing) return;
 
     e.preventDefault();
-    if (isPlaying) stopPlayback();
-    else playGenerated();
+    if (isAnyPlaying()) stopAllPlayback();
+    else playFromUI();
   });
 
   el("btnPickFolder").addEventListener("click", loadReferenceFolder);
+  el("btnPickAudioFolder").addEventListener("click", loadAudioFolder);
+  playbackMode?.addEventListener("change", () => {
+    stopAllPlayback();
+    updatePlaybackModeUI();
+  });
 
   el("btnRegenerate").addEventListener("click", () => {
     try{
       const g = generateMidiFromProgression(el("prog").value);
       // Si la carpeta está cargada, mantenemos el estado "Listo" aunque la progresión tenga un error.
-      if (!folderLoaded) setReady(true, "Listo");
-      else setReady(true, "Listo");
+      updateReadyState();
       ppqText.textContent = g.ppq ?? "—";
     } catch(err){
       log(String(err?.message || err), "ERROR");
-      if (!folderLoaded) setReady(false, "No listo");
-      else setReady(true, "Listo");
+      updateReadyState();
     }
   });
 
-  el("btnPlay").addEventListener("click", playGenerated);
-  el("btnStop").addEventListener("click", () => { stopPlayback(); });
+  el("btnPlay").addEventListener("click", playFromUI);
+  el("btnStop").addEventListener("click", () => { stopAllPlayback(); });
 
   el("btnClean").addEventListener("click", cleanGenerated);
   el("btnExport").addEventListener("click", exportGenerated);
@@ -3654,15 +3984,19 @@ if (typeof globalThis !== "undefined") {
 
   function renderQualityChips() {
     chips.innerHTML = "";
-    if (!QUALITIES.length) {
+    const mode = getPlaybackMode();
+    const activeQualities = mode === "bolero" ? audioQualities : QUALITIES;
+    if (!activeQualities.length) {
       const s = document.createElement("span");
       s.className = "mini";
-      s.textContent = "Carga una carpeta para ver las calidades disponibles.";
+      s.textContent = mode === "bolero"
+        ? "Carga una carpeta de audio para ver las calidades disponibles."
+        : "Carga una carpeta para ver las calidades disponibles.";
       chips.appendChild(s);
       return;
     }
 
-    for (const q of QUALITIES) {
+    for (const q of activeQualities) {
       const b = document.createElement("span");
       b.className = "pill";
       b.textContent = q;
@@ -3680,7 +4014,7 @@ if (typeof globalThis !== "undefined") {
   el("prog").value = ``;
   getRepeatTimes();
 
-  setReady(false, "No listo");
+  updatePlaybackModeUI();
   // init displayed values
   tempoVal.textContent = tempo.value;
   if (tempoValInline) tempoValInline.textContent = tempo.value;
