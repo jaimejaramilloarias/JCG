@@ -3446,6 +3446,9 @@ if (typeof globalThis !== "undefined") {
   // Playback (Bolero Audio)
   // -------------------------
   let isAudioPlaying = false;
+  let isPlaying = false;
+  let playTimers = [];
+  let playOut = null;
   let audioNodes = [];
   let audioTimers = [];
 
@@ -3634,11 +3637,6 @@ if (typeof globalThis !== "undefined") {
       out.send([0xB0|ch, 120, 0]);
     }
   }
-
-  // Estado de reproducción (para poder detener de verdad)
-  let isPlaying = false;
-  let playTimers = [];
-  let playOut = null;
 
   function stopPlayback() {
     isPlaying = false;
