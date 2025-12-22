@@ -159,21 +159,8 @@
       white-space:pre-wrap;
       box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
     }
-    .sliderRow{display:flex; align-items:center; gap:12px}
-    input[type="range"]{width:100%}
     .mini{font-size:12px; color:var(--muted)}
     .inputNumber{width:120px}
-    .advancedBox{margin-top:14px; border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px 12px; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(14,22,38,.55)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04);}
-    .advancedBox summary{cursor:pointer; font-weight:700; color:var(--muted); letter-spacing:.2px; text-transform:uppercase; font-size:11px;}
-    .advancedBox[open]{padding-bottom:12px}
-    .tabs{display:flex; flex-direction:column; gap:10px;}
-    .tabList{display:flex; gap:8px; flex-wrap:wrap;}
-    .tabBtn{border:1px solid rgba(255,255,255,.12); background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); color:var(--txt); padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:800; font-size:11px; letter-spacing:.3px; text-transform:uppercase; transition: border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease; box-shadow: inset 0 1px 0 rgba(255,255,255,.04);}
-    .tabBtn[aria-selected="true"], .tabBtn.active{border-color: rgba(125,211,252,.65); background: linear-gradient(135deg, rgba(56,189,248,.20), rgba(56,189,248,.08)); color: var(--txt); box-shadow: 0 12px 20px rgba(0,0,0,.26);}
-    .tabBtn:hover{border-color: rgba(125,211,252,.45); background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.05));}
-    .tabPanel{display:none; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background: rgba(14,22,38,.55);}
-    .tabPanel.active{display:block}
-    .mainTabs .tabPanel{background: transparent; border:1px dashed rgba(35,50,74,.9);}
     .sectionGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:14px;}
     .sectionCard{border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px 14px; background: linear-gradient(180deg, rgba(20,32,56,.88), rgba(16,26,44,.86)); display:flex; flex-direction:column; gap:10px; box-shadow: 0 12px 28px rgba(0,0,0,.26);}
     .sectionTitle{font-size:12px; color:var(--muted); letter-spacing:.3px; text-transform:uppercase; font-weight:800;}
@@ -184,7 +171,7 @@
     .bad{color: var(--bad)}
     .hint{color:var(--muted); font-size:12px; margin-top:10px; line-height:1.35}
     .hint code{color:#c7d2fe}
-    
+
     .topActions{display:flex; gap:10px; align-items:center}
     .btn.ghost{background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12)}
     .btn.ghost:hover{background: rgba(255,255,255,.10)}
@@ -216,7 +203,7 @@
     @media (max-width: 980px){
       .controlBar{grid-template-columns: 1fr;}
     }
-  
+
     /* Modal: solid (no translucency) */
     .modalCard{background: var(--panel) !important;}
 
@@ -285,11 +272,11 @@
     <div class="brand">
       <p class="eyebrow">Suite creativa</p>
       <h1>Jazz Comping Generator - Jaime Jaramillo Arias</h1>
-      <div class="sub">Escribe una progresión, genera variaciones de comping, escucha por tu salida MIDI y exporta el resultado.</div>
+      <div class="sub">Escribe una progresión, controla tus referencias de audio y genera playback desde archivos WAV.</div>
     </div>
     <div class="heroMeta">
       <div class="kpi">
-        <div class="pill status" title="Estado de carga de carpeta y MIDI">
+        <div class="pill status" title="Estado de carga de referencias de audio">
           <span class="dot bad" id="dotReady"></span>
           <span id="readyText">No listo</span>
         </div>
@@ -306,237 +293,124 @@
   <div class="card megaCard">
     <div class="hd megaHd">
       <div class="title">Panel principal</div>
-      <div class="mini">Organizado en pestañas compactas para editar progresión, escuchar y exportar.</div>
+      <div class="mini">Solo audio de referencia: controla playback, ajustes y exportación.</div>
     </div>
     <div class="megaBd">
       <div class="controlBar">
         <div class="controlCluster">
-          <div class="clusterTitle">Generación y export</div>
+          <div class="clusterTitle">Reproducción y export</div>
           <div class="clusterActions">
-            <button class="btn primary" id="btnRegenerate" title="Generar de nuevo con variación aleatoria">Regenerar</button>
-            <button class="btn" id="btnClean" title="Insertar NoteOff en notas demasiado largas y limpiar artefactos">Limpiar artefactos</button>
-            <button class="btn purple" id="btnExport" title="Exportar el MIDI generado">Exportar</button>
-            <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado (modo Bolero)">Exportar audio</button>
+            <button class="btn primary" id="btnPlay" title="Reproducir la progresión usando tus referencias de audio">Reproducir</button>
+            <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
+            <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado">Exportar audio</button>
           </div>
           <div class="inlineStats">
-            <span class="mini">El botón de audio exporta el playback Bolero al BPM fijo (90 BPM).</span>
+            <span class="mini">El playback usa los WAVs cargados y los ajustes de referencia.</span>
           </div>
         </div>
+
         <div class="controlCluster">
-          <div class="clusterTitle">Playback inmediato</div>
+          <div class="clusterTitle">Carpeta de audio</div>
           <div class="clusterActions">
-            <button class="btn primary" id="btnPlay" title="Reproducir el MIDI generado por el puerto seleccionado">Reproducir</button>
-            <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
-            <div class="miniStat" id="midiStatus">Salida MIDI: —</div>
+            <button class="btn" id="btnPickAudioFolder" title="Cargar carpeta con archivos WAV de referencia">Cargar carpeta</button>
+            <input id="audioFolderFallback" type="file" webkitdirectory multiple style="display:none" />
           </div>
-          <div class="inlineStats">
-            <span>Tempo actual: <span class="mono" id="tempoValInline">120</span> BPM</span>
-            <span class="mini">Ajusta detalles en la pestaña Playback.</span>
+          <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
+        </div>
+
+        <div class="controlCluster">
+          <div class="clusterTitle">Ajustes de referencia</div>
+          <div class="split">
+            <div>
+              <div class="label">Compases por archivo</div>
+              <input id="barsPerFile" type="number" min="1" max="256" value="24" />
+            </div>
+            <div>
+              <div class="label">Compases por acorde</div>
+              <input id="barsPerChord" type="number" min="1" max="64" value="2" />
+            </div>
+            <div>
+              <div class="label">Signatura de medida</div>
+              <select id="timeSignature">
+                <option value="2/4">2/4</option>
+                <option value="3/4">3/4</option>
+                <option value="4/4" selected>4/4</option>
+                <option value="5/4">5/4</option>
+                <option value="6/8">6/8</option>
+                <option value="7/8">7/8</option>
+              </select>
+            </div>
+            <div>
+              <div class="label">BPM fijo referencias</div>
+              <input id="refBpm" type="number" min="20" max="300" value="90" />
+            </div>
+            <div>
+              <div class="label">Crossfade (ms)</div>
+              <input id="crossfadeMs" type="number" min="0" max="2000" value="20" />
+            </div>
+            <div>
+              <div class="label">Fundamental inicial</div>
+              <select id="startRoot">
+                <option value="A">A</option>
+                <option value="A#">A#</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="C#">C#</option>
+                <option value="D">D</option>
+                <option value="D#">D#</option>
+                <option value="E">E</option>
+                <option value="F">F</option>
+                <option value="F#">F#</option>
+                <option value="G">G</option>
+                <option value="G#">G#</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="tabs mainTabs">
-        <div class="tabList" role="tablist" aria-label="Panel principal">
-          <button class="tabBtn active" type="button" role="tab" aria-selected="true" aria-controls="mainProgression" id="mainProgressionTab" data-main-tab="progression">Progresión</button>
-          <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="mainPlayback" id="mainPlaybackTab" data-main-tab="playback">Playback / Export</button>
-          <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="mainDiag" id="mainDiagTab" data-main-tab="diagnostico">Diagnóstico</button>
-        </div>
-
-        <div class="tabPanel active" id="mainProgression" role="tabpanel" aria-labelledby="mainProgressionTab" data-main-panel="progression">
-          <div class="sectionGrid">
-            <div class="sectionCard">
-              <div class="sectionTitle">Configuración rápida</div>
-              <div class="label">Repeticiones</div>
-              <div class="row" style="gap:14px; align-items:flex-end">
-                <input id="repeatCount" type="number" min="1" max="64" value="1" class="inputNumber" title="Número de veces que se repetirá la progresión en el MIDI generado" />
-                <div class="mini">Cuántas veces se repetirá la progresión al reproducir o exportar el MIDI.</div>
-              </div>
-
-              <div class="label" style="margin-top:10px">Transposición</div>
-              <div class="row" style="gap:14px; align-items:flex-end">
-                <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
-                <div class="mini">Ajusta las fundamentales del cifrado sin alterar la selección ni transposición de los archivos de referencia.</div>
-              </div>
-            </div>
-
-            <div class="sectionCard">
-              <div class="sectionTitle">Progresión y calidades</div>
-              <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
-              <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
-              <div class="chips" id="qualityChips"></div>
-              <div class="hint">
-                <div><b>Calidades:</b> aparecen en la lista después de cargar tus patrones.</div>
-                <div style="margin-top:6px">Usa exactamente las calidades que ves (ej: <code>G7alt</code>, <code>F13(b9)</code>).</div>
-              </div>
-            </div>
+      <div class="sectionGrid">
+        <div class="sectionCard">
+          <div class="sectionTitle">Progresión y calidades</div>
+          <div class="label">Repeticiones</div>
+          <div class="row" style="gap:14px; align-items:flex-end">
+            <input id="repeatCount" type="number" min="1" max="64" value="1" class="inputNumber" title="Número de veces que se repetirá la progresión" />
+            <div class="mini">Cuántas veces se repetirá la progresión al reproducir o exportar el audio.</div>
           </div>
 
-          <details class="advancedBox">
-            <summary>Menú avanzado</summary>
-            <div style="height:8px"></div>
-            <div class="tabs" id="advancedTabs">
-              <div class="tabList" role="tablist" aria-label="Menú avanzado">
-                <button class="tabBtn active" type="button" role="tab" aria-selected="true" aria-controls="tabComping" id="tabCompingBtn" data-advanced-tab="comping">Comping</button>
-                <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="tabSoloing" id="tabSoloingBtn" data-advanced-tab="soloing">Soloing</button>
-                <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="tabSalsa" id="tabSalsaBtn" data-advanced-tab="salsa">Salsa 2-3</button>
-              </div>
-
-              <div class="tabPanel active" id="tabComping" role="tabpanel" aria-labelledby="tabCompingBtn" data-advanced-panel="comping">
-                <div class="label">Despoblado / denso</div>
-                <div class="sliderRow">
-                  <div class="mini" style="width:90px">Despoblado</div>
-                  <input id="density" type="range" min="0" max="100" value="100" />
-                  <div class="mini" style="width:60px; text-align:right">Denso</div>
-                  <div class="mono" style="width:56px; text-align:right" id="densityVal">100%</div>
-                  <div class="mini" style="width:60px; text-align:right">Spread</div>
-                </div>
-
-                <div style="height:10px"></div>
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="densityProgressive" />
-                  <span class="mini">Densidad rítmica progresiva</span>
-                </label>
-
-                <label class="row" style="gap:10px; align-items:center; margin-top:2px">
-                  <input type="checkbox" id="progressiveSkips" />
-                  <span class="mini">Shells/Spreads progresivos</span>
-                </label>
-
-                <div style="height:12px"></div>
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="shells" />
-                  <span class="mini">Shells</span>
-                </label>
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="skipClosed" />
-                  <span class="mini">Cerrado</span>
-                </label>
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="blockChords" />
-                  <span class="mini">Block chords</span>
-                </label>
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="blockChordsFull" />
-                  <span class="mini">Block chords full</span>
-                </label>
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="skip2Simple" />
-                  <span class="mini">Skip 2</span>
-                </label>
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="skip2Oct" />
-                  <span class="mini">Skip 2 octavado</span>
-                </label>
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="skipSpread" />
-                  <span class="mini">Spreads</span>
-                </label>
-              </div>
-
-              <div class="tabPanel" id="tabSoloing" role="tabpanel" aria-labelledby="tabSoloingBtn" data-advanced-panel="soloing">
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="soloing" />
-                  <span class="mini">Soloing</span>
-                </label>
-              </div>
-
-              <div class="tabPanel" id="tabSalsa" role="tabpanel" aria-labelledby="tabSalsaBtn" data-advanced-panel="salsa">
-                <label class="row" style="gap:10px; align-items:center">
-                  <input type="checkbox" id="salsa23" />
-                  <span class="mini">Salsa 2-3</span>
-                </label>
-              </div>
-            </div>
-          </details>
-        </div>
-
-        <div class="tabPanel" id="mainPlayback" role="tabpanel" aria-labelledby="mainPlaybackTab" data-main-panel="playback">
-          <div class="sectionGrid">
-            <div class="sectionCard">
-              <div class="sectionTitle">Fuentes de referencia</div>
-              <div class="label">Carpeta de referencia (MIDI o audio)</div>
-              <div class="row">
-                <button class="btn" id="btnPickFolder" title="Cargar carpeta con archivos MIDI o audio según el modo">Cargar carpeta</button>
-                <input id="folderFallback" type="file" webkitdirectory multiple style="display:none" />
-              </div>
-              <div class="mini" id="folderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
-            </div>
-
-            <div class="sectionCard">
-              <div class="sectionTitle">Salida y preview</div>
-              <div class="tabs playbackTabs">
-                <div class="tabList" role="tablist" aria-label="Modo de playback">
-                  <button class="tabBtn active" type="button" role="tab" aria-selected="true" aria-controls="playbackMidiPanel" id="playbackMidiTab" data-playback-tab="midi">MIDI</button>
-                  <button class="tabBtn" type="button" role="tab" aria-selected="false" aria-controls="playbackBoleroPanel" id="playbackBoleroTab" data-playback-tab="bolero">Bolero</button>
-                </div>
-
-                <div class="tabPanel active" id="playbackMidiPanel" role="tabpanel" aria-labelledby="playbackMidiTab" data-playback-panel="midi">
-                  <div class="label">Puerto MIDI de salida</div>
-                  <select id="midiOut" title="Elige el puerto MIDI de salida (destino) para la reproducción"></select>
-                  <div class="mini" id="ppqPill" style="margin-top:10px">PPQ: <span class="mono" id="ppqText">—</span></div>
-                </div>
-
-                <div class="tabPanel" id="playbackBoleroPanel" role="tabpanel" aria-labelledby="playbackBoleroTab" data-playback-panel="bolero">
-                  <div class="label">Carpeta Audio (Bolero)</div>
-                  <div class="row">
-                    <button class="btn" id="btnPickAudioFolder" title="Cargar carpeta con archivos WAV para Bolero">Cargar carpeta</button>
-                    <input id="audioFolderFallback" type="file" webkitdirectory multiple style="display:none" />
-                  </div>
-                  <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin carpeta cargada.</div>
-                </div>
-              </div>
-            </div>
+          <div class="label" style="margin-top:10px">Transposición</div>
+          <div class="row" style="gap:14px; align-items:flex-end">
+            <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
+            <div class="mini">Ajusta las fundamentales del cifrado sin alterar las referencias cargadas.</div>
           </div>
 
-          <div class="sectionGrid">
-            <div class="sectionCard">
-              <div class="sectionTitle">Tempo y feel (solo playback)</div>
-              <div class="label">Tempo (BPM)</div>
-              <div class="sliderRow">
-                <input id="tempo" type="range" min="40" max="240" value="120" />
-                <div class="mono" style="width:56px; text-align:right" id="tempoVal">120</div>
-              </div>
-              <div class="mini" id="boleroTempoNote" style="margin-top:6px">En modo Bolero, el tempo está fijo en 90 BPM.</div>
-
-              <div id="swingBlock">
-                <div class="label" style="margin-top:12px">Swing (%)</div>
-                <div class="sliderRow">
-                  <input id="swing" type="range" min="50" max="75" value="50" />
-                  <div class="mono" style="width:56px; text-align:right" id="swingVal">50</div>
-                </div>
-              </div>
+          <div class="label" style="margin-top:10px">Progresión</div>
+          <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
+          <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
+          <div class="chips" id="qualityChips"></div>
+          <div class="pillRow" style="margin-top:8px">
+            <div class="pill status" id="qualityMismatch" title="Estado de coincidencia de calidades">
+              <span class="dot bad" id="qualityMismatchDot"></span>
+              <span id="qualityMismatchText">Carga referencias de audio para validar calidades.</span>
             </div>
-
-            <div class="sectionCard">
-              <div class="sectionTitle">Apoyo de bajo (solo playback)</div>
-              <div class="label">Bajo (velocidad 0–67) <span class="mini" title="El bajo no se exporta, solo suena al previsualizar">(no exporta)</span></div>
-              <div class="sliderRow">
-                <input id="bassVel" type="range" min="0" max="67" value="42" title="Velocidad MIDI del bajo (0–67). Solo afecta la reproducción en la app." />
-                <div class="mono" style="width:56px; text-align:right" id="bassVelVal">42</div>
-              </div>
-            </div>
+          </div>
+          <div class="hint">
+            <div><b>Calidades:</b> aparecen en la lista después de cargar tus WAVs.</div>
+            <div style="margin-top:6px">Usa exactamente las calidades que ves (ej: <code>G7alt</code>, <code>F13(b9)</code>).</div>
           </div>
         </div>
 
-        <div class="tabPanel" id="mainDiag" role="tabpanel" aria-labelledby="mainDiagTab" data-main-panel="diagnostico">
-          <div class="sectionGrid">
-            <div class="sectionCard">
-              <div class="sectionTitle">Diagnóstico en vivo</div>
-              <div id="logBlock">
-                <div class="label">Log</div>
-                <div class="log" id="log"></div>
-              </div>
-            </div>
-            <div class="sectionCard">
-              <div class="sectionTitle">Ayudas rápidas</div>
-              <div class="hint">
-                Si WebMIDI o “cargar carpeta” no aparecen, abre esto desde <code>http://localhost</code>.
-                En mac: <code>python3 -m http.server 8000</code> y abre <code>http://localhost:8000</code>.
-              </div>
-              <div class="hint">El bloque de log se limpia cada vez que regeneras la progresión.</div>
-            </div>
+        <div class="sectionCard">
+          <div class="sectionTitle">Diagnóstico en vivo</div>
+          <div id="logBlock">
+            <div class="label">Log</div>
+            <div class="log" id="log"></div>
           </div>
+          <div class="hint">
+            Si “cargar carpeta” no aparece, abre esto desde <code>http://localhost</code>.
+            En mac: <code>python3 -m http.server 8000</code> y abre <code>http://localhost:8000</code>.
+          </div>
+          <div class="hint">El bloque de log se limpia cada vez que cargas una carpeta.</div>
         </div>
       </div>
     </div>
@@ -555,13 +429,12 @@
     <div class="modalBd">
       <p><b>Manual rápido</b></p>
       <ul>
-        <li><b>1) Cargar patrones:</b> pulsa <span class="kbd">Cargar carpeta</span> y elige la carpeta con tus patrones MIDI (o audio para Bolero).</li>
-        <li><b>2) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
-        <li><b>3) Calidades:</b> haz clic en la lista para insertar la calidad exacta.</li>
-        <li><b>4) Regenerar:</b> crea una nueva variación.</li>
-        <li><b>5) Escuchar:</b> selecciona tu <b>Puerto MIDI de salida</b> y pulsa <span class="kbd">Reproducir</span>. Usa <span class="kbd">Stop</span> para detener.</li>
-        <li><b>6) Ajustes de escucha:</b> cambia el <b>Tempo</b> y la <b>Velocidad del bajo</b> (solo para la pre-escucha).</li>
-        <li><b>7) Exportar:</b> guarda el resultado con <span class="kbd">Exportar</span>.</li>
+        <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y elige la carpeta con tus WAVs.</li>
+        <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
+        <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
+        <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
+        <li><b>5) Escuchar:</b> pulsa <span class="kbd">Reproducir</span>. Usa <span class="kbd">Stop</span> para detener.</li>
+        <li><b>6) Exportar:</b> guarda el audio con <span class="kbd">Exportar audio</span>.</li>
       </ul>
       <p class="mini">Atajo: <span class="kbd">Espacio</span> alterna Reproducir / Stop (cuando no estás escribiendo).</p>
 
@@ -569,852 +442,27 @@
   </div>
 </div>
 
-
-<script type="module" src="./soloing-window-selector.js"></script>
-<script type="module" src="./salsa-utils.js"></script>
-<script type="module" src="./soloing-utils.js"></script>
-<script>
-// -- MIDI utils embebidos para funcionar sin servidor (file://)
-// Copiado de midi-utils.browser.js
-function readU32(dv, o){ return dv.getUint32(o, false); }
-function readU16(dv, o){ return dv.getUint16(o, false); }
-
-function readVarLen(u8, i) {
-  let value = 0;
-  for (let k=0; k<4; k++){
-    const b = u8[i++];
-    value = (value << 7) | (b & 0x7F);
-    if ((b & 0x80) === 0) return [value, i];
-  }
-  return [value, i];
-}
-
-function writeVarLen(n) {
-  let buffer = n & 0x7F;
-  const bytes = [];
-  while ((n >>= 7) > 0) {
-    buffer <<= 8;
-    buffer |= ((n & 0x7F) | 0x80);
-  }
-  while (true) {
-    bytes.push(buffer & 0xFF);
-    if (buffer & 0x80) buffer >>= 8;
-    else break;
-  }
-  return Uint8Array.from(bytes);
-}
-
-function str4(u8, o) {
-  return String.fromCharCode(u8[o],u8[o+1],u8[o+2],u8[o+3]);
-}
-
-function parseTrack(trackU8) {
-  let i = 0;
-  let absTick = 0;
-  let runningStatus = null;
-  let trackName = null;
-  const events = [];
-
-  while (i < trackU8.length) {
-    let delta; [delta, i] = readVarLen(trackU8, i);
-    absTick += delta;
-
-    let status = trackU8[i++];
-
-    if (status < 0x80) {
-      if (runningStatus === null) throw new Error("Running status inválido.");
-      i--;
-      status = runningStatus;
-    } else {
-      runningStatus = status;
-    }
-
-    if (status === 0xFF) {
-      const type = trackU8[i++];
-      let mlen; [mlen, i] = readVarLen(trackU8, i);
-      const meta = trackU8.slice(i, i+mlen);
-      i += mlen;
-
-      if (type === 0x03) {
-        try { trackName = new TextDecoder().decode(meta).trim(); } catch(_){}
-      }
-      continue;
-    }
-
-    if (status === 0xF0 || status === 0xF7) {
-      let slen; [slen, i] = readVarLen(trackU8, i);
-      i += slen;
-      runningStatus = null;
-      continue;
-    }
-
-    const hi = status & 0xF0;
-    let d1, d2;
-    if (hi === 0xC0 || hi === 0xD0) {
-      d1 = trackU8[i++]; d2 = null;
-    } else {
-      d1 = trackU8[i++]; d2 = trackU8[i++];
-    }
-
-    events.push({ tick: absTick, status, ch: status & 0x0F, d1, d2 });
-  }
-
-  return { name: trackName, events, endTick: absTick };
-}
-
-function parseMidi(input) {
-  const u8 = (input instanceof Uint8Array) ? input : new Uint8Array(input);
-  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-  let i = 0;
-
-  if (str4(u8,i) !== "MThd") throw new Error("No es un MIDI válido (falta MThd).");
-  const hlen = readU32(dv, i+4);
-  const format = readU16(dv, i+8);
-  const ntrks = readU16(dv, i+10);
-  const division = readU16(dv, i+12);
-  if (division & 0x8000) throw new Error("SMPTE timecode no soportado.");
-  const ppq = division;
-  i += 8 + hlen;
-
-  const tracks = [];
-  for (let t=0; t<ntrks; t++){
-    if (str4(u8,i) !== "MTrk") throw new Error("No es un MIDI válido (falta MTrk).");
-    const len = readU32(dv, i+4);
-    const start = i + 8;
-    const end = start + len;
-    const data = u8.slice(start, end);
-    tracks.push(parseTrack(data));
-    i = end;
-  }
-
-  return { format, ppq, tracks };
-}
-
-function buildMidiFile(ppq, channelEventsAbsTicks) {
-  const trackBytes = [];
-
-  const push = (arr) => { for (const b of arr) trackBytes.push(b); };
-  const pushU8 = (b) => trackBytes.push(b & 0xFF);
-
-  function pushMeta(delta, type, dataU8) {
-    push(writeVarLen(delta));
-    pushU8(0xFF);
-    pushU8(type);
-    push(writeVarLen(dataU8.length));
-    push(dataU8);
-  }
-  function pushTrackName(name) {
-    const data = new TextEncoder().encode(name);
-    pushMeta(0, 0x03, data);
-  }
-  function pushTempo(bpm) {
-    const mpqn = Math.round(60000000 / bpm);
-    const data = Uint8Array.from([(mpqn>>16)&255, (mpqn>>8)&255, mpqn&255]);
-    pushMeta(0, 0x51, data);
-  }
-  function pushTimeSig(nn, dd) {
-    const denomPow = Math.log2(dd) | 0;
-    const data = Uint8Array.from([nn&255, denomPow&255, 24, 8]);
-    pushMeta(0, 0x58, data);
-  }
-
-  pushTrackName("generated");
-  pushTempo(120);
-  pushTimeSig(4,4);
-
-  let running = null;
-  let lastTick = 0;
-  const evs = channelEventsAbsTicks.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-  for (const e of evs) {
-    const delta = Math.max(0, (e.tick|0) - lastTick);
-    lastTick = (e.tick|0);
-    push(writeVarLen(delta));
-
-    const status = e.status & 0xFF;
-    const hi = status & 0xF0;
-
-    if (running !== status) {
-      pushU8(status);
-      running = status;
-    }
-
-    pushU8(e.d1 & 0x7F);
-    if (!(hi === 0xC0 || hi === 0xD0)) pushU8((e.d2 ?? 0) & 0x7F);
-  }
-
-  pushMeta(0, 0x2F, Uint8Array.from([]));
-
-  const trackU8 = Uint8Array.from(trackBytes);
-  const trackLen = trackU8.length;
-
-  const header = new Uint8Array(14);
-  header.set([0x4D,0x54,0x68,0x64]);
-  header.set([0x00,0x00,0x00,0x06], 4);
-  header.set([0x00,0x00], 8);
-  header.set([0x00,0x01], 10);
-  header[12] = (ppq >> 8) & 255;
-  header[13] = ppq & 255;
-
-  const trkh = new Uint8Array(8);
-  trkh.set([0x4D,0x54,0x72,0x6B]);
-  trkh[4] = (trackLen >>> 24) & 255;
-  trkh[5] = (trackLen >>> 16) & 255;
-  trkh[6] = (trackLen >>> 8) & 255;
-  trkh[7] = trackLen & 255;
-
-  const out = new Uint8Array(header.length + trkh.length + trackU8.length);
-  out.set(header, 0);
-  out.set(trkh, header.length);
-  out.set(trackU8, header.length + trkh.length);
-  return out;
-}
-
-function alignDerivedNoteOffs(events) {
-  if (!events?.length) return events;
-
-  const byOrigin = new Map();
-  const isOn = (e) => {
-    const hi = e.status & 0xF0;
-    const vel = (e.d2 ?? 0) & 0x7F;
-    return hi === 0x90 && vel > 0;
-  };
-  const isOff = (e) => {
-    const hi = e.status & 0xF0;
-    const vel = (e.d2 ?? 0) & 0x7F;
-    return hi === 0x80 || (hi === 0x90 && vel === 0);
-  };
-
-  for (const e of events) {
-    if (!e?.originId) continue;
-    if (!isOn(e) && !isOff(e)) continue;
-    if (!byOrigin.has(e.originId)) byOrigin.set(e.originId, { ons: [], offs: [] });
-    const bucket = byOrigin.get(e.originId);
-    if (isOn(e)) bucket.ons.push(e);
-    if (isOff(e)) bucket.offs.push(e);
-  }
-
-  for (const { offs } of byOrigin.values()) {
-    if (!offs?.length) continue;
-    const canonical = offs.reduce((best, ev) => {
-      if (!best) return ev;
-      const bestOrder = typeof best.order === "number" ? best.order : 0;
-      const evOrder = typeof ev.order === "number" ? ev.order : 0;
-      if (evOrder < bestOrder) return ev;
-      if (evOrder === bestOrder && ev.tick < best.tick) return ev;
-      return best;
-    }, null);
-
-    const offTick = canonical?.tick;
-    if (typeof offTick !== "number") continue;
-    for (const offEv of offs) {
-      offEv.tick = offTick;
-    }
-  }
-
-  return events;
-}
-
-function sanitizeEvents(events) {
-  const evs = alignDerivedNoteOffs(events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order)));
-  const active = new Map();
-  const cleaned = [];
-
-  const keyOf = (ch, note) => ch + "-" + note;
-  const pushOff = (tick, ch, note, order) => cleaned.push({ tick, status: (0x80 | ch), d1: note, d2: 0, order });
-
-  let lastTick = 0;
-
-  for (const e of evs) {
-    const status = e.status & 0xFF;
-    const hi = status & 0xF0;
-    const ch = status & 0x0F;
-    const d1 = e.d1 & 0x7F;
-    const d2 = (e.d2 ?? 0) & 0x7F;
-
-    if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
-
-    if (hi === 0xB0 && (d1 === 120 || d1 === 123 || d1 === 121)) {
-      active.clear();
-      cleaned.push({ ...e, d1, d2 });
-      continue;
-    }
-
-    if (hi === 0x90 && d2 > 0) {
-      const k = keyOf(ch, d1);
-      const prevCount = active.get(k) || 0;
-      if (prevCount > 0) {
-        const offOrder = (typeof e.order === "number") ? Math.max(0, e.order - 1) : 2;
-        for (let i=0; i<prevCount; i++) pushOff(e.tick, ch, d1, offOrder);
-      }
-      active.set(k, 1);
-      cleaned.push({ ...e, d1, d2 });
-      continue;
-    }
-
-    if (hi === 0x80 || (hi === 0x90 && d2 === 0)) {
-      const k = keyOf(ch, d1);
-      const prevCount = active.get(k) || 0;
-      if (prevCount > 0) {
-        active.set(k, prevCount - 1);
-      }
-      cleaned.push({ ...e, d1, d2 });
-      continue;
-    }
-
-    cleaned.push({ ...e, d1, d2 });
-  }
-
-  if (active.size) {
-    const cleanupTick = lastTick + 1;
-    for (const [key, count] of active.entries()) {
-      if (count <= 0) continue;
-      const [chStr, noteStr] = key.split("-");
-      const ch = parseInt(chStr, 10);
-      const note = parseInt(noteStr, 10);
-      const safeCount = Math.max(1, count);
-      for (let i=0; i<safeCount; i++) pushOff(cleanupTick, ch, note, 5);
-    }
-  }
-
-  return cleaned;
-}
-
-function enforceMaxNoteLength(events, tickPerEighth, maxEighths=3) {
-  if (!events?.length) return events;
-  const maxDur = tickPerEighth * Math.max(1, maxEighths);
-  const evs = events.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-  const active = new Map();
-  const out = [];
-  let lastTick = 0;
-
-  const keyOf = (ch, note) => `${ch}-${note}`;
-  const pushOff = (tick, ch, note, order=3) => {
-    out.push({ tick, status: 0x80 | (ch & 0x0F), d1: note & 0x7F, d2: 0, order });
-  };
-
-  for (const e of evs) {
-    const status = e.status & 0xFF;
-    const hi = status & 0xF0;
-    const ch = status & 0x0F;
-    const note = e.d1 & 0x7F;
-    const vel = (e.d2 ?? 0) & 0x7F;
-    const order = e.order;
-
-    if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
-
-    if (hi === 0x90 && vel > 0) {
-      const entry = active.get(keyOf(ch, note)) || [];
-      entry.push({ deadline: e.tick + maxDur, order });
-      active.set(keyOf(ch, note), entry);
-      out.push({ ...e, d1: note, d2: vel });
-      continue;
-    }
-
-    if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
-      const key = keyOf(ch, note);
-      const stack = active.get(key);
-      if (stack?.length) {
-        const state = stack.shift();
-        if (!stack.length) active.delete(key);
-        const offTick = Math.min(e.tick, state.deadline);
-        lastTick = Math.max(lastTick, offTick);
-        out.push({ ...e, tick: offTick, d1: note, d2: 0 });
-      } else {
-        out.push({ ...e, d1: note, d2: 0 });
-      }
-      continue;
-    }
-
-    out.push({ ...e, d1: note, d2: vel });
-  }
-
-  if (active.size) {
-    for (const [key, stack] of active.entries()) {
-      const [chStr, noteStr] = key.split("-");
-      const ch = parseInt(chStr, 10) || 0;
-      const note = parseInt(noteStr, 10) || 0;
-      for (const state of stack) {
-        const offTick = Math.max(lastTick, state.deadline);
-        pushOff(offTick, ch, note, state.order ?? 3);
-      }
-    }
-  }
-
-  return out.sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-}
-
-  function dropLongNotesAndSustain(events, tickPerEighth, maxEighths=4) {
-    if (!events?.length || !tickPerEighth) return events;
-
-    const indexed = events.map((e, idx) => ({ ...e, _idx: idx }));
-    const sorted = indexed.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-
-    const active = new Map();
-    const toRemove = new Set();
-    const durations = [];
-    const trimmedOffTicks = new Map();
-
-    const keyOf = (ch, note) => `${ch}-${note}`;
-
-    for (const ev of sorted) {
-      const status = ev.status & 0xFF;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const note = ev.d1 & 0x7F;
-      const vel = (ev.d2 ?? 0) & 0x7F;
-
-      if (hi === 0xB0 && note === 64) {
-        toRemove.add(ev._idx);
-        continue;
-      }
-
-      if (hi === 0x90 && vel > 0) {
-        const stack = active.get(keyOf(ch, note)) || [];
-        stack.push(ev);
-        active.set(keyOf(ch, note), stack);
-        continue;
-      }
-
-      const isOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-      if (isOff) {
-        const key = keyOf(ch, note);
-        const stack = active.get(key);
-        const onEv = stack?.shift();
-        if (stack && stack.length === 0) active.delete(key);
-
-        if (onEv) {
-          const dur = ev.tick - onEv.tick;
-          durations.push({ dur, onIdx: onEv._idx, offIdx: ev._idx, onTick: onEv.tick });
-        }
-      }
-    }
-
-    if (active.size) {
-      for (const stack of active.values()) {
-        for (const onEv of stack) {
-          toRemove.add(onEv._idx);
-        }
-      }
-    }
-
-    if (durations.length) {
-      const hardLimit = tickPerEighth * Math.max(1, maxEighths);
-
-      // Promedio global de notas "cortas" para usar como fallback en acordes de 1 sola nota.
-      const sortedDur = durations.slice().sort((a,b)=> a.dur - b.dur);
-      const globalShortPool = (sortedDur.length === 3)
-        ? sortedDur.slice(0, 2)
-        : sortedDur.slice(0, Math.max(1, sortedDur.length - 2));
-      const globalShortAvg = globalShortPool.reduce((sum,d)=> sum + d.dur, 0) / globalShortPool.length;
-
-      // Recalcular promedio por acorde (tick de NoteOn) para recortar outliers dentro del acorde.
-      const byOnTick = new Map();
-      for (const info of durations) {
-        if (!byOnTick.has(info.onTick)) byOnTick.set(info.onTick, []);
-        byOnTick.get(info.onTick).push(info);
-      }
-
-      for (const group of byOnTick.values()) {
-        const sortedGroup = group.slice().sort((a,b)=> a.dur - b.dur);
-        const shortPool = (sortedGroup.length === 3)
-          ? sortedGroup.slice(0, 2)
-          : sortedGroup.slice(0, Math.max(1, sortedGroup.length - 2));
-        const shortAvg = shortPool.reduce((sum,d)=> sum + d.dur, 0) / shortPool.length;
-
-        const refAvg = (sortedGroup.length > 1) ? shortAvg : globalShortAvg;
-        const targetDur = Math.min(hardLimit, Math.max(refAvg, tickPerEighth));
-
-        for (const cand of sortedGroup) {
-          if (cand.dur <= targetDur) continue;
-
-          const ratioBad = cand.dur > targetDur * 1.75;
-          const absoluteBad = cand.dur > hardLimit;
-          if (!ratioBad && !absoluteBad) continue;
-
-          const desiredTick = Math.max(cand.onTick + 1, Math.round(cand.onTick + targetDur));
-          const cappedTick = Math.min(desiredTick, cand.onTick + hardLimit);
-          trimmedOffTicks.set(cand.offIdx, cappedTick);
-        }
-      }
-    }
-
-    return events
-      .map((e, idx) => {
-        if (trimmedOffTicks.has(idx)) {
-          return { ...e, tick: trimmedOffTicks.get(idx) };
-        }
-        return e;
-      })
-      .filter((_, idx) => !toRemove.has(idx));
-  }
-
-function disableUnsupportedMidiMessages(events) {
-  if (!events?.length) return events;
-
-  const allowed = [];
-  for (const e of events) {
-    const status = e.status & 0xFF;
-    const hi = status & 0xF0;
-    const d1 = e.d1 & 0x7F;
-    const vel = (e.d2 ?? 0) & 0x7F;
-
-    const isNoteOn = hi === 0x90 && vel > 0;
-    const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-    if (isNoteOn || isNoteOff) {
-      allowed.push({ ...e, d1, d2: vel });
-    }
-  }
-
-  return allowed;
-}
-
-const MidiUtils = {
-  readU32,
-  readU16,
-  readVarLen,
-  writeVarLen,
-  str4,
-  parseTrack,
-  parseMidi,
-  buildMidiFile,
-  sanitizeEvents,
-  enforceMaxNoteLength,
-  dropLongNotesAndSustain,
-  disableUnsupportedMidiMessages,
-};
-
-if (typeof globalThis !== "undefined") {
-  globalThis.MidiUtils = MidiUtils;
-}
-</script>
 <script>
 (() => {
-  const {
-    buildMidiFile,
-    disableUnsupportedMidiMessages,
-    dropLongNotesAndSustain,
-    enforceMaxNoteLength,
-    parseMidi,
-    sanitizeEvents,
-  } = globalThis.MidiUtils ?? {};
-
-  if (!buildMidiFile) {
-    throw new Error("No se pudo cargar midi-utils en el navegador.");
-  }
-  // -------------------------
-  // Config / constants
-  // -------------------------
-  let QUALITIES = []; // se llena desde los nombres de archivo de la carpeta cargada
-  // Mapa: calidad exacta -> datos del MIDI de referencia
-
-  // Reference MIDI assumptions (as per your spec)
-  const TIME_SIG_NUM = 4;
-  const TIME_SIG_DEN = 4;
-  const REF_BPM_EXPORT = 120; // export tempo fixed
-  const REF_BPM_AUDIO = 90;
-  const BOLERO_BPM = 90;
-  const BARS_PER_AUDIO_FILE = 24;
-  const EIGHTHS_PER_BAR = 8;
-  const AUDIO_SEGMENT_BARS = 2;
-
-  // Ventana base: 16 corcheas (2 compases).
-  // Si el archivo tiene 16 corcheas exactas, se usa completo (1 sola ventana).
-  // Si el archivo tiene 32 corcheas o más, se crean ventanas de 16 corcheas y se escoge una al azar por bloque.
-  const WINDOW_EIGHTS = 16; // 16 eighth-notes
-
-
-  // -------------------------
-  // UI handles
-  // -------------------------
   const el = (id) => document.getElementById(id);
-
-  // quality chips (dinámicos desde la carpeta)
-  const chips = el("qualityChips");
-
-  function insertAtCursor(textarea, txt) {
-    textarea.focus();
-    const start = textarea.selectionStart ?? textarea.value.length;
-    const end = textarea.selectionEnd ?? textarea.value.length;
-    const before = textarea.value.slice(0, start);
-    const after = textarea.value.slice(end);
-
-    // SIN espacio previo: "C" + click "maj7" => "Cmaj7"
-    const needsSpaceAfter = after.length && !/^\s/.test(after);
-    const insert = txt + (needsSpaceAfter ? " " : "");
-
-    textarea.value = before + insert + after;
-    const pos = (before + insert).length;
-    textarea.selectionStart = textarea.selectionEnd = pos;
-  }
-
-  function renderQualityChips() {
-    chips.innerHTML = "";
-    const mode = getPlaybackMode();
-    const activeQualities = mode === "bolero" ? audioQualities : QUALITIES;
-    if (!activeQualities.length) {
-      const s = document.createElement("span");
-      s.className = "mini";
-      s.textContent = mode === "bolero"
-        ? "Carga una carpeta de audio para ver las calidades disponibles."
-        : "Carga una carpeta para ver las calidades disponibles.";
-      chips.appendChild(s);
-      return;
-    }
-
-    for (const q of activeQualities) {
-      const b = document.createElement("span");
-      b.className = "pill";
-      b.textContent = q;
-      b.title = "Clic: insertar la calidad exacta en el cuadro de progresión";
-      b.addEventListener("click", () => {
-        insertAtCursor(el("prog"), q);
-      });
-      chips.appendChild(b);
-    }
-  }
   const logEl = el("log");
-  const dotReady = el("dotReady");
   const readyText = el("readyText");
-  const ppqText = el("ppqText");
-  const folderStatus = el("folderStatus");
+  const dotReady = el("dotReady");
   const audioFolderStatus = el("audioFolderStatus");
-  const midiOutSel = el("midiOut");
-  const midiStatus = el("midiStatus");
-  const tempo = el("tempo");
-  const tempoVal = el("tempoVal");
-  const tempoValInline = el("tempoValInline");
-  const boleroTempoNote = el("boleroTempoNote");
-  const swing = el("swing");
-  const swingVal = el("swingVal");
-  const swingBlock = el("swingBlock");
-  const bassVel = el("bassVel");
-  const bassVelVal = el("bassVelVal");
+  const qualityChips = el("qualityChips");
+  const qualityMismatchText = el("qualityMismatchText");
+  const qualityMismatchDot = el("qualityMismatchDot");
+
+  const prog = el("prog");
   const repeatCount = el("repeatCount");
   const globalTranspose = el("globalTranspose");
-  const prog = el("prog");
-  const density = el("density");
-  const densityVal = el("densityVal");
-  const densityProgressive = el("densityProgressive");
-  const progressiveSkips = el("progressiveSkips");
-  const shells = el("shells");
-  const skipClosed = el("skipClosed");
-  const blockChords = el("blockChords");
-  const blockChordsFull = el("blockChordsFull");
-  const skip2Simple = el("skip2Simple");
-  const skip2Oct = el("skip2Oct");
-  const skipSpread = el("skipSpread");
-  const soloing = el("soloing");
-  const salsa23 = el("salsa23");
-  const advancedTabButtons = Array.from(document.querySelectorAll("[data-advanced-tab]"));
-  const advancedTabPanels = Array.from(document.querySelectorAll("[data-advanced-panel]"));
-  const mainTabButtons = Array.from(document.querySelectorAll("[data-main-tab]"));
-  const mainTabPanels = Array.from(document.querySelectorAll("[data-main-panel]"));
-  const playbackTabButtons = Array.from(document.querySelectorAll("[data-playback-tab]"));
-  const playbackTabPanels = Array.from(document.querySelectorAll("[data-playback-panel]"));
-  let currentPlaybackMode = "midi";
-  let isAudioPlaying = false;
-  let isPlaying = false;
-  let playTimers = [];
-  let playOut = null;
-  let audioNodes = [];
-  let audioTimers = [];
-  let cachedMidiTempo = parseInt(tempo?.value ?? "120", 10) || 120;
-  let audioUrlsByQuality = new Map();
-  let activeRecorder = null;
-  let recorderStopTimer = null;
-  var midiStatusCache = "Salida MIDI: —";
-  let folderLoaded = false;
-  let audioFolderLoaded = false;
+  const barsPerFileInput = el("barsPerFile");
+  const barsPerChordInput = el("barsPerChord");
+  const timeSignatureInput = el("timeSignature");
+  const refBpmInput = el("refBpm");
+  const crossfadeMsInput = el("crossfadeMs");
+  const startRootInput = el("startRoot");
 
-  function setAdvancedTab(tab) {
-    if (!tab) return;
-    advancedTabButtons.forEach((btn) => {
-      const isActive = btn?.dataset?.advancedTab === tab;
-      btn?.classList.toggle("active", isActive);
-      if (btn) {
-        btn.setAttribute("aria-selected", isActive ? "true" : "false");
-        btn.setAttribute("tabindex", isActive ? "0" : "-1");
-      }
-    });
-
-    advancedTabPanels.forEach((panel) => {
-      const isActive = panel?.dataset?.advancedPanel === tab;
-      panel?.classList.toggle("active", isActive);
-      panel?.toggleAttribute("hidden", !isActive);
-    });
-  }
-
-  advancedTabButtons.forEach((btn) => {
-    btn?.addEventListener("click", () => setAdvancedTab(btn.dataset?.advancedTab));
-  });
-
-  setAdvancedTab("comping");
-
-  function setMainTab(tab) {
-    if (!tab) return;
-    mainTabButtons.forEach((btn) => {
-      const isActive = btn?.dataset?.mainTab === tab;
-      btn?.classList.toggle("active", isActive);
-      if (btn) {
-        btn.setAttribute("aria-selected", isActive ? "true" : "false");
-        btn.setAttribute("tabindex", isActive ? "0" : "-1");
-      }
-    });
-
-    mainTabPanels.forEach((panel) => {
-      const isActive = panel?.dataset?.mainPanel === tab;
-      panel?.classList.toggle("active", isActive);
-      panel?.toggleAttribute("hidden", !isActive);
-    });
-  }
-
-  mainTabButtons.forEach((btn) => {
-    btn?.addEventListener("click", () => setMainTab(btn.dataset?.mainTab));
-  });
-
-  setMainTab("progression");
-
-  function setPlaybackTab(tab) {
-    if (!tab) return;
-    currentPlaybackMode = tab;
-    stopAllPlayback();
-    playbackTabButtons.forEach((btn) => {
-      const isActive = btn?.dataset?.playbackTab === tab;
-      btn?.classList.toggle("active", isActive);
-      if (btn) {
-        btn.setAttribute("aria-selected", isActive ? "true" : "false");
-        btn.setAttribute("tabindex", isActive ? "0" : "-1");
-      }
-    });
-
-    playbackTabPanels.forEach((panel) => {
-      const isActive = panel?.dataset?.playbackPanel === tab;
-      panel?.classList.toggle("active", isActive);
-      panel?.toggleAttribute("hidden", !isActive);
-    });
-
-    updatePlaybackModeUI();
-  }
-
-  playbackTabButtons.forEach((btn) => {
-    btn?.addEventListener("click", () => setPlaybackTab(btn.dataset?.playbackTab));
-  });
-
-  setPlaybackTab("midi");
-
-  function log(msg, cls="") {
-    const line = cls ? `[${cls}] ${msg}` : msg;
-    logEl.textContent += line + "\n";
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-  function clearLog() { logEl.textContent = ""; }
-
-  let currentGlobalTranspose = 0;
-
-  function setReady(isReady, text) {
-    dotReady.className = "dot " + (isReady ? "ok" : "bad");
-    readyText.textContent = text;
-  }
-
-  function getPlaybackMode() {
-    return currentPlaybackMode || "midi";
-  }
-
-  function updateReadyState() {
-    const mode = getPlaybackMode();
-    if (mode === "bolero") {
-      setReady(!!audioFolderLoaded, audioFolderLoaded ? "Listo" : "No listo");
-      return;
-    }
-
-    setReady(!!folderLoaded, folderLoaded ? "Listo" : "No listo");
-  }
-
-  function updateMidiStatus(html) {
-    midiStatusCache = html ?? "Salida MIDI: —";
-    if (getPlaybackMode() === "midi") {
-      midiStatus.innerHTML = midiStatusCache;
-    }
-  }
-
-  function syncTempoUI(value) {
-    if (tempo) tempo.value = String(value);
-    if (tempoVal) tempoVal.textContent = String(value);
-    if (tempoValInline) tempoValInline.textContent = String(value);
-  }
-
-  function updatePlaybackModeUI() {
-    const mode = getPlaybackMode();
-    const isMidi = mode === "midi";
-
-    midiOutSel.disabled = !isMidi;
-    bassVel.disabled = !isMidi;
-    if (swing) swing.disabled = !isMidi;
-    if (swingBlock) swingBlock.style.display = isMidi ? "" : "none";
-    if (tempo) {
-      if (isMidi) {
-        tempo.disabled = false;
-        syncTempoUI(cachedMidiTempo);
-      } else {
-        cachedMidiTempo = parseInt(tempo.value, 10) || cachedMidiTempo;
-        tempo.disabled = true;
-        syncTempoUI(BOLERO_BPM);
-      }
-    }
-    if (boleroTempoNote) boleroTempoNote.style.display = isMidi ? "none" : "";
-
-    if (isMidi) {
-      const status = midiStatusCache ?? "Salida MIDI: —";
-      midiStatus.innerHTML = status;
-    } else {
-      midiStatus.innerHTML = `<span class="mini">Bolero (Audio) activo</span>`;
-    }
-
-    updateReadyState();
-    renderQualityChips();
-  }
-
-  // -------------------------
-  // Random
-  // -------------------------
-  function randInt(maxExclusive) {
-    const a = new Uint32Array(1);
-    crypto.getRandomValues(a);
-    return a[0] % maxExclusive;
-  }
-  function choice(arr) { return arr[randInt(arr.length)]; }
-  const randUnit = () => randInt(0x100000000) / 0x100000000;
-
-  const SOLOING_RECENT_WINDOW_HISTORY = 3;
-  const soloingWindowHistory = new Map(); // variantKey -> [windowId,...]
-
-  function rememberSoloingWindow(variantKey, windowId) {
-    if (variantKey == null || windowId == null) return;
-    const history = soloingWindowHistory.get(variantKey) || [];
-    const next = [windowId, ...history.filter((w) => w !== windowId)].slice(0, SOLOING_RECENT_WINDOW_HISTORY);
-    soloingWindowHistory.set(variantKey, next);
-  }
-
-  function pickWindowWithHistory(variantKey, candidates) {
-    if (!candidates?.length) return null;
-    const history = soloingWindowHistory.get(variantKey) || [];
-    const fresh = candidates.filter((c) => !history.includes(c.id));
-    const chosen = choice(fresh.length ? fresh : candidates);
-    rememberSoloingWindow(variantKey, chosen.id);
-    return chosen;
-  }
-
-  // Bajo (solo playback): convierte semitonos desde C a una nota entre C1(24) y C3(48)
-  function bassNoteFromTranspose(semi) {
-    let note = 36 + (semi % 12); // base C2=36
-    if (note > 48) note -= 12;
-    if (note < 24) note += 12;
-    return note;
-  }
-
-  // -------------------------
-  // Note / root parsing + transpose mapping (variant-based, always upward)
-  // -------------------------
   const NOTE_TO_SEMI = new Map([
     ["C",0], ["B#",0],
     ["C#",1], ["DB",1],
@@ -1429,96 +477,50 @@ if (typeof globalThis !== "undefined") {
     ["A#",10], ["BB",10],
     ["B",11], ["CB",11]
   ]);
-
   const SEMI_TO_NOTE_SHARP = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
   const SEMI_TO_NOTE_FLAT = ["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
 
-  const ROOT_SEMI_TO_BAR_START = new Map([
-    [NOTE_TO_SEMI.get("A"), 0],
-    [NOTE_TO_SEMI.get("A#"), 2],
-    [NOTE_TO_SEMI.get("B"), 4],
-    [NOTE_TO_SEMI.get("C"), 6],
-    [NOTE_TO_SEMI.get("C#"), 8],
-    [NOTE_TO_SEMI.get("D"), 10],
-    [NOTE_TO_SEMI.get("D#"), 12],
-    [NOTE_TO_SEMI.get("E"), 14],
-    [NOTE_TO_SEMI.get("F"), 16],
-    [NOTE_TO_SEMI.get("F#"), 18],
-    [NOTE_TO_SEMI.get("G"), 20],
-    [NOTE_TO_SEMI.get("G#"), 22],
-  ]);
+  let audioCtx = null;
+  let audioBuffersByQuality = new Map();
+  let audioUrlsByQuality = new Map();
+  let audioQualities = [];
+  let audioFolderLoaded = false;
+  let isAudioPlaying = false;
+  let audioNodes = [];
+  let audioTimers = [];
+  let currentGlobalTranspose = 0;
 
-  function normalizeAccidentals(s) {
-    return s.replaceAll("♭","b").replaceAll("♯","#");
-  }
-
-  const REF_VARIANT_BASES = {
-    "1": NOTE_TO_SEMI.get("D"),
-    "2": NOTE_TO_SEMI.get("AB"),
+  const log = (msg, level = "INFO") => {
+    const prefix = level === "ERROR" ? "❌" : level === "WARN" ? "⚠️" : "✅";
+    const stamp = new Date().toLocaleTimeString();
+    logEl.textContent += `[${stamp}] ${prefix} ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
   };
 
-  function stripVariantSuffix(s) {
-    return s.replace(/_(1|2|x24|x32)$/i, "");
-  }
+  const clearLog = () => {
+    logEl.textContent = "";
+  };
 
-  function selectVariantForRoot(rootSemi) {
-    if (rootSemi >= NOTE_TO_SEMI.get("D") && rootSemi <= NOTE_TO_SEMI.get("G")) return "1";
-    return "2";
-  }
-
-  function upwardTransposeFromVariant(rootSemi, variant) {
-    const base = REF_VARIANT_BASES[variant];
-    if (base == null) return 0;
-    return ((rootSemi - base) + 12) % 12;
-  }
-
-  const SOLOING_BASE_SEMI = NOTE_TO_SEMI.get("F#");
-
-  function soloingTransposeFromRoot(rootSemi) {
-    if (SOLOING_BASE_SEMI == null || !Number.isFinite(rootSemi)) return 0;
-    return rootSemi - SOLOING_BASE_SEMI;
-  }
-
-  function selectSoloingVariant(qualityKey) {
-    const entry = refByQuality.get(qualityKey);
-    if (!entry?.variants?.size) return null;
-    const first = entry.variants.keys().next();
-    return first && !first.done ? first.value : null;
-  }
-
-  function firstNoteOnFrom(ref, windowStartTick) {
-    const noteOnTicks = ref?.noteOnTicks;
-    if (!noteOnTicks?.length || typeof windowStartTick !== "number") return Infinity;
-    const limit = windowStartTick + (ref?.winTicks ?? 0);
-    if (!Number.isFinite(limit) || limit <= windowStartTick) return Infinity;
-
-    let lo = 0;
-    let hi = noteOnTicks.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (noteOnTicks[mid] < windowStartTick) lo = mid + 1; else hi = mid;
+  const setReady = (ready, text) => {
+    if (ready) {
+      dotReady.classList.remove("bad");
+      dotReady.classList.add("ok");
+    } else {
+      dotReady.classList.remove("ok");
+      dotReady.classList.add("bad");
     }
-
-    const tick = noteOnTicks[lo];
-    if (tick == null || tick >= limit) return Infinity;
-    return tick - windowStartTick;
-  }
-
-  const selectSoloingX32Window = (ref, seg, qualityKey) => {
-    if (!window?.SoloingWindowSelector?.selectSoloingX32Window) return { windowStartEighth: 0, windowIndex: 0, startEighthForWindow: seg?.startEighth ?? 0 };
-    return window.SoloingWindowSelector.selectSoloingX32Window(ref, seg, qualityKey, {
-      firstNoteOnFrom,
-      pickWindowWithHistory,
-      randInt,
-    });
+    readyText.textContent = text;
   };
 
-  const adjustSoloingWindowTranspose = (prevNote, nextFirstNote, baseTranspose) => {
-    if (!window?.SoloingUtils?.adjustSoloingWindowTranspose) return baseTranspose;
-    return window.SoloingUtils.adjustSoloingWindowTranspose(prevNote, nextFirstNote, baseTranspose);
+  const normalizeAccidentals = (s) => s.replaceAll("♭","b").replaceAll("♯","#");
+
+  const normalizeQuality = (q) => {
+    let s = (q || "").trim();
+    s = normalizeAccidentals(s);
+    return s || null;
   };
 
-  function parseChordToken(tokRaw) {
+  const parseChordToken = (tokRaw) => {
     const tok = normalizeAccidentals(tokRaw.trim());
     const m = tok.match(/^([A-Ga-g])([#b]?)(.*)$/);
     if (!m) throw new Error(`No entiendo el acorde: "${tokRaw}"`);
@@ -1528,142 +530,67 @@ if (typeof globalThis !== "undefined") {
     if (!qualKey) throw new Error(`Calidad faltante en "${tokRaw}". Ej: Dm7, G9, A7alt, Cmaj7.`);
     const rootSemi = NOTE_TO_SEMI.get(root.toUpperCase());
     if (rootSemi === undefined) throw new Error(`Fundamental inválida: "${root}"`);
+    return { root, rootSemi, quality: qualKey, token: tokRaw };
+  };
 
-    const soloMode = !!soloing?.checked;
-    const refVariant = soloMode ? selectSoloingVariant(qualKey) : selectVariantForRoot(rootSemi);
-    const transpose = soloMode ? soloingTransposeFromRoot(rootSemi) : upwardTransposeFromVariant(rootSemi, refVariant);
+  const getTimeSignature = () => {
+    const raw = timeSignatureInput.value || "4/4";
+    const [numRaw, denRaw] = raw.split("/");
+    const num = Math.max(1, parseInt(numRaw, 10) || 4);
+    const den = Math.max(1, parseInt(denRaw, 10) || 4);
+    return { num, den };
+  };
 
-    return { root, rootSemi, quality: qualKey, transpose, refVariant };
-  }
+  const getEighthsPerBar = () => {
+    const { num, den } = getTimeSignature();
+    const eighths = Math.round((num * 8) / den);
+    return Math.max(1, eighths);
+  };
 
-  function normalizeQuality(q) {
-    // Exacto: la calidad es exactamente lo que se escribe después de la fundamental.
-    // Sin alias ni conversiones (solo trim).
-    let s = (q || "").trim();
-    s = normalizeAccidentals(s);
-    s = stripVariantSuffix(s);
-    if (!s) return null;
-    return s;
-  }
-
-  function parseReferenceFileName(fullName) {
-    const base = (fullName || "").replace(/\.[^.]+$/, "");
-    const normalizedBase = base
-      .trim()
-      .replace(/[()]/g, "")
-      .replace(/[\s-]+/g, "_")
-      .replace(/_+/g, "_");
-    if (!normalizedBase) return null;
-
-    const match = normalizedBase.match(/^(.*)_(1|2|x24|x32)$/i);
-    if (!match) return null;
-
-    const [, rawQuality, variantRaw] = match;
-    const qualityKey = normalizeQuality(rawQuality);
-    const variant = (variantRaw || "").toLowerCase();
-    if (!qualityKey) return null;
-
-    return { qualityKey, variant };
-  }
-
-  function wrapSemi(semi) {
-    const m = semi % 12;
-    return m < 0 ? m + 12 : m;
-  }
-
-  function transposeRootLabel(root, delta, preferFlat=false) {
-    const baseSemi = NOTE_TO_SEMI.get(root.toUpperCase());
-    if (baseSemi == null) return root;
-    const target = wrapSemi(baseSemi + delta);
-    const dict = preferFlat ? SEMI_TO_NOTE_FLAT : SEMI_TO_NOTE_SHARP;
-    return dict[target] ?? root;
-  }
-
-  function transposeChordTokenText(tok, delta) {
-    if (!delta) return tok;
-    const normalized = normalizeAccidentals(tok.trim());
-    const m = normalized.match(/^([A-Ga-g])([#b]?)(.*)$/);
-    if (!m) return tok;
-    const rootKey = (m[1].toUpperCase() + (m[2]||"" )).toUpperCase();
-    const preferFlat = m[2] === "b" || m[2] === "♭";
-    if (!NOTE_TO_SEMI.has(rootKey)) return tok;
-    const rest = m[3] || "";
-    const newRoot = transposeRootLabel(rootKey, delta, preferFlat);
-    return newRoot + rest;
-  }
-
-  function transposeProgressionText(text, delta) {
-    if (!delta) return text;
-    const bars = text.replace(/\r/g,"").split("|");
-    const mapped = bars.map(bar => {
-      const trimmed = bar.trim();
-      if (!trimmed) return "";
-      const tokens = trimmed.split(/\s+/).filter(Boolean).map(tok => tok === "%" ? tok : transposeChordTokenText(tok, delta));
-      return tokens.length ? ` ${tokens.join(" ")} ` : "";
+  const durationsForBar = (chordCount, eighthsPerBar) => {
+    if (eighthsPerBar === 8) {
+      if (chordCount === 1) return [8];
+      if (chordCount === 2) return [4, 4];
+      if (chordCount === 3) return [4, 2, 2];
+      return [2, 2, 2, 2];
+    }
+    const base = Math.floor(eighthsPerBar / chordCount);
+    let remainder = eighthsPerBar % chordCount;
+    return Array.from({ length: chordCount }, () => {
+      const extra = remainder > 0 ? 1 : 0;
+      remainder = Math.max(0, remainder - 1);
+      return base + extra;
     });
-    return mapped.join("|");
-  }
+  };
 
-  function clampGlobalTranspose() {
-    let n = parseInt(globalTranspose.value, 10);
-    if (!Number.isFinite(n)) n = 0;
-    n = Math.max(-24, Math.min(24, n));
-    globalTranspose.value = String(n);
-    return n;
-  }
-
-  function applyGlobalTranspose() {
-    const desired = clampGlobalTranspose();
-    const delta = desired - currentGlobalTranspose;
-    if (delta === 0) return;
-    const newText = transposeProgressionText(prog.value, delta);
-    prog.value = newText;
-    currentGlobalTranspose = desired;
-  }
-
-  // -------------------------
-  // Progression parsing (bars with | |)
-  // Rules (default):
-  // | X | -> 8 eighths
-  // | X Y | -> 4 + 4 eighths
-  // | X Y Z | -> 4 + 2 + 2 eighths (bolero)
-  // | X Y Z W | -> 2 + 2 + 2 + 2 eighths (bolero)
-  // Anything else -> error (by spec)
-  // -------------------------
-  function parseProgression(text, opts = {}) {
-    const { syncopate = true, maxChordsPerBar = 2 } = opts;
-
-    const raw = text.replace(/\r/g,"").trim();
+  const parseProgression = (text, opts = {}) => {
+    const { maxChordsPerBar = 4 } = opts;
+    const raw = text.replace(/\r/g, "").trim();
     if (!raw) throw new Error("Escribe una progresión.");
-    const parts = raw.split("|").map(s => s.trim()).filter(Boolean);
-    if (parts.length === 0) throw new Error("Usa barras | |. Ej: | Bbmaj7 Gm9 | ...");
+    const parts = raw.split("|").map((s) => s.trim()).filter(Boolean);
+    if (!parts.length) throw new Error("Usa barras | |. Ej: | Bbmaj7 Gm9 | ...");
 
     const segments = [];
     let startEighth = 0;
     let lastBarChords = null;
+    const eighthsPerBar = getEighthsPerBar();
 
-    const addBar = (barChords, source="", barIndex = 0) => {
+    const addBar = (barChords, source = "", barIndex = 0) => {
       if (!barChords || !barChords.length) {
-        throw new Error(`Barra inválida: "${source || ''}". Solo 1 a ${maxChordsPerBar} acordes por compás.`);
+        throw new Error(`Barra inválida: "${source || ""}". Solo 1 a ${maxChordsPerBar} acordes por compás.`);
       }
-
       if (barChords.length < 1 || barChords.length > maxChordsPerBar) {
-        throw new Error(`Barra inválida: "${source || barChords.join(' ')}". Solo 1 a ${maxChordsPerBar} acordes por compás.`);
+        throw new Error(`Barra inválida: "${source || barChords.join(" ")}". Solo 1 a ${maxChordsPerBar} acordes por compás.`);
       }
 
-      const stored = [];
       const chordCount = barChords.length;
-      let durations;
-      if (chordCount === 1) durations = [8];
-      else if (chordCount === 2) durations = [4, 4];
-      else if (chordCount === 3) durations = [4, 2, 2];
-      else durations = [2, 2, 2, 2];
+      const durations = durationsForBar(chordCount, eighthsPerBar);
+      const stored = [];
 
       for (const [idx, c] of barChords.entries()) {
         const parsed = parseChordToken(c);
         segments.push({
           ...parsed,
-          token: c,
           startEighth,
           durEighth: durations[idx],
           barIndex,
@@ -1678,65 +605,44 @@ if (typeof globalThis !== "undefined") {
       lastBarChords = stored;
     };
 
-    // 1) Construimos la progresión "recta" (sin síncopa):
     for (const [barIndex, bar] of parts.entries()) {
       if (bar === "%") {
         if (!lastBarChords) throw new Error("El signo % solo se puede usar después del primer compás.");
         addBar(lastBarChords, bar, barIndex);
         continue;
       }
-
-      const chords = bar.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+      const chords = bar.split(/\s+/).map((s) => s.trim()).filter(Boolean);
       addBar(chords, bar, barIndex);
     }
 
-    const totalEighthNominal = startEighth;
-
-    if (syncopate) {
-      // 2) "Síncopa jazz" CON REGLA DE MÍNIMO:
-      //    - Intentamos adelantar cada cambio 1 corchea.
-      //    - Pero garantizamos que cada acorde dure al menos MEDIO COMPÁS (4 corcheas).
-      //      (Esto evita acordes de 3 corcheas cuando hay 2 acordes por compás.)
-      const MIN_CHORD_EIGHTS = 4;
-
-      if (segments.length >= 2) {
-        // Proponemos nuevos inicios (adelantados 1 corchea), pero sin violar el mínimo.
-        for (let i = 1; i < segments.length; i++) {
-          const prevStart = segments[i-1].startEighth;
-          const proposed = Math.max(0, segments[i].startEighth - 1);
-          const minAllowed = prevStart + MIN_CHORD_EIGHTS;
-          segments[i].startEighth = Math.max(proposed, minAllowed);
+    const totalEighth = parts.length * eighthsPerBar;
+    if (segments.length >= 2) {
+      for (let i = 1; i < segments.length; i++) {
+        const prevStart = segments[i - 1].startEighth;
+        const proposed = Math.max(0, segments[i].startEighth - 1);
+        const minAllowed = prevStart + 1;
+        segments[i].startEighth = Math.max(proposed, minAllowed);
+      }
+      for (let i = 1; i < segments.length; i++) {
+        if (segments[i].startEighth <= segments[i - 1].startEighth) {
+          segments[i].startEighth = segments[i - 1].startEighth + 1;
         }
-
-        // Asegura inicios estrictamente crecientes (por seguridad)
-        for (let i = 1; i < segments.length; i++) {
-          if (segments[i].startEighth <= segments[i-1].startEighth) {
-            segments[i].startEighth = segments[i-1].startEighth + 1;
-          }
-        }
-
-        // Recalcula duraciones: cada acorde dura hasta el siguiente inicio.
-        for (let i = 0; i < segments.length - 1; i++) {
-          segments[i].durEighth = segments[i+1].startEighth - segments[i].startEighth;
-        }
-        segments[segments.length - 1].durEighth = totalEighthNominal - segments[segments.length - 1].startEighth;
-
-        // Safety: evita duraciones raras y respeta mínimo
-        for (const s of segments) {
-          if (s.durEighth <= 0) s.durEighth = 1;
-          if (s.durEighth < MIN_CHORD_EIGHTS) s.durEighth = MIN_CHORD_EIGHTS;
-        }
+      }
+      for (let i = 0; i < segments.length - 1; i++) {
+        segments[i].durEighth = segments[i + 1].startEighth - segments[i].startEighth;
+      }
+      segments[segments.length - 1].durEighth = totalEighth - segments[segments.length - 1].startEighth;
+      for (const s of segments) {
+        s.durEighth = Math.max(1, s.durEighth);
       }
     }
 
-// No cambiamos el "final" total: solo movemos fronteras internas.
-    return { segments, totalEighth: totalEighthNominal, totalBars: parts.length };
-  }
+    return { segments, totalEighth, totalBars: parts.length };
+  };
 
-  function repeatSegments(segments, totalEighth, times) {
-    const t = Math.max(1, Math.floor(times));
+  const repeatSegments = (segments, totalEighth, times) => {
+    const t = Math.max(1, parseInt(times, 10) || 1);
     if (t === 1) return { segments, totalEighth };
-
     const out = [];
     for (let i = 0; i < t; i++) {
       const offset = i * totalEighth;
@@ -1744,238 +650,147 @@ if (typeof globalThis !== "undefined") {
         out.push({ ...s, startEighth: s.startEighth + offset });
       }
     }
-
     return { segments: out, totalEighth: totalEighth * t };
-  }
+  };
 
-  function applySalsaWindowAnticipation(segments, totalEighth) {
-    if (!salsa23?.checked) return { segments, totalEighth };
-    if (!segments?.length) return { segments, totalEighth };
+  const getBarsPerFile = () => Math.max(1, parseInt(barsPerFileInput.value, 10) || 1);
+  const getBarsPerChord = () => Math.max(1, parseInt(barsPerChordInput.value, 10) || 1);
+  const getRefBpm = () => Math.max(20, parseInt(refBpmInput.value, 10) || 90);
+  const getCrossfadeSeconds = () => Math.max(0, parseInt(crossfadeMsInput.value, 10) || 0) / 1000;
 
-    if (window?.SalsaUtils?.adjustSalsaSegments) {
-      return window.SalsaUtils.adjustSalsaSegments(segments, totalEighth);
+  const buildRootBarStartMap = () => {
+    const map = new Map();
+    const startRoot = (startRootInput.value || "A").toUpperCase();
+    const startSemi = NOTE_TO_SEMI.get(startRoot);
+    if (startSemi == null) return map;
+    const barsPerChord = getBarsPerChord();
+    for (let i = 0; i < 12; i++) {
+      const rootSemi = (startSemi + i) % 12;
+      map.set(rootSemi, i * barsPerChord);
     }
+    return map;
+  };
 
-    return { segments, totalEighth };
-  }
+  const getBarSeconds = () => {
+    const { num, den } = getTimeSignature();
+    const bpm = getRefBpm();
+    return (60 / bpm) * num * (4 / den);
+  };
 
-  function getRepeatTimes() {
-    let n = parseInt(repeatCount.value, 10);
-    if (!Number.isFinite(n)) n = 1;
-    n = Math.max(1, Math.min(64, n));
-    repeatCount.value = String(n);
+  const getSecondsPerEighth = () => {
+    const bpm = getRefBpm();
+    return (60 / bpm) / 2;
+  };
+
+  const transposeRootLabel = (root, delta, preferFlat = false) => {
+    const baseSemi = NOTE_TO_SEMI.get(root.toUpperCase());
+    if (baseSemi == null) return root;
+    const target = ((baseSemi + delta) % 12 + 12) % 12;
+    const dict = preferFlat ? SEMI_TO_NOTE_FLAT : SEMI_TO_NOTE_SHARP;
+    return dict[target] ?? root;
+  };
+
+  const transposeChordTokenText = (tok, delta) => {
+    if (!delta) return tok;
+    const normalized = normalizeAccidentals(tok.trim());
+    const m = normalized.match(/^([A-Ga-g])([#b]?)(.*)$/);
+    if (!m) return tok;
+    const rootKey = (m[1].toUpperCase() + (m[2] || "" )).toUpperCase();
+    const preferFlat = m[2] === "b" || m[2] === "♭";
+    if (!NOTE_TO_SEMI.has(rootKey)) return tok;
+    const rest = m[3] || "";
+    const newRoot = transposeRootLabel(rootKey, delta, preferFlat);
+    return newRoot + rest;
+  };
+
+  const transposeProgressionText = (text, delta) => {
+    if (!delta) return text;
+    const bars = text.replace(/\r/g, "").split("|");
+    const mapped = bars.map((bar) => {
+      const trimmed = bar.trim();
+      if (!trimmed) return "";
+      const tokens = trimmed.split(/\s+/).filter(Boolean).map((tok) => tok === "%" ? tok : transposeChordTokenText(tok, delta));
+      return tokens.length ? ` ${tokens.join(" ")} ` : "";
+    });
+    return mapped.join("|");
+  };
+
+  const clampGlobalTranspose = () => {
+    let n = parseInt(globalTranspose.value, 10);
+    if (!Number.isFinite(n)) n = 0;
+    n = Math.max(-24, Math.min(24, n));
+    globalTranspose.value = String(n);
     return n;
-  }
+  };
 
-    // -------------------------
-    // Reference library loading
-    // -------------------------
-  let midiAccess = null;
-  let midiOutputs = [];
-  let refByQuality = new Map(); // qualityKey -> { variants: Map<variantKey, {ppq, events, windowsPerFile, tickPerEighth, winTicks, winEights}> }
-  let refPpq = null;
-  let audioCtx = null;
-  let audioBuffersByQuality = new Map();
-  let audioQualities = [];
+  const applyGlobalTranspose = () => {
+    const desired = clampGlobalTranspose();
+    const delta = desired - currentGlobalTranspose;
+    if (delta === 0) return;
+    prog.value = transposeProgressionText(prog.value, delta);
+    currentGlobalTranspose = desired;
+    updateQualityMismatch();
+  };
 
-  function makeKeyVariants(name) {
-    const base = name.toLowerCase().trim().replace(/\.(mid|midi)$/,"");
-    const v = new Set();
-    v.add(base);
-    v.add(base.replace(/[\s_]/g,""));
-    v.add(base.replace(/[()]/g,""));
-    v.add(base.replace(/[()\s_]/g,""));
-    return [...v];
-  }
+  const insertAtCursor = (input, text) => {
+    const start = input.selectionStart || 0;
+    const end = input.selectionEnd || 0;
+    const value = input.value;
+    input.value = value.slice(0, start) + text + value.slice(end);
+    const pos = start + text.length;
+    input.selectionStart = input.selectionEnd = pos;
+    input.focus();
+  };
 
-  function indexReferenceFile(qualityKey, variant, midiObj) {
-    const ppq = midiObj.ppq;
-    if (refPpq === null) refPpq = ppq;
-    if (ppq !== refPpq) throw new Error(`PPQ inconsistente. Esperaba ${refPpq}, encontré ${ppq}.`);
+  const renderQualityChips = () => {
+    qualityChips.innerHTML = "";
+    if (!audioQualities.length) {
+      const s = document.createElement("span");
+      s.className = "mini";
+      s.textContent = "Carga una carpeta de audio para ver las calidades disponibles.";
+      qualityChips.appendChild(s);
+      return;
+    }
+    for (const q of audioQualities) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "pill";
+      chip.textContent = q;
+      chip.title = "Insertar calidad";
+      chip.addEventListener("click", () => insertAtCursor(prog, q));
+      qualityChips.appendChild(chip);
+    }
+  };
 
-    // Aceptamos múltiples pistas (p.ej. tempo + notas). Fusionamos todo en una sola lista de eventos de canal.
-    const tracks = midiObj.tracks || [];
-    if (!tracks.length) {
-      throw new Error(`"${qualityKey}": el MIDI no tiene pistas con eventos.`);
+  const updateQualityMismatch = () => {
+    if (!audioFolderLoaded || !audioQualities.length) {
+      qualityMismatchText.textContent = "Carga referencias de audio para validar calidades.";
+      qualityMismatchDot.classList.remove("ok");
+      qualityMismatchDot.classList.add("bad");
+      return;
     }
 
-    let events = [];
-    let trackLenTicks = 0;
-    const noteOnTicks = [];
-
-    for (const tr of tracks) {
-      const channelEvents = (tr.events || []).filter((e) => {
-        const status = (e.status ?? 0) & 0xF0;
-        return status >= 0x80 && status <= 0xE0; // NoteOn/Off, aftertouch, control change, program change, pitch bend
-      });
-
-      if (channelEvents.length) events.push(...channelEvents);
-
-      for (const ev of channelEvents) {
-        const status = (ev.status ?? 0) & 0xF0;
-        const vel = (ev.d2 ?? 0) & 0x7F;
-        if (status === 0x90 && vel > 0) noteOnTicks.push(ev.tick | 0);
-      }
-
-      const end = (typeof tr.endTick === "number" && tr.endTick > 0) ? (tr.endTick | 0) : null;
-      if (channelEvents.length && end != null) trackLenTicks = Math.max(trackLenTicks, end);
-    }
-
-    if (!events.length) {
-      throw new Error(`"${qualityKey}": no encontré eventos de canal en las pistas.`);
-    }
-
-    const tickPerEighth = ppq / 2;
-    if ((ppq % 2) !== 0) {
-      throw new Error(`"${qualityKey}": PPQ inválido (${ppq}). Debe ser par para poder contar corcheas.`);
-    }
-
-    const isSoloingVariant = variant === "x24" || variant === "x32";
-    const winEights = isSoloingVariant ? (variant === "x24" ? 8 : 32) : WINDOW_EIGHTS;
-    const minTicks = WINDOW_EIGHTS * tickPerEighth; // 16 corcheas = 2 compases
-
-    // Longitud real del archivo: no depende de Note On/Off; incluye silencios hasta End-Of-Track.
-    let maxTick = 0;
-    for (const e of events) if ((e.tick|0) > maxTick) maxTick = e.tick|0;
-
-    if (!trackLenTicks) trackLenTicks = maxTick;
-
-    // Dummy anchor si el archivo arranca en silencio: evita cortes y asegura conteo desde la primera corchea.
-    let minTick = Infinity;
-    for (const e of events) if ((e.tick|0) < minTick) minTick = (e.tick|0);
-    const anchors = [];
-    const pushDummyNote = (tick) => {
-      anchors.push({ tick, status: 0x90, d1: 0, d2: 0, dummy: true });
-      anchors.push({ tick, status: 0x80, d1: 0, d2: 0, dummy: true });
-    };
-    if (!Number.isFinite(minTick) || minTick > 0) pushDummyNote(0);
-
-    if (trackLenTicks < minTicks) {
-      throw new Error(`"${qualityKey}": demasiado corto. Debe tener al menos 16 corcheas (2 compases).`);
-    }
-
-    // El MIDI de referencia debe venir cuantizado a corcheas, aunque haya silencios.
-    const lenRemainder = trackLenTicks % tickPerEighth;
-    if (lenRemainder !== 0) {
-      // Algunos archivos (p.ej. Salsa) vienen con ligeros microajustes en el último evento
-      // que descuadran la cuantización por unos pocos ticks. Si la desviación es mínima,
-      // la ajustamos automáticamente para permitir la carga de la carpeta completa.
-      const tolerance = Math.min(24, Math.max(2, Math.floor(tickPerEighth * 0.1)));
-      const snapDown = lenRemainder;
-      const snapUp = tickPerEighth - lenRemainder;
-
-      if (snapDown <= tolerance || snapUp <= tolerance) {
-        const adjustedLen = snapDown <= snapUp ? (trackLenTicks - snapDown) : (trackLenTicks + snapUp);
-        trackLenTicks = adjustedLen;
-        events = events.map((e) => (e.tick > trackLenTicks ? { ...e, tick: trackLenTicks } : e));
+    try {
+      const parsed = parseProgression(prog.value, { maxChordsPerBar: 4 });
+      const qualities = new Set(parsed.segments.map((s) => s.quality));
+      const missing = [...qualities].filter((q) => !audioQualities.includes(q));
+      if (missing.length) {
+        qualityMismatchText.textContent = `Faltan referencias para: ${missing.join(", ")}`;
+        qualityMismatchDot.classList.remove("ok");
+        qualityMismatchDot.classList.add("bad");
       } else {
-        throw new Error(`"${qualityKey}": longitud no cuantizada a corcheas. Ajusta el final del archivo a una corchea exacta.`);
+        qualityMismatchText.textContent = "Todas las calidades están cubiertas por las referencias.";
+        qualityMismatchDot.classList.remove("bad");
+        qualityMismatchDot.classList.add("ok");
       }
+    } catch (err) {
+      qualityMismatchText.textContent = `Progresión inválida: ${String(err?.message || err)}`;
+      qualityMismatchDot.classList.remove("ok");
+      qualityMismatchDot.classList.add("bad");
     }
+  };
 
-    const totalEighths = trackLenTicks / tickPerEighth;
-    const totalBars = totalEighths / 8;
-
-    // Requisito: múltiplos de winEights corcheas por archivo de referencia.
-    if ((totalEighths % winEights) !== 0) {
-      throw new Error(`"${qualityKey}": longitud inválida. Debe ser múltiplo de ${winEights} corcheas; encontré ${totalEighths}.`);
-    }
-
-    const windowsPerFile = totalEighths / winEights;
-    const winTicks = winEights * tickPerEighth; // ventana en ticks
-    let windowAnchors = null;
-
-    // Dummy anchors en cada ventana para respetar la primera corchea aunque sea silencio.
-    for (let w = 0; w < windowsPerFile; w++) {
-      pushDummyNote(w * winTicks);
-    }
-
-    if (anchors.length) {
-      events = events.concat(anchors).sort((a,b)=> (a.tick - b.tick) || ((a.status&0xF0) - (b.status&0xF0)));
-    }
-
-    if (isSoloingVariant && window?.SoloingUtils?.prepareSoloingReference) {
-      const prepared = window.SoloingUtils.prepareSoloingReference({
-        ppq,
-        tickPerEighth,
-        winEights,
-        winTicks,
-        windowsPerFile,
-        events,
-        variant,
-        soloing: true,
-      });
-      if (prepared?.events?.length) events = prepared.events;
-      if (prepared?.soloingWindowAnchors?.length) windowAnchors = prepared.soloingWindowAnchors;
-    }
-
-    // Precomputo: evita seleccionar ventanas completamente silenciosas al azar.
-    // Guardamos, por ventana de 16 corcheas, el primer NoteOn (vel>0) relativo a la ventana.
-    // Si no hay notas en una ventana, queda Infinity.
-    noteOnTicks.sort((a, b) => a - b);
-
-    const firstNoteOnRel = new Array(windowsPerFile).fill(Infinity);
-    for (const t of noteOnTicks) {
-      const w = Math.floor(t / winTicks);
-      if (w >= 0 && w < windowsPerFile) {
-        const rel = t - (w * winTicks);
-        if (rel < firstNoteOnRel[w]) firstNoteOnRel[w] = rel;
-      }
-    }
-
-
-    const existing = refByQuality.get(qualityKey);
-    const variants = existing?.variants || new Map();
-    variants.set(variant, {
-      ppq,
-      tickPerEighth,
-      winEights,
-      winTicks,
-      barsPerFile: totalBars,
-      windowsPerFile,
-      firstNoteOnRel,
-      noteOnTicks,
-      events,
-      variant,
-      soloing: isSoloingVariant,
-      soloingWindowAnchors: windowAnchors,
-    });
-
-    refByQuality.set(qualityKey, { variants });
-  }
-
-  async function loadFolderViaPicker(fallbackId = "folderFallback") {
-    // Prefer File System Access API if available
-    if (window.showDirectoryPicker) {
-      const dir = await window.showDirectoryPicker();
-      const collect = async (handle, acc) => {
-        for await (const [, child] of handle.entries()) {
-          if (child.kind === "file") {
-            acc.push(await child.getFile());
-          } else if (child.kind === "directory") {
-            await collect(child, acc);
-          }
-        }
-      };
-
-      const files = [];
-      await collect(dir, files);
-      return { name: dir.name || "carpeta", files };
-    }
-
-    // Fallback: <input webkitdirectory>
-    return await new Promise((resolve, reject) => {
-      const input = el(fallbackId);
-      input.onchange = () => {
-        const list = [...input.files];
-        if (!list.length) reject(new Error("No se encontraron archivos en esa carpeta."));
-        else resolve({ name: "carpeta", files: list });
-      };
-      input.click();
-    });
-  }
-
-  function ensureAudioContext() {
+  const ensureAudioContext = () => {
     if (!audioCtx) {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) throw new Error("AudioContext no disponible en este navegador.");
@@ -1987,18 +802,50 @@ if (typeof globalThis !== "undefined") {
       }
     }
     return audioCtx;
-  }
+  };
 
-  function parseAudioFileName(fullName) {
+  const parseAudioFileName = (fullName) => {
     if (!fullName) return null;
     if (!/\.wav$/i.test(fullName)) return null;
     const base = fullName.replace(/\.[^.]+$/, "");
     const qualityKey = normalizeQuality(base);
     if (!qualityKey) return null;
     return qualityKey;
-  }
+  };
 
-  async function loadAudioFolder() {
+  const loadFolderViaPicker = async () => {
+    if (window.showDirectoryPicker) {
+      const dir = await window.showDirectoryPicker();
+      const collect = async (handle, acc) => {
+        for await (const [, child] of handle.entries()) {
+          if (child.kind === "file") {
+            acc.push(await child.getFile());
+          } else if (child.kind === "directory") {
+            await collect(child, acc);
+          }
+        }
+      };
+      const files = [];
+      await collect(dir, files);
+      return { name: dir.name || "carpeta", files };
+    }
+
+    return await new Promise((resolve, reject) => {
+      const input = el("audioFolderFallback");
+      input.onchange = () => {
+        const list = [...input.files];
+        if (!list.length) reject(new Error("No se encontraron archivos en esa carpeta."));
+        else resolve({ name: "carpeta", files: list });
+      };
+      input.click();
+    });
+  };
+
+  const updateReadyState = () => {
+    setReady(!!audioFolderLoaded, audioFolderLoaded ? "Listo" : "No listo");
+  };
+
+  const loadAudioFolder = async () => {
     clearLog();
     audioBuffersByQuality.clear();
     for (const url of audioUrlsByQuality.values()) {
@@ -2010,29 +857,23 @@ if (typeof globalThis !== "undefined") {
 
     audioFolderLoaded = false;
     audioFolderStatus.textContent = "Cargando…";
-    folderStatus.textContent = "Cargando…";
     updateReadyState();
 
     try {
       const ctx = ensureAudioContext();
-      const { name, files } = await loadFolderViaPicker("audioFolderFallback");
+      const { name, files } = await loadFolderViaPicker();
       const folderFiles = files;
-
       const statusLabel = `Carpeta (audio): ${name} — ${folderFiles.length} archivo(s).`;
       audioFolderStatus.textContent = statusLabel;
-      folderStatus.textContent = statusLabel;
 
       const skipped = [];
       const dups = [];
-      const found = [];
 
       for (const f of folderFiles) {
         const fullName = (f.name || "").trim();
         if (!fullName) { skipped.push("(sin nombre)"); continue; }
-
         const qualityKey = parseAudioFileName(fullName);
         if (!qualityKey) { skipped.push(fullName); continue; }
-
         if (audioBuffersByQuality.has(qualityKey)) {
           dups.push(qualityKey);
           const oldUrl = audioUrlsByQuality.get(qualityKey);
@@ -2045,20 +886,18 @@ if (typeof globalThis !== "undefined") {
           audioBuffersByQuality.set(qualityKey, audioBuf);
           const objectUrl = URL.createObjectURL(f);
           audioUrlsByQuality.set(qualityKey, objectUrl);
-          found.push(qualityKey);
         } catch (err) {
           skipped.push(fullName);
         }
       }
 
-      audioQualities = [...new Set(audioBuffersByQuality.keys())].sort((a,b)=>a.localeCompare(b, "en"));
-
+      audioQualities = [...new Set(audioBuffersByQuality.keys())].sort((a, b) => a.localeCompare(b, "en"));
       renderQualityChips();
+      updateQualityMismatch();
 
       if (!audioQualities.length) {
         log("No encontré WAVs válidos. Revisa nombres y extensiones.", "ERROR");
         audioFolderStatus.textContent = "Sin carpeta cargada.";
-        folderStatus.textContent = "Sin carpeta cargada.";
         audioFolderLoaded = false;
         updateReadyState();
         return;
@@ -2071,1651 +910,140 @@ if (typeof globalThis !== "undefined") {
         log(`Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
       }
 
+      const expectedSeconds = getBarsPerFile() * getBarSeconds();
       for (const [quality, buffer] of audioBuffersByQuality.entries()) {
-        const expectedSeconds = BARS_PER_AUDIO_FILE * (60 / REF_BPM_AUDIO) * 4;
         if (buffer.duration + 0.1 < expectedSeconds) {
           log(`"${quality}": duración corta (${buffer.duration.toFixed(2)}s). Esperaba ~${expectedSeconds.toFixed(2)}s.`, "WARN");
         }
       }
 
-      log(`Cargados ${audioQualities.length} WAV(s) para Bolero.`, "OK");
+      log(`Cargados ${audioQualities.length} WAV(s) de referencia.`, "OK");
       audioFolderLoaded = true;
-      folderStatus.textContent = audioFolderStatus.textContent;
       updateReadyState();
     } catch (err) {
       audioFolderLoaded = false;
       audioFolderStatus.textContent = "Error al cargar carpeta.";
-      folderStatus.textContent = "Error al cargar carpeta.";
       log(String(err?.message || err), "ERROR");
       updateReadyState();
     }
-  }
-
-  async function loadReferenceFolder() {
-    clearLog();
-    refByQuality.clear();
-    refPpq = null;
-    QUALITIES = [];
-    renderQualityChips();
-
-    ppqText.textContent = "—";
-    if (getPlaybackMode() === "midi") setReady(false, "Cargando…");
-    folderLoaded = false;
-    folderStatus.textContent = "Cargando…";
-
-    try{
-      const { name, files } = await loadFolderViaPicker();
-      const folderFiles = files;
-
-      folderStatus.textContent = `Carpeta: ${name} — ${folderFiles.length} archivo(s).`;
-
-      const skipped = [];
-      const dups = [];
-      const found = [];
-
-      for (const f of folderFiles) {
-        const fullName = (f.name || "").trim();
-        if (!fullName) { skipped.push("(sin nombre)"); continue; }
-
-        const parsed = parseReferenceFileName(fullName);
-        if (!parsed) { skipped.push(fullName); continue; }
-
-        const { qualityKey, variant } = parsed;
-
-        const existing = refByQuality.get(qualityKey);
-        if (existing?.variants?.has(variant)) { dups.push(`${qualityKey}_${variant}`); }
-
-        try{
-          const buf = await f.arrayBuffer();
-          const midi = parseMidi(buf);
-          indexReferenceFile(qualityKey, variant, midi);
-          found.push(`${qualityKey}_${variant}`);
-        } catch(err) {
-          skipped.push(fullName);
-          continue;
-        }
-      }
-
-      QUALITIES = [...new Set(refByQuality.keys())].sort((a,b)=>a.localeCompare(b, "en"));
-
-      renderQualityChips();
-
-      ppqText.textContent = (refPpq ?? "—");
-
-      if (!QUALITIES.length) {
-        log("No encontré calidades válidas. Revisa que los nombres de archivo no tengan espacios y que los archivos sean MIDI.", "ERROR");
-        updateReadyState();
-        return;
-      }
-
-      if (skipped.length) {
-        log(`Archivos ignorados (no MIDI / nombre inválido / con espacios / demasiado cortos / más de una pista): ${skipped.join(", ")}`, "WARN");
-      }
-      if (dups.length) {
-        log(`Duplicados: se usó el último archivo para: ${[...new Set(dups)].join(", ")}`, "WARN");
-      }
-
-      log(`Cargadas ${QUALITIES.length} calidad(es) desde la carpeta.`, "OK");
-      folderLoaded = true;
-      updateReadyState();
-    } catch(err){
-      updateReadyState();
-      folderStatus.textContent = "Error al cargar carpeta.";
-      QUALITIES = [];
-      renderQualityChips();
-      log(String(err?.message || err), "ERROR");
-    }
-  }
-
-  async function loadReferenceFolderByMode() {
-    if (getPlaybackMode() === "bolero") {
-      await loadAudioFolder();
-      return;
-    }
-
-    await loadReferenceFolder();
-  }
-
-  // -------------------------
-  // Generation (core)
-  // -------------------------
-    let generated = {
-      ppq: null,
-      events: [],     // channel events, abs ticks, include {tick, status, d1, d2, order}
-    lengthTicks: 0,
-    debug: {}
   };
 
-  function ensureQualityLoaded(q, variant) {
-    const entry = refByQuality.get(q);
-    if (!entry) throw new Error(`No tengo el MIDI de referencia para "${q}".`);
-    if (variant && !entry.variants?.has(variant)) {
-      throw new Error(`No tengo el MIDI de referencia para "${q}_${variant}".`);
-    }
-    return entry;
-  }
-
-  function getReferenceForSegment(seg) {
-    const entry = ensureQualityLoaded(seg.quality, seg.refVariant);
-    let variant = seg.refVariant;
-
-    if ((!variant || !entry?.variants?.has(variant)) && isSoloingMode()) {
-      variant = selectSoloingVariant(seg.quality);
-      if (variant) seg.refVariant = variant;
-    }
-
-    if (!variant || !entry?.variants?.has(variant)) {
-      throw new Error(`No tengo el MIDI de referencia para "${seg.quality}_${variant || '?'}".`);
-    }
-
-    const ref = entry?.variants?.get(variant);
-
-    if (salsa23?.checked && window?.SalsaUtils?.prepareSalsaReference) {
-      const prepared = window.SalsaUtils.prepareSalsaReference(ref);
-
-      if (prepared && prepared !== ref) {
-        entry?.variants?.set(variant, prepared);
-      }
-
-      return prepared;
-    }
-
-    return ref;
-  }
-
-  function channelEvent(tick, status, d1, d2, order=3) {
-    return { tick, status: status & 255, d1: d1 & 127, d2: (d2==null?0:(d2&127)), order };
-  }
-
-  function enforceChordsOnly(events) {
-    if (!events?.length) return events;
-
-    const noteOnByTick = new Map();
-    const sorted = events.map((e, idx) => ({ e, idx }))
-      .sort((a,b)=> (a.e.tick - b.e.tick) || ((a.e.order ?? 0) - (b.e.order ?? 0)));
-
-    for (const { e, idx } of sorted) {
-      const status = e.status & 0xFF;
-      const hi = status & 0xF0;
-      const vel = e.d2 ?? 0;
-      if (!(hi === 0x90 && vel > 0)) continue;
-      const key = e.tick;
-      if (!noteOnByTick.has(key)) noteOnByTick.set(key, []);
-      noteOnByTick.get(key).push(idx);
-    }
-
-    const toDrop = new Set();
-    for (const arr of noteOnByTick.values()) {
-      if (arr.length === 1) toDrop.add(arr[0]);
-    }
-
-    const active = new Map(); // "ch-note" -> stack of noteOn idx
-    const offsToDrop = new Set();
-    const keyOf = (ch, note) => ch + "-" + note;
-
-    for (const { e, idx } of sorted) {
-      const status = e.status & 0xFF;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const note = e.d1 & 0x7F;
-      const vel = e.d2 ?? 0;
-
-      if (hi === 0x90 && vel > 0) {
-        const k = keyOf(ch, note);
-        if (!active.has(k)) active.set(k, []);
-        active.get(k).push(idx);
-      } else if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
-        const k = keyOf(ch, note);
-        const stack = active.get(k);
-        if (stack?.length) {
-          const onIdx = stack.shift();
-          if (!stack.length) active.delete(k);
-          if (toDrop.has(onIdx)) offsToDrop.add(idx);
-        }
-      }
-    }
-
-    const remove = new Set([...toDrop, ...offsToDrop]);
-    if (!remove.size) return events;
-    return events.filter((_, idx) => !remove.has(idx));
-  }
-
-  function applySkip2Transform(events, mode) {
-    if (!mode || !events?.length) return events;
-    const shouldDouble = mode === "octavado";
-
-    const sorted = events.slice().sort((a,b)=> (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-    const toShift = new Set();
-    const byTickCh = new Map();
-
-    for (const e of sorted) {
-      const status = e.status & 255;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const vel = e.d2 ?? 0;
-      if (!(hi === 0x90 && vel > 0)) continue;
-      const key = `${e.tick}|${ch}`;
-      if (!byTickCh.has(key)) byTickCh.set(key, []);
-      byTickCh.get(key).push(e);
-    }
-
-    for (const group of byTickCh.values()) {
-      if (group.length < 3) continue;
-      const sortedGroup = group.slice().sort((a,b)=> (a.d1 ?? 0) - (b.d1 ?? 0));
-      const target = sortedGroup[1];
-      toShift.add(target);
-    }
-
-    const shiftedActive = new Map(); // ch-noteOriginal -> queue of { notes: [oct1, oct2], originId }
-    const extraEvents = [];
-    const keyOf = (ch, note) => ch + "-" + note;
-
-    for (const e of sorted) {
-      const status = e.status & 255;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const vel = e.d2 ?? 0;
-      const note = e.d1 ?? 0;
-      const baseOrder = (typeof e.order === "number") ? e.order : 3;
-
-      if (hi === 0x90 && vel > 0) {
-        if (toShift.has(e)) {
-          const newNote1 = Math.min(127, note + 12);
-          const newNote2 = shouldDouble ? Math.min(127, note + 24) : null;
-          const originId = e.originId ?? `${e.tick}|${ch}|${note}|${baseOrder|0}`;
-          e.originId = originId;
-          e.d1 = newNote1;
-
-          if (shouldDouble && newNote2 != null) {
-            const duplicate = { ...e, d1: newNote2, order: baseOrder + 0.1, originId };
-            extraEvents.push(duplicate);
-          }
-
-          const k = keyOf(ch, note);
-          if (!shiftedActive.has(k)) shiftedActive.set(k, []);
-          shiftedActive.get(k).push({ notes: [newNote1, newNote2], originId });
-        }
-      } else if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
-        const k = keyOf(ch, note);
-        const stack = shiftedActive.get(k);
-        if (stack?.length) {
-          const mapped = stack.shift();
-          const { notes, originId } = Array.isArray(mapped) ? { notes: mapped, originId: e.originId } : mapped;
-          const [oct1, oct2] = Array.isArray(notes) ? notes : [notes, null];
-          e.d1 = oct1;
-          if (originId) e.originId ??= originId;
-          if (oct2 != null) {
-            const off = { ...e, d1: oct2, order: baseOrder + 0.1, originId };
-            extraEvents.push(off);
-          }
-          if (!stack.length) shiftedActive.delete(k);
-        }
-      }
-    }
-
-    if (!extraEvents.length) return events;
-    return events.concat(extraEvents);
-  }
-
-  function applySpreadTransform(events) {
-    if (!events?.length) return events;
-
-    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-    const byTickCh = new Map();
-    const toShift = new Set();
-    const duplicates = [];
-
-    const clampNote = (n) => Math.max(0, Math.min(127, n));
-
-    for (const e of sorted) {
-      const status = e.status & 255;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const vel = e.d2 ?? 0;
-      if (!(hi === 0x90 && vel > 0)) continue;
-      const key = `${e.tick}|${ch}`;
-      if (!byTickCh.has(key)) byTickCh.set(key, []);
-      byTickCh.get(key).push(e);
-    }
-
-    for (const group of byTickCh.values()) {
-      if (!group.length) continue;
-      const ordered = group.slice().sort((a, b) => (a.d1 ?? 0) - (b.d1 ?? 0));
-      const top = ordered[ordered.length - 1];
-      duplicates.push({ src: top, note: clampNote((top.d1 ?? 0) + 12) });
-
-      if (ordered.length >= 2) {
-        const second = ordered[1];
-        toShift.add(second);
-        duplicates.push({ src: second, note: clampNote((second.d1 ?? 0) + 24) });
-      }
-    }
-
-    if (!toShift.size && !duplicates.length) return events;
-
-    const spreadActive = new Map(); // "ch-note" -> queue of {notes: number[], originId}
-    const keyOf = (ch, note) => `${ch}-${note}`;
-    const extraEvents = [];
-
-    for (const e of sorted) {
-      const status = e.status & 255;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const vel = e.d2 ?? 0;
-      const note = e.d1 ?? 0;
-      const isOn = hi === 0x90 && vel > 0;
-      const isOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-      const baseOrder = (typeof e.order === "number") ? e.order : 3;
-
-      if (!isOn && !isOff) continue;
-
-      if (isOn) {
-        const shiftUp = toShift.has(e) ? 12 : 0;
-        const baseNote = clampNote(note + shiftUp);
-        const originId = e.originId ?? `${e.tick}|${ch}|${note}|${baseOrder|0}`;
-        e.originId = originId;
-        e.d1 = baseNote;
-
-        const dupNotes = duplicates
-          .filter((d) => d.src === e)
-          .map((d) => d.note)
-          .filter((n) => typeof n === "number");
-
-        for (const [idx, dupNote] of dupNotes.entries()) {
-          const duplicateEv = { ...e, d1: dupNote, order: baseOrder + 0.1 + idx * 0.05, originId };
-          extraEvents.push(duplicateEv);
-        }
-
-        const key = keyOf(ch, note);
-        if (!spreadActive.has(key)) spreadActive.set(key, []);
-        spreadActive.get(key).push({ notes: [baseNote, ...dupNotes], originId });
-      } else if (isOff) {
-        const key = keyOf(ch, note);
-        const queue = spreadActive.get(key);
-        if (queue?.length) {
-          const { notes, originId } = queue.shift();
-          const [baseNote, ...dupNotes] = notes;
-          e.d1 = baseNote;
-          if (originId) e.originId ??= originId;
-          if (!queue.length) spreadActive.delete(key);
-
-          for (const [idx, dupNote] of dupNotes.entries()) {
-            const offEv = { ...channelEvent(e.tick, status, dupNote, 0, (baseOrder ?? 3) + 0.1 + idx * 0.05), originId };
-            extraEvents.push(offEv);
-          }
-        }
-      }
-    }
-
-    if (!extraEvents.length) return events;
-    return sorted.concat(extraEvents).sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-  }
-
-  function addPanicAtTick(out, tick, channelsSet, order=2) {
-    // Limpieza anti-artefactos: Reset All Controllers (121), Sustain Off (64), All Notes Off (123), All Sound Off (120)
-    for (const ch of channelsSet) {
-      out.push(channelEvent(tick, 0xB0 | ch, 121, 0, order));
-      out.push(channelEvent(tick, 0xB0 | ch, 64, 0, order));
-      out.push(channelEvent(tick, 0xB0 | ch, 123, 0, order));
-      out.push(channelEvent(tick, 0xB0 | ch, 120, 0, order));
-    }
-  }
-
-  function getSelectedSkipModes() {
-    const modes = [];
-    if (skipClosed?.checked) modes.push(null);
-    if (skip2Simple?.checked) modes.push("simple");
-    if (skip2Oct?.checked) modes.push("octavado");
-    if (skipSpread?.checked) modes.push("spread");
-    return modes;
-  }
-
-  function getEnabledAdvancedModes() {
-    const modes = [];
-    if (shells?.checked) modes.push("shells");
-    if (blockChords?.checked) modes.push("blockTop");
-    if (blockChordsFull?.checked) modes.push("blockFull");
-    if (skipClosed?.checked) modes.push("skipClosed");
-    if (skip2Simple?.checked) modes.push("skip2");
-    if (skip2Oct?.checked) modes.push("skip2Oct");
-    if (skipSpread?.checked) modes.push("spread");
-    return modes;
-  }
-
-  function applyManualSkipModes(events, segments, tickPerEighth, forcedModesBySeg=null) {
-    const modes = forcedModesBySeg ? [] : getSelectedSkipModes();
-    const hasModes = forcedModesBySeg ? Array.isArray(forcedModesBySeg) && forcedModesBySeg.length : modes.length;
-    if (!events?.length || !hasModes) return events;
-    if (!segments?.length || !Number.isFinite(tickPerEighth)) {
-      const mode = forcedModesBySeg ? forcedModesBySeg[0] : choice(modes);
-      return applySkipMode(events, mode);
-    }
-
-    const spans = segments.map((s) => ({
-      startTick: s.startEighth * tickPerEighth,
-      endTick: (s.startEighth + s.durEighth) * tickPerEighth,
-    }));
-
-    const findSegmentIndex = (tick) => {
-      for (let i = 0; i < spans.length; i++) {
-        const seg = spans[i];
-        if (tick >= seg.startTick && tick < seg.endTick) return i;
-      }
-      return -1;
-    };
-
-    const grouped = new Map();
-    const outside = [];
-
-    for (const e of events) {
-      const segIndex = findSegmentIndex(e.tick);
-      if (segIndex < 0) {
-        outside.push(e);
-        continue;
-      }
-      if (!grouped.has(segIndex)) grouped.set(segIndex, []);
-      grouped.get(segIndex).push(e);
-    }
-
-    const result = [];
-    const orderedSegIndexes = [...grouped.keys()].sort((a, b) => a - b);
-    for (const segIndex of orderedSegIndexes) {
-      const forced = forcedModesBySeg ? forcedModesBySeg[segIndex] : null;
-      const mode = forced ?? choice(modes);
-      const skipMode = (mode === "skipClosed") ? null
-        : (mode === "skip2") ? "simple"
-        : (mode === "skip2Oct") ? "octavado"
-        : (mode === "spread") ? "spread"
-        : (forcedModesBySeg ? null : mode);
-      const chunk = grouped.get(segIndex) || [];
-      if (!skipMode) {
-        result.push(...chunk);
-        continue;
-      }
-      const transformed = applySkipMode(chunk.slice(), skipMode);
-      result.push(...transformed);
-    }
-
-    result.push(...outside);
-    return result;
-  }
-
-  function applySkipMode(events, mode) {
-    if (mode === "spread") return applySpreadTransform(events);
-    if (mode === "simple" || mode === "octavado") return applySkip2Transform(events, mode);
-    return events;
-  }
-
-  function applyBlockChords(events, segments=null, tickPerEighth=null, modeResolver=null) {
-    const enableTop = !!blockChords?.checked;
-    const enableFull = !!blockChordsFull?.checked;
-    if (!enableTop && !enableFull && !modeResolver) return events;
-    if (!events?.length) return events;
-
-    const spans = (segments?.length && Number.isFinite(tickPerEighth)) ? segments.map((s) => ({
-      startTick: s.startEighth * tickPerEighth,
-      endTick: (s.startEighth + s.durEighth) * tickPerEighth,
-    })) : null;
-
-    const findSegmentIndex = (tick) => {
-      if (!spans) return -1;
-      for (let i = 0; i < spans.length; i++) {
-        const seg = spans[i];
-        if (tick >= seg.startTick && tick < seg.endTick) return i;
-      }
-      return -1;
-    };
-
-    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-    const byTickCh = new Map();
-    const clampNote = (n) => Math.max(0, Math.min(127, n));
-
-    for (const e of sorted) {
-      const status = e.status & 255;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const vel = e.d2 ?? 0;
-      if (!(hi === 0x90 && vel > 0)) continue;
-      const segIndex = findSegmentIndex(e.tick);
-      const { top: segTop, full: segFull } = modeResolver?.(segIndex) ?? { top: enableTop, full: enableFull };
-      if (!segTop && !segFull) continue;
-      const key = `${e.tick}|${ch}`;
-      if (!byTickCh.has(key)) byTickCh.set(key, []);
-      byTickCh.get(key).push({ ev: e, segTop, segFull });
-    }
-
-    const duplicates = [];
-    for (const group of byTickCh.values()) {
-      if (group.length < 2) continue;
-      const ordered = group.slice().sort((a, b) => (a.ev.d1 ?? 0) - (b.ev.d1 ?? 0));
-      const topOn = ordered.find((g) => g.segTop);
-      const fullOn = ordered.some((g) => g.segFull);
-
-      if (topOn) {
-        const top = ordered[ordered.length - 1].ev;
-        duplicates.push({ src: top, note: clampNote((top.d1 ?? 0) - 12) });
-      }
-      if (fullOn) {
-        for (const { ev: src } of ordered.filter((g) => g.segFull)) {
-          duplicates.push({ src, note: clampNote((src.d1 ?? 0) + 12) });
-        }
-      }
-    }
-
-    if (!duplicates.length) return events;
-
-    const extraEvents = [];
-    const active = new Map(); // key: "ch-note" -> queue of { notes: number[], originId }
-    const keyOf = (ch, note) => `${ch}-${note}`;
-
-    for (const e of sorted) {
-      const status = e.status & 255;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const vel = e.d2 ?? 0;
-      const note = e.d1 ?? 0;
-      const isOn = hi === 0x90 && vel > 0;
-      const isOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-      if (!isOn && !isOff) continue;
-
-      const baseOrder = (typeof e.order === "number") ? e.order : 3;
-      const key = keyOf(ch, note);
-
-      if (isOn) {
-        const dupNotes = duplicates
-          .filter((d) => d.src === e)
-          .map((d) => d.note)
-          .filter((n) => typeof n === "number");
-
-        if (dupNotes.length) {
-          const originId = e.originId ?? `${e.tick}|${ch}|${note}|${baseOrder|0}`;
-          e.originId = originId;
-          if (!active.has(key)) active.set(key, []);
-          active.get(key).push({ notes: dupNotes, originId });
-
-          for (const [idx, dupNote] of dupNotes.entries()) {
-            const duplicateEv = { ...e, d1: dupNote, order: baseOrder + 0.1 + idx * 0.05, originId };
-            extraEvents.push(duplicateEv);
-          }
-        }
-      } else if (isOff) {
-        const queue = active.get(key);
-        if (queue?.length) {
-          const { notes, originId } = queue.shift();
-          if (!queue.length) active.delete(key);
-
-          for (const [idx, dupNote] of (notes ?? []).entries()) {
-            const offEv = { ...e, d1: dupNote, order: baseOrder + 0.1 + idx * 0.05, originId: originId ?? e.originId };
-            extraEvents.push(offEv);
-          }
-        }
-      }
-    }
-
-    if (!extraEvents.length) return events;
-    return sorted.concat(extraEvents).sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-  }
-
-  function isSoloingMode() {
-    return !!(soloing?.checked || salsa23?.checked);
-  }
-
-  function applySoloingMode(events, endTick, ppqVal) {
-    if (!isSoloingMode()) return events;
-    if (!events?.length) return events;
-
-    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-    const result = [];
-    const active = new Map();
-
-    for (const e of sorted) {
-      const status = e.status & 0xF0;
-      const ch = e.status & 0x0F;
-      const note = e.d1 ?? 0;
-      const vel = e.d2 ?? 0;
-      const isOn = status === 0x90 && vel > 0;
-      const isOff = status === 0x80 || (status === 0x90 && vel === 0);
-
-      result.push(e);
-
-      if (!isOn && !isOff) continue;
-
-      const key = `${ch}-${note}`;
-      if (isOn) active.set(key, { ch, note });
-      else if (isOff) active.delete(key);
-    }
-
-    if (active.size) {
-      const fallbackTick = sorted[sorted.length - 1]?.tick ?? 0;
-      const computedOffTick = fallbackTick + (ppqVal ?? 0);
-      const offTick = typeof endTick === "number" ? Math.min(endTick, computedOffTick) : computedOffTick;
-      for (const { ch, note } of active.values()) {
-        result.push(channelEvent(offTick, 0x80 | ch, note, 0, 3));
-      }
-    }
-
-    return result.sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-  }
-
-  function insertNoteOffsForLongNotes(events, maxLenTicks, totalLength) {
-    if (!events?.length) return events;
-    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-    const active = new Map();
-    const extra = [];
-
-    for (const e of sorted) {
-      const status = e.status & 0xF0;
-      const ch = e.status & 0x0F;
-      const note = e.d1 ?? 0;
-      const vel = e.d2 ?? 0;
-      const isOn = status === 0x90 && vel > 0;
-      const isOff = status === 0x80 || (status === 0x90 && vel === 0);
-      if (!isOn && !isOff) continue;
-
-      const key = `${ch}-${note}`;
-
-      if (isOn) {
-        active.set(key, e.tick);
-      } else {
-        const start = active.get(key);
-        if (start != null && (e.tick - start) > maxLenTicks) {
-          const forcedTick = start + maxLenTicks;
-          if (forcedTick < e.tick) extra.push(channelEvent(forcedTick, 0x80 | ch, note, 0, (e.order ?? 3) - 0.1));
-        }
-        active.delete(key);
-      }
-    }
-
-    const endTick = typeof totalLength === "number" ? totalLength : (sorted[sorted.length - 1]?.tick ?? 0);
-    for (const [key, start] of active.entries()) {
-      const [chStr, noteStr] = key.split("-");
-      const ch = parseInt(chStr, 10) || 0;
-      const note = parseInt(noteStr, 10) || 0;
-      const forcedTick = start + maxLenTicks;
-      extra.push(channelEvent(Math.min(endTick, forcedTick), 0x80 | ch, note, 0, 3));
-    }
-
-    if (!extra.length) return sorted;
-    return sorted.concat(extra).sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-  }
-
-  function sanitizeChannelEvents(events) {
-    if (!events?.length) return [];
-
-    const evs = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-    const active = new Map();
-    const cleaned = [];
-    let lastTick = 0;
-
-    const keyOf = (ch, note) => `${ch}-${note}`;
-    const pushOff = (tick, ch, note, order) => cleaned.push({ tick, status: (0x80 | ch), d1: note, d2: 0, order });
-
-    for (const e of evs) {
-      const status = e.status & 0xFF;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const d1 = e.d1 & 0x7F;
-      const d2 = (e.d2 ?? 0) & 0x7F;
-
-      if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
-
-      if (hi === 0xB0 && (d1 === 120 || d1 === 123 || d1 === 121)) {
-        active.clear();
-        cleaned.push({ ...e, d1, d2 });
-        continue;
-      }
-
-      if (hi === 0x90 && d2 > 0) {
-        const k = keyOf(ch, d1);
-        const prevCount = active.get(k) || 0;
-        if (prevCount > 0) {
-          const offOrder = (typeof e.order === "number") ? Math.max(0, e.order - 1) : 2;
-          for (let i = 0; i < prevCount; i++) pushOff(e.tick, ch, d1, offOrder);
-        }
-        active.set(k, prevCount + 1);
-        cleaned.push({ ...e, d1, d2 });
-        continue;
-      }
-
-      if (hi === 0x80 || (hi === 0x90 && d2 === 0)) {
-        const k = keyOf(ch, d1);
-        const prevCount = active.get(k) || 0;
-        if (prevCount > 0) {
-          active.set(k, prevCount - 1);
-        }
-        cleaned.push({ ...e, d1, d2 });
-        continue;
-      }
-
-      cleaned.push({ ...e, d1, d2 });
-    }
-
-    if (active.size) {
-      const cleanupTick = lastTick + 1;
-      for (const [key, count] of active.entries()) {
-        if (count <= 0) continue;
-        const [chStr, noteStr] = key.split("-");
-        const ch = parseInt(chStr, 10);
-        const note = parseInt(noteStr, 10);
-        const safeCount = Math.max(1, count);
-        for (let i = 0; i < safeCount; i++) pushOff(cleanupTick, ch, note, 5);
-      }
-    }
-
-    return cleaned;
-  }
-
-  function normalizeExportEvents(events) {
-    if (!events?.length) return [];
-
-    const MIN_EXPORT_NOTE = 41; // F2
-
-    const sanitized = sanitizeChannelEvents(events);
-
-    const active = new Map();
-
-    const filtered = sanitized
-      .filter((e) => {
-        const hi = e.status & 0xF0;
-        const note = e.d1 & 0x7F;
-        const vel = (e.d2 ?? 0) & 0x7F;
-        const isNoteOn = hi === 0x90 && vel > 0;
-        const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-
-        if (!isNoteOn && !isNoteOff) return false;
-
-        // Anchors/dummies: nota 0 con velocidad mínima insertada para mantener la
-        // cuadrícula de corcheas en los archivos de referencia. No deben exportarse.
-        const isAnchor = note === 0; // eliminar siempre la nota grave dummy
-        if (isAnchor) return false;
-
-        if (note < MIN_EXPORT_NOTE) return false;
-
-        const key = `${e.status & 0x0F}-${note}`;
-        if (isNoteOn) {
-          active.set(key, (active.get(key) ?? 0) + 1);
-          return true;
-        }
-
-        const activeCount = active.get(key) ?? 0;
-        if (activeCount <= 0) return false; // dummy/artefacto sin NoteOn previo
-
-        if (activeCount === 1) active.delete(key);
-        else active.set(key, activeCount - 1);
-        return true;
-      })
-      .map((e) => {
-        const hi = e.status & 0xF0;
-        const note = e.d1 & 0x7F;
-        const vel = (e.d2 ?? 0) & 0x7F;
-        const isNoteOff = hi === 0x80 || (hi === 0x90 && vel === 0);
-
-        return {
-          type: "midi",
-          absTick: e.tick | 0,
-          eType: isNoteOff ? 0x8 : 0x9,
-          ch: 0, // fuerza TODO a un solo canal para evitar pistas extra al importar
-          d1: note,
-          d2: isNoteOff ? 0 : vel,
-        };
-      });
-
-    return filtered.sort((a, b) => (a.absTick - b.absTick) || (a.d1 - b.d1));
-  }
-
-  function removeNotesOutsideRange(events, minLenTicks, maxLenTicks, totalLength) {
-    if (!events?.length) return events;
-    const sorted = events.slice().sort((a, b) => (a.tick - b.tick) || ((a.order ?? 0) - (b.order ?? 0)));
-    const active = new Map();
-    const toDrop = new Set();
-    let lastTick = 0;
-
-    const keyOf = (ch, note) => `${ch}-${note}`;
-    const mark = (ev) => { if (ev) toDrop.add(ev); };
-
-    for (const e of sorted) {
-      const status = e.status & 0xF0;
-      const ch = e.status & 0x0F;
-      const note = e.d1 ?? 0;
-      const vel = e.d2 ?? 0;
-      const isOn = status === 0x90 && vel > 0;
-      const isOff = status === 0x80 || (status === 0x90 && vel === 0);
-
-      if (typeof e.tick === "number") lastTick = Math.max(lastTick, e.tick);
-
-      if (!isOn && !isOff) continue;
-
-      const key = keyOf(ch, note);
-
-      if (isOn) {
-        active.set(key, e);
-        continue;
-      }
-
-      const startEv = active.get(key);
-      if (startEv) {
-        const dur = e.tick - startEv.tick;
-        if (dur > maxLenTicks || dur < minLenTicks) {
-          mark(startEv);
-          mark(e);
-        }
-        active.delete(key);
-      }
-    }
-
-    const finalTick = typeof totalLength === "number" ? totalLength : lastTick;
-    for (const startEv of active.values()) {
-      const dur = finalTick - startEv.tick;
-      if (dur > maxLenTicks || dur < minLenTicks) mark(startEv);
-    }
-
-    if (!toDrop.size) return events;
-    return events.filter((ev) => !toDrop.has(ev));
-  }
-
-  function applyProgressiveSkips(events, segments, tickPerEighth) {
-    if (!progressiveSkips?.checked) return events;
-    if (!events?.length || !segments?.length) return events;
-
-    const spans = segments.map((s) => ({
-      startTick: s.startEighth * tickPerEighth,
-      endTick: (s.startEighth + s.durEighth) * tickPerEighth,
-    }));
-
-    const findSegmentIndex = (tick) => {
-      for (let i = 0; i < spans.length; i++) {
-        const seg = spans[i];
-        if (tick >= seg.startTick && tick < seg.endTick) return i;
-      }
-      return -1;
-    };
-
-    const grouped = new Map();
-    const outside = [];
-
-    for (const e of events) {
-      const segIndex = findSegmentIndex(e.tick);
-      if (segIndex < 0) {
-        outside.push(e);
-        continue;
-      }
-      if (!grouped.has(segIndex)) grouped.set(segIndex, []);
-      grouped.get(segIndex).push(e);
-    }
-
-    const result = [];
-    const lastIndex = spans.length - 1;
-
-    const modeForSeg = (segIndex) => {
-      if (lastIndex <= 0) return null;
-      const ratio = segIndex / lastIndex;
-      if (ratio < 0.25) return null; // cerrado
-      if (ratio < 0.5) return randUnit() < 0.7 ? "simple" : null;
-      if (ratio < 0.75) return randUnit() < 0.5 ? "simple" : "octavado";
-      return "spread";
-    };
-
-    const orderedSegIndexes = [...grouped.keys()].sort((a, b) => a - b);
-    for (const segIndex of orderedSegIndexes) {
-      const mode = modeForSeg(segIndex);
-      const chunk = grouped.get(segIndex) || [];
-      if (!mode) {
-        result.push(...chunk);
-        continue;
-      }
-      const transformed = applySkipMode(chunk.slice(), mode);
-      result.push(...transformed);
-    }
-
-    result.push(...outside);
-    return result;
-  }
-
-  function applySkipsAfterDensity(events, segments, tickPerEighth, forcedModes=null) {
-    if (!events?.length) return events;
-    if (progressiveSkips?.checked) return applyProgressiveSkips(events, segments, tickPerEighth);
-
-    return applyManualSkipModes(events, segments, tickPerEighth, forcedModes);
-  }
-
-  function applyShells(events, segments, tickPerEighth, densityBySegment=null, applySegPredicate=null) {
-    if (!shells?.checked) return events;
-    if (!events?.length) return events;
-
-    const hasSegments = Array.isArray(segments) && Number.isFinite(tickPerEighth);
-    const spans = hasSegments ? segments.map((s) => ({
-      startTick: s.startEighth * tickPerEighth,
-      endTick: (s.startEighth + s.durEighth) * tickPerEighth,
-    })) : [];
-
-    const clampDensity = (v) => Math.max(0, Math.min(1, v));
-    const hasProfile = Array.isArray(densityBySegment) && densityBySegment.length === segments?.length;
-    const profile = hasProfile ? densityBySegment.map(clampDensity) : null;
-    const minProfile = profile ? Math.min(...profile) : null;
-
-    const findSegmentIndex = (tick) => {
-      if (!hasSegments) return -1;
-      for (let i = 0; i < spans.length; i++) {
-        const seg = spans[i];
-        if (tick >= seg.startTick && tick < seg.endTick) return i;
-      }
-      return -1;
-    };
-
-    const shouldApplyForSeg = (segIndex) => {
-      if (applySegPredicate) return applySegPredicate(segIndex);
-      if (profile && segIndex >= 0) {
-        if (minProfile == null || minProfile >= 0.999) return false;
-        return profile[segIndex] <= minProfile;
-      }
-      if (profile) return false;
-      return true;
-    };
-
-    const sorted = events.map((e, idx) => ({ e, idx, segIndex: findSegmentIndex(e.tick) }))
-      .sort((a, b) => (a.e.tick - b.e.tick) || ((a.e.order ?? 0) - (b.e.order ?? 0)));
-
-    const noteOnByTick = new Map(); // key: `${segIndex}|${tick}` -> [{idx, note}]
-
-    for (const { e, idx, segIndex } of sorted) {
-      const status = e.status & 0xF0;
-      const vel = e.d2 ?? 0;
-      if (!(status === 0x90 && vel > 0)) continue;
-      if (!shouldApplyForSeg(segIndex)) continue;
-
-      const key = `${segIndex}|${e.tick}`;
-      if (!noteOnByTick.has(key)) noteOnByTick.set(key, []);
-      noteOnByTick.get(key).push({ idx, note: e.d1 ?? 0 });
-    }
-
-    const toDrop = new Set();
-    for (const arr of noteOnByTick.values()) {
-      if (arr.length < 2) continue;
-      const ordered = arr.slice().sort((a, b) => (a.note - b.note) || (a.idx - b.idx));
-      toDrop.add(ordered[1].idx);
-    }
-
-    if (!toDrop.size) return events;
-
-    const active = new Map(); // key: "ch-note" -> stack of idx
-    const keyOf = (ch, note) => `${ch}-${note}`;
-
-    for (const { e, idx } of sorted) {
-      const status = e.status & 0xF0;
-      const ch = e.status & 0x0F;
-      const note = e.d1 ?? 0;
-      const vel = e.d2 ?? 0;
-      const isOn = status === 0x90 && vel > 0;
-      const isOff = status === 0x80 || (status === 0x90 && vel === 0);
-
-      if (!isOn && !isOff) continue;
-
-      const key = keyOf(ch, note);
-
-      if (isOn) {
-        if (!active.has(key)) active.set(key, []);
-        active.get(key).push(idx);
-      } else if (isOff) {
-        const stack = active.get(key);
-        if (stack?.length) {
-          const onIdx = stack.shift();
-          if (!stack.length) active.delete(key);
-          if (toDrop.has(onIdx)) toDrop.add(idx);
-        }
-      }
-    }
-
-    return events.filter((_, idx) => !toDrop.has(idx));
-  }
-
-  function getDensityFactor() {
-    let v = parseInt(density.value, 10);
-    if (!Number.isFinite(v)) v = 100;
-    v = Math.max(0, Math.min(100, v));
-    density.value = String(v);
-    return v / 100;
-  }
-
-  function getProgressiveDensityProfile(segments) {
-    if (!densityProgressive.checked || !segments?.length) return null;
-    if (segments.length === 1) return [1];
-
-    const last = segments.length - 1;
-    return segments.map((_, idx) => {
-      const ratio = idx / last;
-      return Math.max(0.2, Math.min(1, 0.2 + ratio * 0.8));
-    });
-  }
-
-  function applyDensityFilter(events, segments, tickPerEighth, densityFactor, densityBySegment=null) {
-    if (!events?.length) return events;
-    if (!segments?.length) return events;
-
-    const clampDensity = (v) => Math.max(0, Math.min(1, v));
-    const hasProfile = Array.isArray(densityBySegment) && densityBySegment.length === segments.length;
-    const minDensity = hasProfile ? Math.min(...densityBySegment.map(clampDensity)) : clampDensity(densityFactor);
-    if (minDensity >= 0.999) return events;
-
-    const removal = new Set();
-
-    const segSpans = segments.map(s => ({
-      startTick: s.startEighth * tickPerEighth,
-      endTick: (s.startEighth + s.durEighth) * tickPerEighth
-    }));
-
-    const findSegmentIndex = (tick) => {
-      for (let i=0; i<segSpans.length; i++) {
-        const seg = segSpans[i];
-        if (tick >= seg.startTick && tick < seg.endTick) return i;
-      }
-      return -1;
-    };
-
-    const getDensityForSeg = (segIndex) => {
-      if (hasProfile && segIndex >= 0) return clampDensity(densityBySegment[segIndex]);
-      return clampDensity(densityFactor);
-    };
-    const removalStrengthForSeg = (segIndex) => 1 - getDensityForSeg(segIndex);
-
-    const sortedIdx = events
-      .map((_,i)=>i)
-      .sort((a,b)=> (events[a].tick - events[b].tick) || ((events[a].order ?? 0) - (events[b].order ?? 0)));
-
-    const active = new Map();
-    const notePairs = [];
-    for (const idx of sortedIdx) {
-      const e = events[idx];
-      const status = e.status & 255;
-      const hi = status & 0xF0;
-      const ch = status & 0x0F;
-      const vel = e.d2 ?? 0;
-
-      if (hi === 0x90 && vel > 0) {
-        const key = ch + "-" + (e.d1 ?? 0);
-        if (!active.has(key)) active.set(key, []);
-        active.get(key).push({ idx, tick: e.tick });
-      } else if (hi === 0x80 || (hi === 0x90 && vel === 0)) {
-        const key = ch + "-" + (e.d1 ?? 0);
-        const stack = active.get(key);
-        if (stack && stack.length) {
-          const on = stack.pop();
-          const segIndex = findSegmentIndex(on.tick);
-          notePairs.push({
-            onIdx: on.idx,
-            offIdx: idx,
-            onTick: on.tick,
-            offTick: e.tick,
-            dur: e.tick - on.tick,
-            ch,
-            note: e.d1 ?? 0,
-            segIndex
-          });
-        }
-      }
-    }
-
-    const eighthTol = tickPerEighth * 0.2;
-    const sortedPairs = notePairs.slice().sort((a,b)=> a.onTick - b.onTick);
-    for (let i=0; i<sortedPairs.length; i++) {
-      const p = sortedPairs[i];
-      if (Math.abs(p.dur - tickPerEighth) > eighthTol) continue;
-      const prev = sortedPairs[i-1];
-      const next = sortedPairs[i+1];
-      const hasPrev = prev && Math.abs(p.onTick - prev.onTick) <= tickPerEighth * 1.25 && Math.abs(prev.dur - tickPerEighth) <= eighthTol;
-      const hasNext = next && Math.abs(next.onTick - p.onTick) <= tickPerEighth * 1.25 && Math.abs(next.dur - tickPerEighth) <= eighthTol;
-      const removalStrength = removalStrengthForSeg(p.segIndex);
-      if (hasPrev && hasNext && removalStrength > 0 && randUnit() < removalStrength) {
-        if (p.onIdx != null) removal.add(p.onIdx);
-        if (p.offIdx != null) removal.add(p.offIdx);
-      }
-    }
-
-    const groupsBySeg = new Map();
-    const groupList = [];
-    const byTick = new Map();
-    for (const p of notePairs) {
-      const arr = byTick.get(p.onTick) || [];
-      arr.push(p);
-      byTick.set(p.onTick, arr);
-    }
-
-    for (const [tick, arr] of byTick.entries()) {
-      const segIndex = findSegmentIndex(tick);
-      if (segIndex < 0) continue;
-      if (arr.length >= 3) {
-        const g = { tick, segIndex, pairs: arr.slice() };
-        groupList.push(g);
-        if (!groupsBySeg.has(segIndex)) groupsBySeg.set(segIndex, []);
-        groupsBySeg.get(segIndex).push(g);
-      }
-    }
-
-    for (const arr of groupsBySeg.values()) arr.sort((a,b)=> a.tick - b.tick);
-
-    const chordRemovalProbForSeg = (segIndex) => Math.max(0, removalStrengthForSeg(segIndex) - 0.2);
-    for (const g of groupList) {
-      const segGroups = groupsBySeg.get(g.segIndex) || [];
-      const mustKeep = segGroups.length <= 1;
-      const chordRemovalProb = chordRemovalProbForSeg(g.segIndex);
-      if (!mustKeep && chordRemovalProb > 0 && randUnit() < chordRemovalProb) {
-        for (const p of g.pairs) {
-          if (p.onIdx != null) removal.add(p.onIdx);
-          if (p.offIdx != null) removal.add(p.offIdx);
-        }
-        g.removed = true;
-      }
-    }
-
-    const voiceRemovalThreshold = 0.55;
-    for (const g of groupList) {
-      if (g.removed) continue;
-      const removalStrength = removalStrengthForSeg(g.segIndex);
-      if (removalStrength > voiceRemovalThreshold) {
-        const voiceProb = Math.min(1, (removalStrength - voiceRemovalThreshold) / (1 - voiceRemovalThreshold));
-        const survivors = g.pairs.filter(p => !removal.has(p.onIdx));
-        if (survivors.length <= 3) continue; // mantener al menos triada
-
-        if (randUnit() < voiceProb) {
-          const ordered = survivors.slice().sort((a,b)=> a.note - b.note);
-          const target = randUnit() < 0.5 ? ordered[0] : ordered[ordered.length - 1];
-          if (survivors.length - 1 >= 3) {
-            if (target.onIdx != null) removal.add(target.onIdx);
-            if (target.offIdx != null) removal.add(target.offIdx);
-          }
-        }
-      }
-    }
-
-    for (const [segIdx, groups] of groupsBySeg.entries()) {
-      let hasChord = false;
-      for (const g of groups) {
-        const survivors = g.pairs.filter(p => !removal.has(p.onIdx));
-        if (survivors.length >= 3) { hasChord = true; break; }
-      }
-      if (!hasChord && groups.length) {
-        const g = groups[0];
-        for (const p of g.pairs) {
-          removal.delete(p.onIdx);
-          removal.delete(p.offIdx);
-        }
-      }
-    }
-
-    return events.filter((_, idx) => !removal.has(idx));
-  }
-
-  function generateMidiFromProgression(text) {
-    clearLog();
-
-    const { segments: baseSegments, totalEighth: baseTotalEighth } = parseProgression(text, { syncopate: !isSoloingMode() });
-    const repeatTimes = getRepeatTimes();
-    const repeated = repeatSegments(baseSegments, baseTotalEighth, repeatTimes);
-    const { segments, totalEighth } = applySalsaWindowAnticipation(repeated.segments, repeated.totalEighth);
-    if (refPpq == null) throw new Error("Primero carga la carpeta de referencias.");
-    const ppq = refPpq;
-    const tickPerEighth = ppq / 2;
-    const blockWindowSeedByWin = new Map();
-    const blockSeedsFor = (winEights) => {
-      if (!blockWindowSeedByWin.has(winEights)) {
-        const blocks = Math.ceil(totalEighth / winEights);
-        blockWindowSeedByWin.set(winEights, Array.from({ length: blocks }, () => randInt(0x100000000)));
-      }
-      return blockWindowSeedByWin.get(winEights);
-    };
-    const out = [];
-    let maxTick = 0;
-
-    const usingSoloing = isSoloingMode();
-    const appliedTransposeBySegment = [];
-    let prevSoloingWindowLastNote = null;
-
-    // generate segment by segment
-    for (const seg of segments) {
-      const ref = getReferenceForSegment(seg);
-
-      const winEights = ref.winEights ?? WINDOW_EIGHTS;
-      const startTickOut = seg.startEighth * tickPerEighth;
-      const durTicks = seg.durEighth * tickPerEighth;
-      const endTickOut = startTickOut + durTicks;
-
-      let windowOffsetEighths;
-      let windowOffsetTicks;
-      let remainingWindowTicks;
-      let effectiveSpan;
-      let windowBaseEighth;
-      let srcWindow;
-
-      const block = Math.floor(seg.startEighth / winEights);
-
-      // Selección de ventana:
-      // - Si el archivo es EXACTAMENTE winEights corcheas (windowsPerFile===1), NO hay ventanas aleatorias.
-      // - Si el archivo tiene más, se elige una ventana por bloque de winEights corcheas (o al azar en soloing x24/x32).
-      //   PERO: evitamos ventanas silenciosas (para que ningún acorde quede sin notas).
-      if (usingSoloing && ref.variant === "x32") {
-        const { windowStartEighth, windowIndex, startEighthForWindow } = selectSoloingX32Window(ref, seg, seg.quality);
-        windowBaseEighth = windowStartEighth;
-        windowOffsetEighths = (startEighthForWindow ?? seg.startEighth) - windowBaseEighth;
-        srcWindow = windowIndex;
-      } else if (ref.windowsPerFile === 1) {
-        srcWindow = 0;
-        windowOffsetEighths = (usingSoloing && ref.variant === "x24") ? 0 : (seg.startEighth % winEights);
-        windowBaseEighth = 0;
-      } else if (usingSoloing && ref.variant === "x24") {
-        windowOffsetEighths = 0;
-        const attempts = ref.windowsPerFile;
-        for (let i = 0; i < attempts; i++) {
-          const cand = randInt(ref.windowsPerFile);
-          windowOffsetTicks = 0;
-          remainingWindowTicks = ref.winTicks;
-          effectiveSpan = Math.min(durTicks, remainingWindowTicks);
-          const noteHorizon = ref.firstNoteOnRel ? ref.firstNoteOnRel[cand] : Infinity;
-          if (noteHorizon < (windowOffsetTicks + effectiveSpan)) { srcWindow = cand; break; }
-        }
-        if (srcWindow == null) srcWindow = randInt(ref.windowsPerFile);
-        windowBaseEighth = srcWindow * winEights;
-      } else {
-        windowOffsetEighths = seg.startEighth % winEights;
-        windowOffsetTicks = windowOffsetEighths * tickPerEighth;
-        remainingWindowTicks = ref.winTicks - windowOffsetTicks;
-        effectiveSpan = Math.min(durTicks, remainingWindowTicks);
-
-        const seeds = blockSeedsFor(winEights);
-        const cand = ((seeds?.[block] ?? randInt(0x100000000)) % ref.windowsPerFile);
-        srcWindow = cand;
-
-        // Si la ventana candidata no tiene ningún NoteOn antes de que termine el acorde, buscamos otra.
-        const noteHorizon = ref.firstNoteOnRel ? ref.firstNoteOnRel[srcWindow] : Infinity;
-        const withinSpan = noteHorizon < (windowOffsetTicks + effectiveSpan);
-        if (!withinSpan) {
-          for (let off = 1; off <= ref.windowsPerFile; off++) {
-            const w = (cand + off) % ref.windowsPerFile;
-            const altHorizon = ref.firstNoteOnRel ? ref.firstNoteOnRel[w] : Infinity;
-            if (altHorizon < (windowOffsetTicks + effectiveSpan)) { srcWindow = w; break; }
-          }
-        }
-        windowBaseEighth = srcWindow * winEights;
-      }
-
-      if (windowOffsetTicks == null) {
-        windowOffsetTicks = windowOffsetEighths * tickPerEighth;
-        remainingWindowTicks = ref.winTicks - windowOffsetTicks;
-        effectiveSpan = Math.min(durTicks, remainingWindowTicks);
-      }
-
-      const windowAnchors = ref.soloingWindowAnchors;
-      const windowAnchor = (Array.isArray(windowAnchors) && srcWindow != null) ? windowAnchors[srcWindow] : null;
-      const firstAnchorNote = windowAnchor?.first;
-      const lastAnchorNote = windowAnchor?.last;
-
-      const segmentTranspose = usingSoloing
-        ? adjustSoloingWindowTranspose(prevSoloingWindowLastNote, firstAnchorNote, seg.transpose)
-        : seg.transpose;
-      appliedTransposeBySegment.push(segmentTranspose);
-
-      // Regla: al cambiar de acorde, se debe usar el material desde el INICIO de la ventana elegida.
-      // Manteniendo el offset real dentro de la ventana según la posición de la progresión.
-      const srcStart = (windowBaseEighth * tickPerEighth) + windowOffsetTicks;
-      const srcEnd = srcStart + durTicks;
-
-      // Archivo de referencia con UNA SOLA PISTA
-      const srcEvents = ref.events;
-
-      const gapEndTickOut = startTickOut;
-      // collect channels used in this segment (post-filter)
-      const channelsUsed = new Set();
-
-      // anti-artifact: cleanup at boundary BEFORE start events
-      // (note-offs from prior segment are handled per segment end)
-      // We'll still send a short panic at each chord boundary (safe).
-      // order=2 means after any "end cleanup" at same tick (order=1) but before copied notes (order=3).
-      // We'll decide channels from extracted events; if none, we panic channel 0 just in case.
-      const extracted = [];
-      // Conteo por nota para evitar artefactos si aparece NoteOn repetido antes de su NoteOff
-      const activeCount = new Map(); // "ch-note" -> int
-      const carryVel = new Map();    // "ch-note" -> last velocity
-      const winBase = windowBaseEighth * tickPerEighth;
-
-      const hasNoteOnAtStart = srcEvents.some((ev) => {
-        const status = ev.status & 0xF0;
-        const vel = (ev.d2 ?? 0) & 0x7F;
-        return ev.tick === srcStart && status === 0x90 && vel > 0;
-      });
-
-      // --- Carryover: si en el patrón hay notas sostenidas que empezaron antes de srcStart,
-      // las activamos al inicio del segmento para que el acorde suene "completo".
-      // Sin embargo, si al momento exacto del inicio no hay ningún Note On, dejamos silencio
-      // para evitar que se arrastre el acorde previo en anticipaciones.
-      if (hasNoteOnAtStart) {
-        for (const e of srcEvents) {
-          if (e.tick < winBase || e.tick >= srcStart) continue;
-
-          const status = e.status & 255;
-          const hi = status & 0xF0;
-          const ch = status & 0x0F;
-
-          if (hi !== 0x80 && hi !== 0x90) continue;
-
-          let note = (e.d1 ?? 0) + segmentTranspose;
-          let vel = e.d2 ?? 0;
-          if (note < 0 || note > 127) continue;
-
-          const key = ch + "-" + note;
-          const isOn = (hi === 0x90) && vel > 0;
-          const isOff = (hi === 0x80) || ((hi === 0x90) && vel === 0);
-
-          if (isOn) {
-            const cnt = activeCount.get(key) || 0;
-            activeCount.set(key, cnt + 1);
-            carryVel.set(key, vel);
-          } else if (isOff) {
-            const cnt = activeCount.get(key) || 0;
-            if (cnt > 0) activeCount.set(key, cnt - 1);
-          }
-        }
-      }
-
-      // Emitimos NoteOn de carryover al inicio del segmento (order 1, después del panic order 0)
-      for (const [key, cnt] of activeCount.entries()) {
-        if (cnt <= 0) continue;
-        const [chStr, noteStr] = key.split("-");
-        const ch = parseInt(chStr, 10);
-        const note = parseInt(noteStr, 10);
-        const vel = (carryVel.get(key) ?? 80) & 127;
-
-        channelsUsed.add(ch);
-        if (gapEndTickOut < endTickOut) extracted.push(channelEvent(gapEndTickOut, 0x90 | ch, note, vel, 1));
-      }
-
-      for (const e of srcEvents) {
-        if (e.tick < srcStart || e.tick >= srcEnd) continue;
-
-        const rel = e.tick - srcStart;
-        const t = startTickOut + rel;
-
-        const status = e.status & 255;
-        const hi = status & 0xF0;
-        const ch = status & 0x0F;
-
-        // keep only within segment; ignore garbage
-        if (hi === 0x80 || hi === 0x90) {
-          let note = e.d1;
-          let vel = e.d2 ?? 0;
-
-          // transpose upward from the chosen reference root
-          note = note + segmentTranspose;
-          if (note < 0 || note > 127) continue;
-
-          const key = ch + "-" + note;
-          channelsUsed.add(ch);
-
-          const isOn = (hi === 0x90) && vel > 0;
-          const isOff = (hi === 0x80) || ((hi === 0x90) && vel === 0);
-
-          if (isOn) {
-            const cnt = activeCount.get(key) || 0;
-
-            // Si ya estaba sonando, forzamos un NoteOff en el mismo tick (order 2) antes del nuevo NoteOn (order 3)
-            if (cnt > 0) {
-              extracted.push(channelEvent(t, 0x80 | ch, note, 0, 2));
-            }
-
-            activeCount.set(key, cnt + 1);
-            extracted.push(channelEvent(t, 0x90 | ch, note, vel, 3));
-          } else if (isOff) {
-            const cnt = activeCount.get(key) || 0;
-            // Solo dejamos NoteOff si hubo NoteOn dentro de esta ventana (evita offs raros por corte)
-            if (cnt > 0) {
-              activeCount.set(key, cnt - 1);
-              extracted.push(channelEvent(t, 0x80 | ch, note, 0, 3));
-            }
-          }
-        } else {
-          // other channel events: keep them (CC, pitch bend, program, etc.)
-          channelsUsed.add(ch);
-
-          if (hi === 0xC0 || hi === 0xD0) {
-            extracted.push({ tick: t, status, d1: e.d1 & 127, d2: 0, order: 3 });
-          } else {
-            extracted.push({ tick: t, status, d1: e.d1 & 127, d2: (e.d2 ?? 0) & 127, order: 3 });
-          }
-        }
-      }
-
-      if (channelsUsed.size === 0) channelsUsed.add(0);
-
-      // PANIC at segment start (order 2) to avoid carryover artifacts
-      addPanicAtTick(out, startTickOut, channelsUsed, 0);
-
-      // Copy extracted events
-      for (const e of extracted) out.push(e);
-
-      // Segment end cleanup: fuerza NoteOff de todas las notas que quedaron activas en esta ventana
-      const endChannels = new Set(channelsUsed);
-      for (const [key, cnt] of activeCount.entries()) {
-        if (cnt <= 0) continue;
-        const [chStr, noteStr] = key.split("-");
-        const ch = parseInt(chStr,10);
-        const note = parseInt(noteStr,10);
-        out.push(channelEvent(endTickOut, 0x80 | ch, note, 0, 1)); // order 1: cleanup first
-      }
-      // also clear sustain / notes at segment end (order 1)
-      addPanicAtTick(out, endTickOut, endChannels, 1);
-
-      if (endTickOut > maxTick) maxTick = endTickOut;
-      const transpLabel = segmentTranspose >= 0 ? `+${segmentTranspose}` : `${segmentTranspose}`;
-      log(`Seg: ${seg.token}  q=${seg.quality}_${seg.refVariant}  srcWin=${srcWindow+1}/${ref.windowsPerFile}  transp=${transpLabel}`, "OK");
-
-      if (usingSoloing) {
-        prevSoloingWindowLastNote = Number.isFinite(lastAnchorNote)
-          ? lastAnchorNote + segmentTranspose
-          : null;
-      }
-    }
-
-    // Final global panic
-    const allCh = new Set([...Array(16)].map((_,i)=>i));
-    addPanicAtTick(out, maxTick, allCh, 1);
-
-    const segmentsForBass = segments.map((s, idx) => ({
-      token: s.token,
-        transpose: appliedTransposeBySegment[idx] ?? s.transpose, // semitonos relativos desde la raíz del archivo de referencia elegido
-      startTick: s.startEighth * tickPerEighth,
-      endTick: (s.startEighth + s.durEighth) * tickPerEighth
-    }));
-
-    const advancedModes = usingSoloing ? [] : getEnabledAdvancedModes();
-    const advancedModeBySegment = (!usingSoloing && segments?.length && advancedModes.length >= 2)
-      ? segments.map(() => choice(advancedModes))
-      : null;
-
-    const chordsOnly = usingSoloing ? out : enforceChordsOnly(out);
-    const blockResolver = advancedModeBySegment ? (segIndex) => {
-      const mode = (segIndex != null && segIndex >= 0) ? advancedModeBySegment[segIndex] : null;
-      return { top: mode === "blockTop", full: mode === "blockFull" };
-    } : null;
-    const blockAdjusted = usingSoloing ? chordsOnly : applyBlockChords(chordsOnly, segments, tickPerEighth, blockResolver);
-    const progressiveProfile = usingSoloing ? null : getProgressiveDensityProfile(segments);
-    const densityFactor = usingSoloing ? 1 : (densityProgressive.checked ? 1 : getDensityFactor());
-    const densityApplied = usingSoloing ? blockAdjusted : applyDensityFilter(blockAdjusted, segments, tickPerEighth, densityFactor, progressiveProfile);
-    const shellsApplied = usingSoloing ? blockAdjusted : applyShells(
-      densityApplied,
-      segments,
-      tickPerEighth,
-      progressiveProfile,
-      advancedModeBySegment ? (segIndex) => advancedModeBySegment[segIndex] === "shells" : null,
-    );
-    const skipAdjusted = usingSoloing ? blockAdjusted : applySkipsAfterDensity(
-      shellsApplied,
-      segments,
-      tickPerEighth,
-      advancedModeBySegment,
-    );
-    const soloed = applySoloingMode(skipAdjusted, maxTick, ppq);
-    const lengthLimited = enforceMaxNoteLength(soloed, tickPerEighth, 3);
-    const cleaned = sanitizeEvents(lengthLimited);
-    const noteOnly = disableUnsupportedMidiMessages(cleaned);
-    const pruned = dropLongNotesAndSustain(noteOnly, tickPerEighth, 4);
-    generated = { ppq, events: pruned, lengthTicks: maxTick, debug: { segmentsForBass } };
-
-    log(`Listo. Longitud: ${maxTick} ticks (${(maxTick/(ppq))* (60/REF_BPM_EXPORT)} s a 120bpm).`, "OK");
-    return generated;
-
-  }
-  // -------------------------
-  // Playback (Bolero Audio)
-  // -------------------------
-  function isAnyPlaying() {
-    return isPlaying || isAudioPlaying;
-  }
-
-  function stopBoleroPlayback() {
+  const stopAudioPlayback = () => {
     isAudioPlaying = false;
     for (const t of audioTimers) {
       clearTimeout(t);
-      clearInterval(t);
     }
     audioTimers = [];
     for (const node of audioNodes) {
-      try { node.source?.stop(0); } catch (_) {}
-      try { node.source?.disconnect(); } catch (_) {}
-      try { node.gain?.disconnect(); } catch (_) {}
+      try {
+        node.source?.stop();
+      } catch (_) {}
+      try {
+        node.source?.disconnect();
+        node.gain?.disconnect();
+      } catch (_) {}
     }
     audioNodes = [];
-  }
+  };
 
-  function stopBoleroRecording() {
-    if (recorderStopTimer) {
-      clearTimeout(recorderStopTimer);
-      recorderStopTimer = null;
-    }
-    if (activeRecorder && activeRecorder.state !== "inactive") {
-      try { activeRecorder.stop(); } catch (_) {}
-    }
-    activeRecorder = null;
-    const exportBtn = el("btnExportAudio");
-    if (exportBtn) exportBtn.disabled = false;
-  }
-
-  function scheduleBoleroChord({
-    ctx,
-    buffer,
-    startTime,
-    endTime,
-    bufferOffset,
-    loopStart,
-    loopEnd,
-    recordDest,
-    trackNodes = true,
-  }) {
+  const scheduleAudioChord = ({ ctx, buffer, startTime, endTime, bufferOffset, loopStart, loopEnd, trackNodes = true }) => {
+    if (!buffer) return;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.loop = loopEnd > loopStart;
-    if (source.loop) {
-      source.loopStart = loopStart;
-      source.loopEnd = loopEnd;
-    }
+    source.loop = true;
+    source.loopStart = loopStart;
+    source.loopEnd = loopEnd;
+
     const gain = ctx.createGain();
     gain.gain.value = 0;
-    source.connect(gain);
-    gain.connect(ctx.destination);
-    if (recordDest) gain.connect(recordDest);
+    source.connect(gain).connect(ctx.destination);
 
     const duration = Math.max(0, endTime - startTime);
-    const fade = Math.min(0.02, duration / 2);
-    gain.gain.setValueAtTime(0, startTime);
-    if (fade > 0) {
-      const fadeSamples = 64;
-      const curveIn = new Float32Array(fadeSamples);
-      const curveOut = new Float32Array(fadeSamples);
-      for (let i = 0; i < fadeSamples; i++) {
-        const t = i / (fadeSamples - 1);
-        curveIn[i] = Math.sin(t * Math.PI * 0.5);
-        curveOut[i] = Math.cos(t * Math.PI * 0.5);
+    const crossfade = Math.min(getCrossfadeSeconds(), duration / 2);
+    if (crossfade > 0) {
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(1, startTime + crossfade);
+      if (duration > crossfade * 2) {
+        gain.gain.setValueAtTime(1, Math.max(startTime + crossfade, endTime - crossfade));
       }
-      gain.gain.setValueCurveAtTime(curveIn, startTime, fade);
-      if (duration > fade * 2) {
-        gain.gain.setValueAtTime(1, Math.max(startTime + fade, endTime - fade));
-        gain.gain.setValueCurveAtTime(curveOut, Math.max(startTime + fade, endTime - fade), fade);
-      } else {
-        gain.gain.setValueCurveAtTime(curveOut, Math.max(startTime + fade, endTime - fade), fade);
-      }
+      gain.gain.linearRampToValueAtTime(0, endTime);
     } else {
+      gain.gain.setValueAtTime(1, startTime);
       gain.gain.setValueAtTime(0, endTime);
     }
 
-    const safeOffset = Math.max(0, bufferOffset || 0);
-    source.start(startTime, safeOffset);
-    source.stop(Math.max(endTime, startTime + 0.01) + 0.05);
-    source.onended = () => {
-      try { source.disconnect(); } catch (_) {}
-      try { gain.disconnect(); } catch (_) {}
-    };
+    source.start(startTime, bufferOffset);
+    source.stop(endTime + 0.05);
+
     if (trackNodes) {
       audioNodes.push({ source, gain });
     }
-  }
+  };
 
-  async function playBoleroAudio() {
+  const buildAudioSegments = () => {
+    const parsed = parseProgression(prog.value, { maxChordsPerBar: 4 });
+    const repeated = repeatSegments(parsed.segments, parsed.totalEighth, parseInt(repeatCount.value, 10) || 1);
+    return { segments: repeated.segments, totalEighth: repeated.totalEighth };
+  };
+
+  const playAudio = () => {
     if (!audioFolderLoaded || !audioBuffersByQuality.size) {
-      log("Carga una carpeta de WAVs para el modo Bolero.", "ERROR");
+      log("Carga una carpeta de WAVs para reproducir.", "ERROR");
       return;
     }
-
-    const ctx = ensureAudioContext();
-    await ctx.resume();
-
-    const bpm = BOLERO_BPM;
-    const secPerEighth = (60 / bpm) / 2;
-    const barSeconds = (60 / REF_BPM_AUDIO) * 4;
-    const segmentSeconds = AUDIO_SEGMENT_BARS * barSeconds;
-
     let parsed;
     try {
-      parsed = parseProgression(el("prog").value, { syncopate: false, maxChordsPerBar: 4 });
+      parsed = buildAudioSegments();
     } catch (err) {
       log(String(err?.message || err), "ERROR");
+      updateQualityMismatch();
       return;
     }
 
-    const repeated = repeatSegments(parsed.segments, parsed.totalEighth, getRepeatTimes());
-    const segments = repeated.segments;
-    const totalEighth = repeated.totalEighth;
-
+    const segments = parsed.segments;
     if (!segments.length) {
       log("No hay acordes para reproducir.", "ERROR");
       return;
     }
 
+    const rootBarMap = buildRootBarStartMap();
+    const barsPerChord = getBarsPerChord();
+    const eighthsPerBar = getEighthsPerBar();
+    const segmentEighths = eighthsPerBar * barsPerChord;
+
     for (const seg of segments) {
-      if (!audioBuffersByQuality.has(seg.quality) || !audioUrlsByQuality.has(seg.quality)) {
+      if (!audioBuffersByQuality.has(seg.quality)) {
         log(`No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
         return;
       }
-      if (!ROOT_SEMI_TO_BAR_START.has(seg.rootSemi)) {
+      if (!rootBarMap.has(seg.rootSemi)) {
         log(`Fundamental inválida para audio: ${seg.root}.`, "ERROR");
         return;
       }
     }
 
-    if (isAudioPlaying) stopBoleroPlayback();
-
+    stopAudioPlayback();
     isAudioPlaying = true;
-    const base = ctx.currentTime + 0.12;
+
+    const ctx = ensureAudioContext();
+    const secPerEighth = getSecondsPerEighth();
+    const barSeconds = getBarSeconds();
+    const segmentSeconds = barsPerChord * barSeconds;
 
     for (const seg of segments) {
       const buffer = audioBuffersByQuality.get(seg.quality);
-      const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
-      const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
-      const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
-      const startFromBeginning = !!seg.windowFromStart;
+      const rootBarStart = rootBarMap.get(seg.rootSemi);
+      const offsetEighthInSegment = seg.startEighth % segmentEighths;
+      const offsetSeconds = offsetEighthInSegment * secPerEighth;
       const loopStart = rootBarStart * barSeconds;
-      const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
       const loopEnd = loopStart + segmentSeconds;
 
-      const startTime = base + (seg.startEighth * secPerEighth);
-      const endTime = startTime + (seg.durEighth * secPerEighth);
+      const startTime = ctx.currentTime + seg.startEighth * secPerEighth;
+      const endTime = startTime + seg.durEighth * secPerEighth;
+      const startFromBeginning = !!seg.windowFromStart;
+      const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
 
-      scheduleBoleroChord({
+      scheduleAudioChord({
         ctx,
         buffer,
         startTime,
@@ -3723,183 +1051,16 @@ if (typeof globalThis !== "undefined") {
         bufferOffset,
         loopStart,
         loopEnd,
+        trackNodes: true,
       });
     }
 
-    const totalDuration = totalEighth * secPerEighth;
-    const doneTimer = setTimeout(() => {
-      isAudioPlaying = false;
-    }, Math.ceil((totalDuration + 0.2) * 1000));
+    const doneTimer = setTimeout(() => { isAudioPlaying = false; }, (parsed.totalEighth * secPerEighth + 0.4) * 1000);
     audioTimers.push(doneTimer);
-  }
+    log("Playback iniciado.", "OK");
+  };
 
-  function stopAllPlayback() {
-    if (isPlaying) stopPlayback();
-    if (isAudioPlaying) stopBoleroPlayback();
-    stopBoleroRecording();
-  }
-
-  function playFromUI() {
-    if (getPlaybackMode() === "bolero") {
-      stopAllPlayback();
-      playBoleroAudio();
-      return;
-    }
-
-    playGenerated();
-  }
-
-  // -------------------------
-  // Playback (WebMIDI) with tempo + swing (only playback)
-  // -------------------------
-  function tickToMsSwung(tick, ppq, bpm, swingPct) {
-    const msPerTick = (60_000 / bpm) / ppq;
-
-    // swingPct: 50..75 -> ratio r in 0.5..0.75 for the off-beat position in the quarter
-    const r = Math.min(0.75, Math.max(0.50, swingPct/100));
-    const q = ppq;          // quarter ticks
-    const e = ppq / 2;      // eighth ticks
-
-    // Map inside each quarter
-    const quarterIndex = Math.floor(tick / q);
-    const pos = tick - quarterIndex * q;
-
-    let newPos = pos;
-    if (pos >= e) {
-      // pos in [e, q): remap to [r*q, q)
-      const t = (pos - e) / (q - e); // 0..1
-      newPos = (r * q) + t * (q - (r*q));
-    }
-    const swungTick = quarterIndex * q + newPos;
-    return swungTick * msPerTick;
-  }
-
-  function getSelectedOutput() {
-    const id = midiOutSel.value;
-    return midiOutputs.find(o => o.id === id) || null;
-  }
-
-  function panicNow(out) {
-    if (!out) return;
-    for (let ch=0; ch<16; ch++){
-      out.send([0xB0|ch, 64, 0]);
-      out.send([0xB0|ch, 123, 0]);
-      out.send([0xB0|ch, 120, 0]);
-    }
-  }
-
-  function stopPlayback() {
-    isPlaying = false;
-    for (const t of playTimers) clearTimeout(t);
-    playTimers = [];
-
-    const out = playOut || getSelectedOutput();
-    if (out) {
-      panicNow(out);
-      const t2 = setTimeout(() => panicNow(out), 60);
-      playTimers.push(t2);
-    }
-  }
-
-  function playGenerated() {
-    const out = getSelectedOutput();
-    if (!out) { log("Selecciona un puerto MIDI de salida.", "ERROR"); return; }
-    if (!generated?.events?.length) { log("Primero genera MIDI (Regenerar).", "ERROR"); return; }
-
-    if (isPlaying || isAudioPlaying) stopAllPlayback();
-
-    isPlaying = true;
-    playOut = out;
-
-    panicNow(out);
-
-    const bpm = parseInt(tempo.value, 10);
-    const sw = 50; // swing desactivado
-    const ppq = generated.ppq;
-
-    const leadIn = 80;
-    const base = performance.now() + leadIn;
-
-    const evs = generated.events.slice().sort((a,b)=> (a.tick-b.tick) || (a.order-b.order));
-
-    const schedule = (fn, delayMs) => {
-      const id = setTimeout(() => { if (isPlaying) fn(); }, delayMs);
-      playTimers.push(id);
-    };
-
-    let lastDelay = 0;
-    for (const e of evs) {
-      const status = e.status & 255;
-      const hi = status & 0xF0;
-      const tMs = tickToMsSwung(e.tick, ppq, bpm, sw);
-      const delay = Math.max(0, Math.round((base + tMs) - performance.now()));
-      if (delay > lastDelay) lastDelay = delay;
-
-      schedule(() => {
-        if (hi === 0xC0 || hi === 0xD0) out.send([status, e.d1 & 127]);
-        else out.send([status, e.d1 & 127, (e.d2 ?? 0) & 127]);
-      }, delay);
-    }
-
-    // Bajo SOLO para playback (NO export)
-    const segs = generated.debug?.segmentsForBass || [];
-    const BASS_CH = 15;
-    const BASS_VEL = Math.max(0, Math.min(67, parseInt(bassVel.value, 10) || 0));
-
-    const barTicks = 4 * ppq;
-    const quarter = ppq;
-
-    let si = 0;
-    for (let barStart = 0; barStart < generated.lengthTicks; barStart += barTicks) {
-      const pulses = [barStart, barStart + 2 * quarter];
-      for (const t0 of pulses) {
-        if (t0 >= generated.lengthTicks) continue;
-
-        while (si < segs.length && t0 >= segs[si].endTick) si++;
-        if (si >= segs.length) continue;
-        if (t0 < segs[si].startTick) continue;
-
-        const note = bassNoteFromTranspose(segs[si].transpose);
-
-        const onDelay = Math.max(0, Math.round((base + tickToMsSwung(t0, ppq, bpm, sw)) - performance.now()));
-        const offDelay = Math.max(0, Math.round((base + tickToMsSwung(t0 + quarter, ppq, bpm, sw)) - performance.now()));
-        if (offDelay > lastDelay) lastDelay = offDelay;
-
-        schedule(() => out.send([0x90 | BASS_CH, note & 127, BASS_VEL & 127]), onDelay);
-        schedule(() => out.send([0x80 | BASS_CH, note & 127, 0]), offDelay);
-      }
-    }
-
-    schedule(() => { isPlaying = false; }, lastDelay + 120);
-  }
-
-  // -------------------------
-  // Export
-  // -------------------------
-  function exportGenerated() {
-    if (!generated?.events?.length) { log("No hay MIDI generado.", "ERROR"); return; }
-
-    const trackEvents = normalizeExportEvents(generated.events).map((e) => ({
-      tick: e.absTick,
-      status: ((e.eType === 0x8 ? 0x80 : 0x90) | (e.ch ?? 0)) & 0xFF,
-      d1: e.d1 ?? 0,
-      d2: e.d2 ?? 0,
-    }));
-
-    const bytes = buildMidiFile(generated.ppq, trackEvents);
-    const blob = new Blob([bytes], { type: "audio/midi" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "generated.mid";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 2000);
-    log("Exportado: generated.mid (una sola pista/canal, tempo fijo 120; swing NO afecta exportación).", "OK");
-  }
-
-  function encodeWavFromBuffer(buffer) {
+  const encodeWavFromBuffer = (buffer) => {
     const numChannels = buffer.numberOfChannels;
     const sampleRate = buffer.sampleRate;
     const length = buffer.length;
@@ -3947,80 +1108,71 @@ if (typeof globalThis !== "undefined") {
     }
 
     return wavBuffer;
-  }
+  };
 
-  async function exportBoleroAudio() {
-    if (getPlaybackMode() !== "bolero") {
-      log("El export de audio solo está disponible en modo Bolero.", "WARN");
-      return;
-    }
+  const exportAudio = async () => {
     if (!audioFolderLoaded || !audioBuffersByQuality.size || !audioUrlsByQuality.size) {
       log("Carga una carpeta de WAVs para exportar audio.", "ERROR");
       return;
     }
     let parsed;
     try {
-      parsed = parseProgression(el("prog").value, { syncopate: false, maxChordsPerBar: 4 });
+      parsed = buildAudioSegments();
     } catch (err) {
       log(String(err?.message || err), "ERROR");
+      updateQualityMismatch();
       return;
     }
 
-    const bpm = BOLERO_BPM;
-    const secPerEighth = (60 / bpm) / 2;
-    const barSeconds = (60 / REF_BPM_AUDIO) * 4;
-    const segmentSeconds = AUDIO_SEGMENT_BARS * barSeconds;
-
-    const repeated = repeatSegments(parsed.segments, parsed.totalEighth, getRepeatTimes());
-    const segments = repeated.segments;
-    const totalEighth = repeated.totalEighth;
-
+    const segments = parsed.segments;
     if (!segments.length) {
       log("No hay acordes para exportar.", "ERROR");
       return;
     }
+
+    const rootBarMap = buildRootBarStartMap();
+    const barsPerChord = getBarsPerChord();
+    const eighthsPerBar = getEighthsPerBar();
+    const segmentEighths = eighthsPerBar * barsPerChord;
 
     for (const seg of segments) {
       if (!audioBuffersByQuality.has(seg.quality) || !audioUrlsByQuality.has(seg.quality)) {
         log(`No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
         return;
       }
-      if (!ROOT_SEMI_TO_BAR_START.has(seg.rootSemi)) {
+      if (!rootBarMap.has(seg.rootSemi)) {
         log(`Fundamental inválida para audio: ${seg.root}.`, "ERROR");
         return;
       }
     }
 
-    if (isAudioPlaying) stopBoleroPlayback();
-    stopBoleroRecording();
-
     const buffers = [...audioBuffersByQuality.values()];
     const sampleRate = buffers[0]?.sampleRate || 44100;
     const numChannels = Math.max(1, ...buffers.map((buf) => buf.numberOfChannels || 1));
-    const totalDuration = totalEighth * secPerEighth;
+    const secPerEighth = getSecondsPerEighth();
+    const totalDuration = parsed.totalEighth * secPerEighth;
     const renderLength = Math.ceil((totalDuration + 0.4) * sampleRate);
     const offlineCtx = new OfflineAudioContext(numChannels, renderLength, sampleRate);
 
-    const exportBtn = el("btnExportAudio");
-    if (exportBtn) exportBtn.disabled = true;
-
-    isAudioPlaying = true;
     log("Renderizando audio en segundo plano…", "OK");
+
+    const barSeconds = getBarSeconds();
+    const segmentSeconds = barsPerChord * barSeconds;
 
     for (const seg of segments) {
       const buffer = audioBuffersByQuality.get(seg.quality);
-      const rootBarStart = ROOT_SEMI_TO_BAR_START.get(seg.rootSemi);
-      const offsetEighthInTwoBar = seg.startEighth % (EIGHTHS_PER_BAR * AUDIO_SEGMENT_BARS);
-      const offsetSeconds = offsetEighthInTwoBar * ((60 / REF_BPM_AUDIO) / 2);
-      const startFromBeginning = !!seg.windowFromStart;
+      const rootBarStart = rootBarMap.get(seg.rootSemi);
+      const offsetEighthInSegment = seg.startEighth % segmentEighths;
+      const offsetSeconds = offsetEighthInSegment * secPerEighth;
       const loopStart = rootBarStart * barSeconds;
-      const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
       const loopEnd = loopStart + segmentSeconds;
 
       const startTime = seg.startEighth * secPerEighth;
-      const endTime = startTime + (seg.durEighth * secPerEighth);
+      const endTime = startTime + seg.durEighth * secPerEighth;
+      const startFromBeginning = !!seg.windowFromStart;
+      const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
 
-      scheduleBoleroChord({
+      scheduleAudioChord({
         ctx: offlineCtx,
         buffer,
         startTime,
@@ -4036,8 +1188,6 @@ if (typeof globalThis !== "undefined") {
     try {
       rendered = await offlineCtx.startRendering();
     } catch (err) {
-      isAudioPlaying = false;
-      if (exportBtn) exportBtn.disabled = false;
       log(`Error al renderizar WAV: ${String(err?.message || err)}`, "ERROR");
       return;
     }
@@ -4047,279 +1197,73 @@ if (typeof globalThis !== "undefined") {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `bolero_${bpm}bpm.wav`;
+    anchor.download = `referencia_${getRefBpm()}bpm.wav`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-    isAudioPlaying = false;
-    if (exportBtn) exportBtn.disabled = false;
     log(`Exportado audio: ${anchor.download}`, "OK");
-  }
+  };
 
-  function cleanGenerated() {
-    if (!generated?.events?.length) { log("No hay MIDI generado.", "ERROR"); return; }
-    const ppqVal = generated.ppq ?? 960;
-    const tickPerEighth = ppqVal / 2;
-    const maxLen = Math.max(1, Math.round(tickPerEighth * 4)); // 4 corcheas
-    const minLen = Math.max(1, Math.round(ppqVal / 8)); // 1/32
-
-    const sanitized = sanitizeChannelEvents(generated.events);
-    const ranged = removeNotesOutsideRange(sanitized, minLen, maxLen, generated.lengthTicks);
-    const lengthLimited = insertNoteOffsForLongNotes(ranged, maxLen, generated.lengthTicks);
-    generated.events = sanitizeChannelEvents(lengthLimited);
-
-    log("MIDI limpiado: sin notas huérfanas, fuera de rango ni sostenidas en exceso.", "OK");
-  }
-
-  // -------------------------
-  // WebMIDI init
-  // -------------------------
-  async function initMIDI() {
-    try{
-      if (!navigator.requestMIDIAccess) {
-        updateMidiStatus(`<span class="bad">MIDI no soportado en este navegador.</span>`);
-        midiOutSel.innerHTML = `<option value="">(sin MIDI)</option>`;
-        return;
-      }
-      midiAccess = await navigator.requestMIDIAccess({ sysex: false });
-      updateMidiStatus(`<span class="ok">MIDI listo.</span>`);
-      refreshOutputs();
-
-      midiAccess.onstatechange = () => refreshOutputs();
-    } catch(err) {
-      updateMidiStatus(`<span class="bad">MIDI bloqueado.</span>`);
-      log(String(err?.message || err), "ERROR");
-    }
-  }
-
-  function refreshOutputs() {
-    midiOutputs = [];
-    midiOutSel.innerHTML = "";
-    if (!midiAccess) {
-      midiOutSel.innerHTML = `<option value="">(sin MIDI)</option>`;
-      return;
-    }
-    for (const out of midiAccess.outputs.values()) midiOutputs.push(out);
-
-    if (!midiOutputs.length) {
-      midiOutSel.innerHTML = `<option value="">(no hay salidas)</option>`;
-      return;
-    }
-    for (const out of midiOutputs) {
-      const opt = document.createElement("option");
-      opt.value = out.id;
-      opt.textContent = out.name || out.manufacturer || out.id;
-      midiOutSel.appendChild(opt);
-    }
-  }
-
-  // -------------------------
-  // UI wiring
-  // -------------------------
-  function updateDensityLabel() {
-    densityVal.textContent = densityProgressive.checked ? "20→100%" : `${density.value}%`;
-  }
-
-  tempo.addEventListener("input", () => {
-    tempoVal.textContent = tempo.value;
-    if (tempoValInline) tempoValInline.textContent = tempo.value;
-    cachedMidiTempo = parseInt(tempo.value, 10) || cachedMidiTempo;
-  });
-  // swing desactivado
-  bassVel.addEventListener("input", () => bassVelVal.textContent = bassVel.value);
-  density.addEventListener("input", updateDensityLabel);
-  densityProgressive.addEventListener("change", updateDensityLabel);
-  globalTranspose.addEventListener("input", applyGlobalTranspose);
-  repeatCount.addEventListener("input", () => getRepeatTimes());
-  clampGlobalTranspose();
-  function clearManualSkips() {
-    if (skip2Simple) skip2Simple.checked = false;
-    if (skip2Oct) skip2Oct.checked = false;
-    if (skipSpread) skipSpread.checked = false;
-  }
-
-  function setSkipModeControlsEnabled(enabled) {
-    const controls = [
-      shells,
-      skipClosed,
-      blockChords,
-      blockChordsFull,
-      skip2Simple,
-      skip2Oct,
-      skipSpread,
-    ];
-
-    for (const ctrl of controls) {
-      if (!ctrl) continue;
-      ctrl.disabled = !enabled;
-      if (!enabled) ctrl.checked = false;
-    }
-  }
-
-  function handleManualSkipsChange() {
-    if (progressiveSkips) progressiveSkips.checked = false;
-    setSkipModeControlsEnabled(true);
-  }
-
-  function setAdvancedControlsEnabled(enabled) {
-    const controls = [
-      density,
-      densityProgressive,
-      progressiveSkips,
-      shells,
-      skipClosed,
-      blockChords,
-      blockChordsFull,
-      skip2Simple,
-      skip2Oct,
-      skipSpread,
-    ];
-    for (const ctrl of controls) {
-      if (!ctrl) continue;
-      ctrl.disabled = !enabled;
-      if (!enabled && ctrl.type === "checkbox") ctrl.checked = false;
-    }
-
-    if (!enabled && density) {
-      density.value = "100";
-      updateDensityLabel();
-    }
-  }
-  skip2Simple?.addEventListener("change", handleManualSkipsChange);
-  skip2Oct?.addEventListener("change", handleManualSkipsChange);
-  skipSpread?.addEventListener("change", handleManualSkipsChange);
-  skipClosed?.addEventListener("change", handleManualSkipsChange);
-  progressiveSkips?.addEventListener("change", () => {
-    if (progressiveSkips.checked) {
-      setSkipModeControlsEnabled(false);
-      if (skipClosed) skipClosed.checked = false;
-      if (shells) shells.checked = false;
-      if (blockChords) blockChords.checked = false;
-      if (blockChordsFull) blockChordsFull.checked = false;
-      clearManualSkips();
-      return;
-    }
-
-    setSkipModeControlsEnabled(true);
-  });
-
-  setSkipModeControlsEnabled(true);
-
-  function resetAdvancedModes() {
-    clearManualSkips();
-    if (shells) shells.checked = false;
-    if (skipClosed) skipClosed.checked = false;
-    if (blockChords) blockChords.checked = false;
-    if (blockChordsFull) blockChordsFull.checked = false;
-    if (progressiveSkips) progressiveSkips.checked = false;
-    if (densityProgressive) densityProgressive.checked = false;
-    density.value = "100";
-    updateDensityLabel();
-  }
-
-  function handleExclusiveModesChange() {
-    const salsaActive = !!salsa23?.checked;
-    const soloActive = !!soloing?.checked;
-    const hasExclusive = salsaActive || soloActive;
-
-    if (salsaActive && soloing) soloing.checked = false;
-    if (soloActive && salsa23) salsa23.checked = false;
-
-    setAdvancedControlsEnabled(!hasExclusive);
-    if (soloing) soloing.disabled = salsaActive;
-    if (salsa23) salsa23.disabled = soloActive;
-
-    if (hasExclusive) resetAdvancedModes();
-  }
-
-  soloing?.addEventListener("change", handleExclusiveModesChange);
-  salsa23?.addEventListener("change", handleExclusiveModesChange);
-
-  // Ayuda (modal)
-  const helpModal = el("helpModal");
   const btnHelp = el("btnHelp");
   const btnHelpClose = el("btnHelpClose");
-  function openHelp(){
+  const helpModal = el("helpModal");
+  const openHelp = () => {
     helpModal.classList.add("open");
-    helpModal.setAttribute("aria-hidden","false");
-  }
-  function closeHelp(){
+    helpModal.setAttribute("aria-hidden", "false");
+  };
+  const closeHelp = () => {
     helpModal.classList.remove("open");
-    helpModal.setAttribute("aria-hidden","true");
-  }
+    helpModal.setAttribute("aria-hidden", "true");
+  };
   btnHelp.addEventListener("click", openHelp);
   btnHelpClose.addEventListener("click", closeHelp);
+  helpModal.addEventListener("click", (e) => { if (e.target === helpModal) closeHelp(); });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelp(); });
 
-  // Tema claro/oscuro
   const btnTheme = el("btnTheme");
   const root = document.documentElement;
-  function setTheme(t){
+  const setTheme = (t) => {
     root.setAttribute("data-theme", t);
-    try{ localStorage.setItem("jcg_theme", t); }catch(_){}
-  }
-  const savedTheme = (()=>{ try{ return localStorage.getItem("jcg_theme"); } catch(_){ return null; } })();
+    try { localStorage.setItem("jcg_theme", t); } catch (_) {}
+  };
+  const savedTheme = (() => { try { return localStorage.getItem("jcg_theme"); } catch (_) { return null; } })();
   setTheme(savedTheme || "dark");
   btnTheme.addEventListener("click", () => {
     const cur = root.getAttribute("data-theme") || "dark";
     setTheme(cur === "dark" ? "light" : "dark");
   });
 
-  helpModal.addEventListener("click", (e) => { if (e.target === helpModal) closeHelp(); });
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelp(); });
+  el("btnPickAudioFolder").addEventListener("click", loadAudioFolder);
+  el("btnPlay").addEventListener("click", playAudio);
+  el("btnStop").addEventListener("click", stopAudioPlayback);
+  el("btnExportAudio").addEventListener("click", exportAudio);
 
-  // Barra espaciadora: Play/Stop (solo si NO estás escribiendo)
+  prog.addEventListener("input", updateQualityMismatch);
+  repeatCount.addEventListener("input", updateQualityMismatch);
+  barsPerFileInput.addEventListener("input", updateQualityMismatch);
+  barsPerChordInput.addEventListener("input", updateQualityMismatch);
+  timeSignatureInput.addEventListener("change", updateQualityMismatch);
+  refBpmInput.addEventListener("input", updateQualityMismatch);
+  crossfadeMsInput.addEventListener("input", updateQualityMismatch);
+  startRootInput.addEventListener("change", updateQualityMismatch);
+  globalTranspose.addEventListener("input", applyGlobalTranspose);
+
   window.addEventListener("keydown", (e) => {
-    if (e.code !== "Space" && e.key != " ") return;
-
+    if (e.code !== "Space" && e.key !== " ") return;
     const ae = document.activeElement;
     const tag = ae && ae.tagName ? ae.tagName.toLowerCase() : "";
     const typing = tag === "textarea" || tag === "input" || tag === "select" || (ae && ae.isContentEditable);
     if (typing) return;
-
     e.preventDefault();
-    if (isAnyPlaying()) stopAllPlayback();
-    else playFromUI();
+    if (isAudioPlaying) stopAudioPlayback();
+    else playAudio();
   });
 
-  el("btnPickFolder").addEventListener("click", loadReferenceFolderByMode);
-  el("btnPickAudioFolder").addEventListener("click", loadAudioFolder);
-
-  el("btnRegenerate").addEventListener("click", () => {
-    try{
-      const g = generateMidiFromProgression(el("prog").value);
-      // Si la carpeta está cargada, mantenemos el estado "Listo" aunque la progresión tenga un error.
-      updateReadyState();
-      ppqText.textContent = g.ppq ?? "—";
-    } catch(err){
-      log(String(err?.message || err), "ERROR");
-      updateReadyState();
-    }
-  });
-
-  el("btnPlay").addEventListener("click", playFromUI);
-  el("btnStop").addEventListener("click", () => { stopAllPlayback(); });
-
-  el("btnClean").addEventListener("click", cleanGenerated);
-  el("btnExport").addEventListener("click", exportGenerated);
-  el("btnExportAudio").addEventListener("click", exportBoleroAudio);
-
-  renderQualityChips(); // estado inicial
-
-  // Initial defaults
-  el("prog").value = ``;
-  getRepeatTimes();
-
-  updatePlaybackModeUI();
-  // init displayed values
-  tempoVal.textContent = tempo.value;
-  if (tempoValInline) tempoValInline.textContent = tempo.value;
-  // swing desactivado
-  bassVelVal.textContent = bassVel.value;
-  updateDensityLabel();
-  setAdvancedControlsEnabled(!soloing?.checked);
-
-  initMIDI();
+  prog.value = "";
+  renderQualityChips();
+  updateQualityMismatch();
+  updateReadyState();
 })();
 </script>
 </body>
