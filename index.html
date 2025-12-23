@@ -560,7 +560,6 @@
 </div>
 
 <script type="module">
-import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberband-wasm@3.3.0/dist/index.esm.min.js";
 
 (() => {
   const el = (id) => document.getElementById(id);
@@ -635,13 +634,10 @@ import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberb
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
   const FADE_CURVE_SAMPLES = 128;
-  const STRETCH_BUFFER_SIZE = 4096;
   const STRETCH_TEMPO_EPSILON = 0.0005;
   const STORAGE_KEY = "jcg_saved_progressions";
   const stretchedBufferCache = new Map();
   const stretchedLoopCache = new Map();
-  const RUBBERBAND_WASM_URL = "https://unpkg.com/rubberband-wasm@3.3.0/dist/rubberband.wasm";
-  let rubberBandPromise = null;
 
   const createStretchProgressTracker = (totalFrames, label = "Estirando audio…") => {
     if (!stretchProgressWrap || !stretchProgressBar || !stretchProgressPercent || totalFrames <= 0) {
@@ -1072,127 +1068,108 @@ import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberb
     return Math.max(0.1, playback / ref);
   };
 
-  const getRubberBand = async () => {
-    if (!rubberBandPromise) {
-      rubberBandPromise = (async () => {
-        const response = await fetch(RUBBERBAND_WASM_URL);
-        if (!response.ok) {
-          throw new Error(`No pude descargar Rubber Band WASM (${response.status}).`);
-        }
-        const bytes = await response.arrayBuffer();
-        const module = await WebAssembly.compile(bytes);
-        return RubberBandInterface.initialize(module);
-      })();
+  const buildHannWindow = (size) => {
+    const win = new Float32Array(size);
+    const denom = size - 1;
+    for (let i = 0; i < size; i += 1) {
+      win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / denom);
     }
-    return rubberBandPromise;
+    return win;
   };
 
-  const buildRubberBandOptions = () => (
-    RubberBandOption.RubberBandOptionProcessOffline |
-    RubberBandOption.RubberBandOptionStretchPrecise |
-    RubberBandOption.RubberBandOptionTransientsMixed |
-    RubberBandOption.RubberBandOptionDetectorCompound |
-    RubberBandOption.RubberBandOptionPhaseLaminar |
-    RubberBandOption.RubberBandOptionWindowStandard |
-    RubberBandOption.RubberBandOptionSmoothingOn |
-    RubberBandOption.RubberBandOptionFormantPreserved |
-    RubberBandOption.RubberBandOptionPitchHighQuality |
-    RubberBandOption.RubberBandOptionChannelsTogether |
-    RubberBandOption.RubberBandOptionEngineFiner
-  );
+  const selectWsolaWindow = (sampleRate) => {
+    const target = Math.round(sampleRate * 0.046);
+    const clamped = Math.max(1024, Math.min(4096, target));
+    return Math.max(256, clamped);
+  };
+
+  const findBestOverlapOffset = (input, prevPos, searchStart, searchEnd, windowSize, window) => {
+    let bestOffset = searchStart;
+    let bestScore = -Infinity;
+    const prevStart = Math.max(0, prevPos);
+    const prevSlice = input.subarray(prevStart, prevStart + windowSize);
+    for (let pos = searchStart; pos <= searchEnd; pos += 1) {
+      const cand = input.subarray(pos, pos + windowSize);
+      let score = 0;
+      for (let i = 0; i < windowSize; i += 1) {
+        score += prevSlice[i] * cand[i] * window[i];
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestOffset = pos;
+      }
+    }
+    return bestOffset;
+  };
+
+  const wsolaStretchBuffer = (buffer, timeRatio, onProgress) => {
+    const channels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const windowSize = selectWsolaWindow(sampleRate);
+    const analysisHop = Math.max(1, Math.round(windowSize / 2));
+    const synthesisHop = Math.max(1, Math.round(analysisHop * timeRatio));
+    const searchRange = Math.max(16, Math.round(windowSize / 4));
+    const window = buildHannWindow(windowSize);
+    const inputLength = buffer.length;
+    const estimatedLength = Math.max(windowSize, Math.round(inputLength * timeRatio + windowSize));
+    const outputLength = estimatedLength + windowSize;
+    const outputChannels = Array.from({ length: channels }, () => new Float32Array(outputLength));
+    const weights = new Float32Array(outputLength);
+    const refInput = buffer.getChannelData(0);
+
+    let inputPos = 0;
+    let outputPos = 0;
+    const writeWindow = (sourcePos) => {
+      const maxSamples = Math.min(windowSize, inputLength - sourcePos);
+      for (let i = 0; i < maxSamples; i += 1) {
+        const w = window[i];
+        const outIndex = outputPos + i;
+        if (outIndex >= outputLength) break;
+        weights[outIndex] += w;
+        for (let ch = 0; ch < channels; ch += 1) {
+          const inputData = buffer.getChannelData(ch);
+          outputChannels[ch][outIndex] += inputData[sourcePos + i] * w;
+        }
+      }
+    };
+
+    writeWindow(inputPos);
+    inputPos += analysisHop;
+
+    while (inputPos + windowSize < inputLength) {
+      const expected = inputPos;
+      const searchStart = Math.max(0, expected - searchRange);
+      const searchEnd = Math.min(inputLength - windowSize, expected + searchRange);
+      const bestOffset = findBestOverlapOffset(refInput, inputPos - analysisHop, searchStart, searchEnd, windowSize, window);
+
+      outputPos += synthesisHop;
+      writeWindow(bestOffset);
+
+      inputPos = expected + analysisHop;
+      if (onProgress) onProgress(Math.min(analysisHop, inputLength - expected));
+    }
+
+    const finalLength = Math.min(outputLength, outputPos + windowSize);
+    const outBuffer = ensureAudioContext().createBuffer(channels, finalLength, sampleRate);
+    for (let ch = 0; ch < channels; ch += 1) {
+      const outData = outBuffer.getChannelData(ch);
+      const src = outputChannels[ch];
+      for (let i = 0; i < finalLength; i += 1) {
+        const w = weights[i];
+        outData[i] = w > 0 ? src[i] / w : 0;
+      }
+    }
+    return outBuffer;
+  };
 
   const stretchAudioBuffer = async (buffer, tempo, onProgress) => {
     if (!buffer) return null;
     if (Math.abs(tempo - 1) <= STRETCH_TEMPO_EPSILON) return buffer;
     try {
       const timeRatio = Math.max(0.1, 1 / tempo);
-      const channels = buffer.numberOfChannels;
-      const sampleRate = buffer.sampleRate;
-      const rb = await getRubberBand();
-
-      const options = buildRubberBandOptions();
-      const state = rb.rubberband_new(sampleRate, channels, options, timeRatio, 1);
-      rb.rubberband_set_time_ratio(state, timeRatio);
-      rb.rubberband_set_expected_input_duration(state, buffer.length);
-      rb.rubberband_set_max_process_size(state, STRETCH_BUFFER_SIZE);
-
-      const inputPtr = rb.malloc(channels * 4);
-      const outputPtr = rb.malloc(channels * 4);
-      const inputChannelPtrs = [];
-      const outputChannelPtrs = [];
-
-      let outputCapacity = Math.ceil(STRETCH_BUFFER_SIZE / timeRatio) + 512;
-      const allocateChannelBuffers = () => {
-        inputChannelPtrs.length = 0;
-        outputChannelPtrs.length = 0;
-        for (let ch = 0; ch < channels; ch += 1) {
-          const inPtr = rb.malloc(STRETCH_BUFFER_SIZE * 4);
-          const outPtr = rb.malloc(outputCapacity * 4);
-          inputChannelPtrs.push(inPtr);
-          outputChannelPtrs.push(outPtr);
-          rb.memWritePtr(inputPtr + ch * 4, inPtr);
-          rb.memWritePtr(outputPtr + ch * 4, outPtr);
-        }
-      };
-
-      const freeChannelBuffers = () => {
-        for (const ptr of inputChannelPtrs) rb.free(ptr);
-        for (const ptr of outputChannelPtrs) rb.free(ptr);
-      };
-
-      const outputChunks = Array.from({ length: channels }, () => []);
-      const outputLengths = Array.from({ length: channels }, () => 0);
-
-      allocateChannelBuffers();
-
-      try {
-        const totalSamples = buffer.length;
-        for (let offset = 0; offset < totalSamples; offset += STRETCH_BUFFER_SIZE) {
-          const frameCount = Math.min(STRETCH_BUFFER_SIZE, totalSamples - offset);
-          for (let ch = 0; ch < channels; ch += 1) {
-            const data = buffer.getChannelData(ch).subarray(offset, offset + frameCount);
-            rb.memWrite(inputChannelPtrs[ch], data);
-          }
-          const isFinal = offset + frameCount >= totalSamples ? 1 : 0;
-          rb.rubberband_process(state, inputPtr, frameCount, isFinal);
-
-          let available = rb.rubberband_available(state);
-          while (available > 0) {
-            if (available > outputCapacity) {
-              freeChannelBuffers();
-              outputCapacity = Math.max(available, outputCapacity * 2);
-              allocateChannelBuffers();
-            }
-            const retrieved = rb.rubberband_retrieve(state, outputPtr, available);
-            for (let ch = 0; ch < channels; ch += 1) {
-              const chunk = rb.memReadF32(outputChannelPtrs[ch], retrieved);
-              outputChunks[ch].push(chunk.slice());
-              outputLengths[ch] += retrieved;
-            }
-            available = rb.rubberband_available(state);
-          }
-          if (onProgress) onProgress(frameCount);
-        }
-      } finally {
-        freeChannelBuffers();
-        rb.free(inputPtr);
-        rb.free(outputPtr);
-        rb.rubberband_delete(state);
-      }
-
-      const outLength = Math.max(...outputLengths, 1);
-      const outBuffer = ensureAudioContext().createBuffer(channels, outLength, sampleRate);
-      for (let ch = 0; ch < channels; ch += 1) {
-        const channelData = outBuffer.getChannelData(ch);
-        let writeOffset = 0;
-        for (const chunk of outputChunks[ch]) {
-          channelData.set(chunk, writeOffset);
-          writeOffset += chunk.length;
-        }
-      }
-      return outBuffer;
+      return wsolaStretchBuffer(buffer, timeRatio, onProgress);
     } catch (err) {
-      log(`Error en Rubber Band: ${String(err?.message || err)}`, "ERROR");
+      log(`Error en WSOLA: ${String(err?.message || err)}`, "ERROR");
       return buffer;
     }
   };
