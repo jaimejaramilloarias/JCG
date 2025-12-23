@@ -492,6 +492,18 @@
   const PLAYBACK_SCHEDULE_AHEAD_SEC = 0.08;
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
+  const FADE_CURVE_SAMPLES = 128;
+
+  const buildEqualPowerCurve = (samples, fadeIn = true) => {
+    const curve = new Float32Array(samples);
+    for (let i = 0; i < samples; i += 1) {
+      const t = i / (samples - 1);
+      curve[i] = fadeIn ? Math.sin(t * Math.PI * 0.5) : Math.cos(t * Math.PI * 0.5);
+    }
+    return curve;
+  };
+  const FADE_IN_CURVE = buildEqualPowerCurve(FADE_CURVE_SAMPLES, true);
+  const FADE_OUT_CURVE = buildEqualPowerCurve(FADE_CURVE_SAMPLES, false);
 
   const log = (msg, level = "INFO") => {
     const prefix = level === "ERROR" ? "❌" : level === "WARN" ? "⚠️" : "✅";
@@ -953,16 +965,29 @@
     const playDuration = Math.min(duration, maxPlayable);
     if (playDuration <= 0) return;
 
-    const crossfade = Math.min(getCrossfadeSeconds(), playDuration / 2);
-    const attack = Math.min(Math.max(MIN_FADE_SEC, crossfade || 0), playDuration / 2 || MIN_FADE_SEC);
-    const release = Math.min(Math.max(MIN_FADE_SEC, crossfade || 0), playDuration / 2 || MIN_FADE_SEC);
+    const requestedFade = Math.max(MIN_FADE_SEC, getCrossfadeSeconds());
+    const maxFade = Math.max(MIN_FADE_SEC, playDuration / 2);
+    const fade = Math.min(requestedFade, maxFade);
+    const attack = fade;
+    const release = fade;
     const effectiveEnd = startTime + playDuration;
-    gain.gain.setValueAtTime(0, Math.max(0, startTime - attack));
-    gain.gain.linearRampToValueAtTime(1, startTime + attack);
-    if (playDuration > attack + release) {
-      gain.gain.setValueAtTime(1, Math.max(startTime + attack, effectiveEnd - release));
+    const sustainStart = startTime + attack;
+    const releaseStart = Math.max(sustainStart, effectiveEnd - release);
+
+    gain.gain.setValueAtTime(0, startTime);
+    if (attack > 0) {
+      gain.gain.setValueCurveAtTime(FADE_IN_CURVE, startTime, attack);
+    } else {
+      gain.gain.setValueAtTime(1, startTime);
     }
-    gain.gain.linearRampToValueAtTime(0, effectiveEnd + release);
+    if (effectiveEnd > sustainStart) {
+      gain.gain.setValueAtTime(1, releaseStart);
+    }
+    if (release > 0) {
+      gain.gain.setValueCurveAtTime(FADE_OUT_CURVE, releaseStart, release);
+    } else {
+      gain.gain.setValueAtTime(0, effectiveEnd);
+    }
 
     source.start(startTime, safeOffset, playDuration);
     source.stop(effectiveEnd + release + RELEASE_TAIL_SEC);
