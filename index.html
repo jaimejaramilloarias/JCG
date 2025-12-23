@@ -392,6 +392,19 @@
         </div>
 
         <div class="controlCluster">
+          <div class="clusterTitle">Loop base</div>
+          <div class="clusterActions">
+            <button class="btn ghost" id="btnLoopToggle" title="Activar o silenciar el loop base">Loop base: ON</button>
+          </div>
+          <div class="label">Volumen loop</div>
+          <div class="row" style="gap:8px; align-items:center;">
+            <input id="loopVolume" type="range" min="0" max="1" step="0.01" value="0.6" />
+            <span class="mini" id="loopVolumeValue">60%</span>
+          </div>
+          <div class="mini" id="loopStatus" style="margin-top:6px">Sin loop cargado.</div>
+        </div>
+
+        <div class="controlCluster">
           <div class="clusterTitle">Ajustes de referencia</div>
           <div class="split">
             <div>
@@ -527,6 +540,7 @@
   const readyText = el("readyText");
   const dotReady = el("dotReady");
   const audioFolderStatus = el("audioFolderStatus");
+  const loopStatus = el("loopStatus");
   const qualityChips = el("qualityChips");
   const qualityMismatchText = el("qualityMismatchText");
   const qualityMismatchDot = el("qualityMismatchDot");
@@ -549,6 +563,9 @@
   const refBpmInput = el("refBpm");
   const crossfadeMsInput = el("crossfadeMs");
   const startRootInput = el("startRoot");
+  const loopVolumeInput = el("loopVolume");
+  const loopVolumeValue = el("loopVolumeValue");
+  const btnLoopToggle = el("btnLoopToggle");
 
   const NOTE_TO_SEMI = new Map([
     ["C",0], ["B#",0],
@@ -571,11 +588,13 @@
   let audioBuffersByQuality = new Map();
   let audioUrlsByQuality = new Map();
   let audioQualities = [];
+  let loopBuffers = [];
   let audioFolderLoaded = false;
   let isAudioPlaying = false;
   let audioNodes = [];
   let audioTimers = [];
   let currentGlobalTranspose = 0;
+  let loopEnabled = true;
   const PLAYBACK_SCHEDULE_AHEAD_SEC = 0.08;
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
@@ -768,6 +787,20 @@
     let s = (q || "").trim();
     s = normalizeAccidentals(s);
     return s || null;
+  };
+
+  const isLoopFileName = (fullName) => {
+    const base = fullName.replace(/\.[^.]+$/, "");
+    return /loop_/i.test(base);
+  };
+
+  const scaleCurve = (curve, scale) => {
+    if (scale === 1) return curve;
+    const out = new Float32Array(curve.length);
+    for (let i = 0; i < curve.length; i += 1) {
+      out[i] = curve[i] * scale;
+    }
+    return out;
   };
 
   const parseChordToken = (tokRaw) => {
@@ -1114,10 +1147,36 @@
   const parseAudioFileName = (fullName) => {
     if (!fullName) return null;
     if (!/\.wav$/i.test(fullName)) return null;
+    if (isLoopFileName(fullName)) return null;
     const base = fullName.replace(/\.[^.]+$/, "");
     const qualityKey = normalizeQuality(base);
     if (!qualityKey) return null;
     return qualityKey;
+  };
+
+  const getLoopVolume = () => {
+    const value = parseFloat(loopVolumeInput?.value ?? "0");
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(1, value));
+  };
+
+  const updateLoopControls = () => {
+    if (loopVolumeValue) {
+      loopVolumeValue.textContent = `${Math.round(getLoopVolume() * 100)}%`;
+    }
+    if (btnLoopToggle) {
+      btnLoopToggle.textContent = loopEnabled ? "Loop base: ON" : "Loop base: OFF";
+      btnLoopToggle.classList.toggle("bad", !loopEnabled);
+      btnLoopToggle.classList.toggle("ghost", loopEnabled);
+      btnLoopToggle.disabled = loopBuffers.length === 0;
+    }
+    if (loopStatus) {
+      if (!loopBuffers.length) {
+        loopStatus.textContent = "Sin loop cargado.";
+      } else {
+        loopStatus.textContent = `${loopBuffers.length} loop(s) cargado(s).`;
+      }
+    }
   };
 
   const loadFolderViaPicker = async () => {
@@ -1155,6 +1214,7 @@
   const loadAudioFolder = async () => {
     clearLog();
     audioBuffersByQuality.clear();
+    loopBuffers = [];
     for (const url of audioUrlsByQuality.values()) {
       URL.revokeObjectURL(url);
     }
@@ -1164,6 +1224,7 @@
 
     audioFolderLoaded = false;
     audioFolderStatus.textContent = "Cargando…";
+    if (loopStatus) loopStatus.textContent = "Cargando…";
     updateReadyState();
 
     try {
@@ -1175,10 +1236,22 @@
 
       const skipped = [];
       const dups = [];
+      const loopSkipped = [];
 
       for (const f of folderFiles) {
         const fullName = (f.name || "").trim();
         if (!fullName) { skipped.push("(sin nombre)"); continue; }
+        if (isLoopFileName(fullName)) {
+          if (!/\.wav$/i.test(fullName)) { skipped.push(fullName); continue; }
+          try {
+            const buf = await f.arrayBuffer();
+            const audioBuf = await ctx.decodeAudioData(buf.slice(0));
+            loopBuffers.push({ name: fullName, buffer: audioBuf });
+          } catch (err) {
+            loopSkipped.push(fullName);
+          }
+          continue;
+        }
         const qualityKey = parseAudioFileName(fullName);
         if (!qualityKey) { skipped.push(fullName); continue; }
         if (audioBuffersByQuality.has(qualityKey)) {
@@ -1201,11 +1274,13 @@
       audioQualities = [...new Set(audioBuffersByQuality.keys())].sort((a, b) => a.localeCompare(b, "en"));
       renderQualityChips();
       updateQualityMismatch();
+      updateLoopControls();
 
       if (!audioQualities.length) {
         log("No encontré WAVs válidos. Revisa nombres y extensiones.", "ERROR");
         audioFolderStatus.textContent = "Sin carpeta cargada.";
         audioFolderLoaded = false;
+        updateLoopControls();
         updateReadyState();
         return;
       }
@@ -1215,6 +1290,12 @@
       }
       if (dups.length) {
         log(`Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
+      }
+      if (loopSkipped.length) {
+        log(`Loops ignorados (error al leer): ${loopSkipped.join(", ")}`, "WARN");
+      }
+      if (loopBuffers.length) {
+        log(`Loops cargados: ${loopBuffers.length}.`, "OK");
       }
 
       const expectedSeconds = getBarsPerFile() * getBarSeconds();
@@ -1253,7 +1334,7 @@
     audioNodes = [];
   };
 
-  const scheduleAudioChord = ({ ctx, buffer, startTime, endTime, bufferOffset, trackNodes = true }) => {
+  const scheduleAudioChord = ({ ctx, buffer, startTime, endTime, bufferOffset, trackNodes = true, gainValue = 1 }) => {
     if (!buffer) return;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
@@ -1279,15 +1360,15 @@
 
     gain.gain.setValueAtTime(0, startTime);
     if (attack > 0) {
-      gain.gain.setValueCurveAtTime(FADE_IN_CURVE, startTime, attack);
+      gain.gain.setValueCurveAtTime(scaleCurve(FADE_IN_CURVE, gainValue), startTime, attack);
     } else {
-      gain.gain.setValueAtTime(1, startTime);
+      gain.gain.setValueAtTime(gainValue, startTime);
     }
     if (effectiveEnd > sustainStart) {
-      gain.gain.setValueAtTime(1, releaseStart);
+      gain.gain.setValueAtTime(gainValue, releaseStart);
     }
     if (release > 0) {
-      gain.gain.setValueCurveAtTime(FADE_OUT_CURVE, releaseStart, release);
+      gain.gain.setValueCurveAtTime(scaleCurve(FADE_OUT_CURVE, gainValue), releaseStart, release);
     } else {
       gain.gain.setValueAtTime(0, effectiveEnd);
     }
@@ -1304,6 +1385,30 @@
     const parsed = parseProgression(prog.value, { maxChordsPerBar: 4 });
     const repeated = repeatSegments(parsed.segments, parsed.totalEighth, parseInt(repeatCount.value, 10) || 1);
     return { segments: repeated.segments, totalEighth: repeated.totalEighth };
+  };
+
+  const scheduleLoopLayer = ({ ctx, baseTime, totalEighth, secPerEighth, barSeconds, trackNodes }) => {
+    if (!loopEnabled || !loopBuffers.length) return;
+    const loopVolume = getLoopVolume();
+    if (loopVolume <= 0) return;
+    const totalBars = Math.ceil(totalEighth / getEighthsPerBar());
+    for (const loop of loopBuffers) {
+      const duration = Math.max(loop.buffer.duration, 0.001);
+      for (let bar = 0; bar < totalBars; bar += 1) {
+        const startTime = baseTime + bar * barSeconds;
+        const endTime = startTime + barSeconds;
+        const bufferOffset = (bar * barSeconds) % duration;
+        scheduleAudioChord({
+          ctx,
+          buffer: loop.buffer,
+          startTime,
+          endTime,
+          bufferOffset,
+          trackNodes,
+          gainValue: loopVolume,
+        });
+      }
+    }
   };
 
   const playAudio = () => {
@@ -1350,6 +1455,15 @@
     const barSeconds = getBarSeconds();
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
 
+    scheduleLoopLayer({
+      ctx,
+      baseTime,
+      totalEighth: parsed.totalEighth,
+      secPerEighth,
+      barSeconds,
+      trackNodes: true,
+    });
+
     for (const seg of segments) {
       const buffer = audioBuffersByQuality.get(seg.quality);
       const rootBarStart = rootBarMap.get(seg.rootSemi);
@@ -1369,6 +1483,7 @@
         endTime,
         bufferOffset,
         trackNodes: true,
+        gainValue: 1,
       });
     }
 
@@ -1477,6 +1592,15 @@
 
     const barSeconds = getBarSeconds();
 
+    scheduleLoopLayer({
+      ctx: offlineCtx,
+      baseTime: 0,
+      totalEighth: parsed.totalEighth,
+      secPerEighth,
+      barSeconds,
+      trackNodes: false,
+    });
+
     for (const seg of segments) {
       const buffer = audioBuffersByQuality.get(seg.quality);
       const rootBarStart = rootBarMap.get(seg.rootSemi);
@@ -1496,6 +1620,7 @@
         endTime,
         bufferOffset,
         trackNodes: false,
+        gainValue: 1,
       });
     }
 
@@ -1540,6 +1665,11 @@
   el("btnPlay").addEventListener("click", playAudio);
   el("btnStop").addEventListener("click", stopAudioPlayback);
   el("btnExportAudio").addEventListener("click", exportAudio);
+  loopVolumeInput.addEventListener("input", updateLoopControls);
+  btnLoopToggle.addEventListener("click", () => {
+    loopEnabled = !loopEnabled;
+    updateLoopControls();
+  });
   btnSaveProg.addEventListener("click", saveCurrentProgression);
   btnLoadProg.addEventListener("click", loadSelectedProgression);
   btnExportProgs.addEventListener("click", exportProgressions);
@@ -1578,6 +1708,7 @@
   renderSavedProgressions(getSavedProgressions());
   updateQualityMismatch();
   updateReadyState();
+  updateLoopControls();
 })();
 </script>
 </body>
