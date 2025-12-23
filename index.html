@@ -546,7 +546,7 @@
 </div>
 
 <script type="module">
-import { SoundTouch, SimpleFilter, WebAudioBufferSource } from "https://unpkg.com/soundtouchjs@0.2.1/dist/soundtouch.js";
+import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberband-wasm@3.3.0/dist/index.esm.min.js";
 
 (() => {
   const el = (id) => document.getElementById(id);
@@ -617,11 +617,13 @@ import { SoundTouch, SimpleFilter, WebAudioBufferSource } from "https://unpkg.co
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
   const FADE_CURVE_SAMPLES = 128;
-  const STRETCH_BUFFER_SIZE = 16384;
+  const STRETCH_BUFFER_SIZE = 4096;
   const STRETCH_TEMPO_EPSILON = 0.0005;
   const STORAGE_KEY = "jcg_saved_progressions";
   const stretchedBufferCache = new Map();
   const stretchedLoopCache = new Map();
+  const RUBBERBAND_WASM_URL = "https://unpkg.com/rubberband-wasm@3.3.0/dist/rubberband.wasm";
+  let rubberBandPromise = null;
 
   const buildEqualPowerCurve = (samples, fadeIn = true) => {
     const curve = new Float32Array(samples);
@@ -1018,41 +1020,133 @@ import { SoundTouch, SimpleFilter, WebAudioBufferSource } from "https://unpkg.co
     return Math.max(0.1, playback / ref);
   };
 
-  const stretchAudioBuffer = (buffer, tempo) => {
+  const getRubberBand = async () => {
+    if (!rubberBandPromise) {
+      rubberBandPromise = (async () => {
+        const response = await fetch(RUBBERBAND_WASM_URL);
+        if (!response.ok) {
+          throw new Error(`No pude descargar Rubber Band WASM (${response.status}).`);
+        }
+        const bytes = await response.arrayBuffer();
+        const module = await WebAssembly.compile(bytes);
+        return RubberBandInterface.initialize(module);
+      })();
+    }
+    return rubberBandPromise;
+  };
+
+  const buildRubberBandOptions = () => (
+    RubberBandOption.RubberBandOptionProcessOffline |
+    RubberBandOption.RubberBandOptionStretchPrecise |
+    RubberBandOption.RubberBandOptionTransientsMixed |
+    RubberBandOption.RubberBandOptionDetectorCompound |
+    RubberBandOption.RubberBandOptionPhaseLaminar |
+    RubberBandOption.RubberBandOptionWindowStandard |
+    RubberBandOption.RubberBandOptionSmoothingOn |
+    RubberBandOption.RubberBandOptionFormantPreserved |
+    RubberBandOption.RubberBandOptionPitchHighQuality |
+    RubberBandOption.RubberBandOptionChannelsTogether |
+    RubberBandOption.RubberBandOptionEngineFiner
+  );
+
+  const stretchAudioBuffer = async (buffer, tempo) => {
     if (!buffer) return null;
     if (Math.abs(tempo - 1) <= STRETCH_TEMPO_EPSILON) return buffer;
-    const soundtouch = new SoundTouch();
-    soundtouch.stretch.setParameters(buffer.sampleRate, 0, 0, 0);
-    soundtouch.tempo = tempo;
-    const source = new WebAudioBufferSource(buffer);
-    const filter = new SimpleFilter(source, soundtouch);
-    const samples = new Float32Array(STRETCH_BUFFER_SIZE * 2);
-    const chunks = [];
-    let totalFrames = 0;
-    while (true) {
-      const extracted = filter.extract(samples, STRETCH_BUFFER_SIZE);
-      if (!extracted) break;
-      chunks.push(samples.slice(0, extracted * 2));
-      totalFrames += extracted;
-    }
-    const channels = buffer.numberOfChannels > 1 ? 2 : 1;
-    const outBuffer = ensureAudioContext().createBuffer(channels, totalFrames, buffer.sampleRate);
-    const left = outBuffer.getChannelData(0);
-    const right = channels > 1 ? outBuffer.getChannelData(1) : null;
-    let offset = 0;
-    for (const chunk of chunks) {
-      for (let i = 0; i < chunk.length; i += 2) {
-        left[offset] = chunk[i];
-        if (right) right[offset] = chunk[i + 1];
-        offset += 1;
+    try {
+      const timeRatio = Math.max(0.1, 1 / tempo);
+      const channels = buffer.numberOfChannels;
+      const sampleRate = buffer.sampleRate;
+      const rb = await getRubberBand();
+
+      const options = buildRubberBandOptions();
+      const state = rb.rubberband_new(sampleRate, channels, options, timeRatio, 1);
+      rb.rubberband_set_time_ratio(state, timeRatio);
+      rb.rubberband_set_expected_input_duration(state, buffer.length);
+      rb.rubberband_set_max_process_size(state, STRETCH_BUFFER_SIZE);
+
+      const inputPtr = rb.malloc(channels * 4);
+      const outputPtr = rb.malloc(channels * 4);
+      const inputChannelPtrs = [];
+      const outputChannelPtrs = [];
+
+      let outputCapacity = Math.ceil(STRETCH_BUFFER_SIZE / timeRatio) + 512;
+      const allocateChannelBuffers = () => {
+        inputChannelPtrs.length = 0;
+        outputChannelPtrs.length = 0;
+        for (let ch = 0; ch < channels; ch += 1) {
+          const inPtr = rb.malloc(STRETCH_BUFFER_SIZE * 4);
+          const outPtr = rb.malloc(outputCapacity * 4);
+          inputChannelPtrs.push(inPtr);
+          outputChannelPtrs.push(outPtr);
+          rb.memWritePtr(inputPtr + ch * 4, inPtr);
+          rb.memWritePtr(outputPtr + ch * 4, outPtr);
+        }
+      };
+
+      const freeChannelBuffers = () => {
+        for (const ptr of inputChannelPtrs) rb.free(ptr);
+        for (const ptr of outputChannelPtrs) rb.free(ptr);
+      };
+
+      const outputChunks = Array.from({ length: channels }, () => []);
+      const outputLengths = Array.from({ length: channels }, () => 0);
+
+      allocateChannelBuffers();
+
+      try {
+        const totalSamples = buffer.length;
+        for (let offset = 0; offset < totalSamples; offset += STRETCH_BUFFER_SIZE) {
+          const frameCount = Math.min(STRETCH_BUFFER_SIZE, totalSamples - offset);
+          for (let ch = 0; ch < channels; ch += 1) {
+            const data = buffer.getChannelData(ch).subarray(offset, offset + frameCount);
+            rb.memWrite(inputChannelPtrs[ch], data);
+          }
+          const isFinal = offset + frameCount >= totalSamples ? 1 : 0;
+          rb.rubberband_process(state, inputPtr, frameCount, isFinal);
+
+          let available = rb.rubberband_available(state);
+          while (available > 0) {
+            if (available > outputCapacity) {
+              freeChannelBuffers();
+              outputCapacity = Math.max(available, outputCapacity * 2);
+              allocateChannelBuffers();
+            }
+            const retrieved = rb.rubberband_retrieve(state, outputPtr, available);
+            for (let ch = 0; ch < channels; ch += 1) {
+              const chunk = rb.memReadF32(outputChannelPtrs[ch], retrieved);
+              outputChunks[ch].push(chunk.slice());
+              outputLengths[ch] += retrieved;
+            }
+            available = rb.rubberband_available(state);
+          }
+        }
+      } finally {
+        freeChannelBuffers();
+        rb.free(inputPtr);
+        rb.free(outputPtr);
+        rb.rubberband_delete(state);
       }
+
+      const outLength = Math.max(...outputLengths, 1);
+      const outBuffer = ensureAudioContext().createBuffer(channels, outLength, sampleRate);
+      for (let ch = 0; ch < channels; ch += 1) {
+        const channelData = outBuffer.getChannelData(ch);
+        let writeOffset = 0;
+        for (const chunk of outputChunks[ch]) {
+          channelData.set(chunk, writeOffset);
+          writeOffset += chunk.length;
+        }
+      }
+      return outBuffer;
+    } catch (err) {
+      log(`Error en Rubber Band: ${String(err?.message || err)}`, "ERROR");
+      return buffer;
     }
-    return outBuffer;
   };
 
   const getTempoCacheKey = (tempo) => tempo.toFixed(4);
 
-  const prepareStretchedBuffers = (tempoRatio, qualities) => {
+  const prepareStretchedBuffers = async (tempoRatio, qualities) => {
     if (Math.abs(tempoRatio - 1) <= STRETCH_TEMPO_EPSILON) {
       return { buffersByQuality: audioBuffersByQuality, loopBuffers };
     }
@@ -1069,17 +1163,22 @@ import { SoundTouch, SimpleFilter, WebAudioBufferSource } from "https://unpkg.co
       if (!cache.has(quality)) {
         cache.set(quality, stretchAudioBuffer(base, tempoRatio));
       }
-      out.set(quality, cache.get(quality));
+      out.set(quality, await cache.get(quality));
     }
     let loopCache = stretchedLoopCache.get(key);
     if (!loopCache) {
       loopCache = loopBuffers.map((loop) => ({
         name: loop.name,
-        buffer: stretchAudioBuffer(loop.buffer, tempoRatio),
+        bufferPromise: stretchAudioBuffer(loop.buffer, tempoRatio),
       }));
       stretchedLoopCache.set(key, loopCache);
     }
-    return { buffersByQuality: out, loopBuffers: loopCache };
+    const resolvedLoops = [];
+    for (const loop of loopCache) {
+      const buffer = await loop.bufferPromise;
+      if (buffer) resolvedLoops.push({ name: loop.name, buffer });
+    }
+    return { buffersByQuality: out, loopBuffers: resolvedLoops };
   };
   const transposeRootLabel = (root, delta, preferFlat = false) => {
     const baseSemi = NOTE_TO_SEMI.get(root.toUpperCase());
@@ -1568,7 +1667,7 @@ import { SoundTouch, SimpleFilter, WebAudioBufferSource } from "https://unpkg.co
     const segmentEighths = eighthsPerBar * barsPerChord;
     const tempoRatio = getPlaybackTempoRatio();
     const uniqueQualities = [...new Set(segments.map((seg) => seg.quality))];
-    const { buffersByQuality, loopBuffers: stretchedLoops } = prepareStretchedBuffers(tempoRatio, uniqueQualities);
+    const { buffersByQuality, loopBuffers: stretchedLoops } = await prepareStretchedBuffers(tempoRatio, uniqueQualities);
 
     for (const seg of segments) {
       if (!buffersByQuality.has(seg.quality)) {
@@ -1705,7 +1804,7 @@ import { SoundTouch, SimpleFilter, WebAudioBufferSource } from "https://unpkg.co
     const segmentEighths = eighthsPerBar * barsPerChord;
     const tempoRatio = getPlaybackTempoRatio();
     const uniqueQualities = [...new Set(segments.map((seg) => seg.quality))];
-    const { buffersByQuality, loopBuffers: stretchedLoops } = prepareStretchedBuffers(tempoRatio, uniqueQualities);
+    const { buffersByQuality, loopBuffers: stretchedLoops } = await prepareStretchedBuffers(tempoRatio, uniqueQualities);
 
     for (const seg of segments) {
       if (!buffersByQuality.has(seg.quality) || !audioUrlsByQuality.has(seg.quality)) {
