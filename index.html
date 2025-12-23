@@ -97,9 +97,9 @@
     textarea:focus{border-color: rgba(125,211,252,.6); box-shadow:0 0 0 4px rgba(125,211,252,.12)}
     .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
     .btn{
-      border:1px solid rgba(255,255,255,.12);
-      background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(34,211,238,.12));
-      color:var(--txt);
+      border:1px solid rgba(56,189,248,.85);
+      background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+      color:#041521;
       padding:7px 10px;
       border-radius:12px;
       cursor:pointer;
@@ -108,13 +108,14 @@
       font-size:12px;
       transition: transform .06s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
       user-select:none;
-      box-shadow: 0 10px 18px rgba(0,0,0,.28);
+      box-shadow: 0 10px 18px rgba(0,0,0,.28), 0 0 0 1px rgba(56,189,248,.2);
+      text-shadow: 0 1px 0 rgba(255,255,255,.4);
     }
-    .btn:hover{border-color: rgba(34,211,238,.55); background: linear-gradient(135deg, rgba(255,255,255,.16), rgba(34,211,238,.14)); box-shadow: 0 14px 22px rgba(0,0,0,.32)}
+    .btn:hover{border-color: rgba(125,211,252,.95); background: linear-gradient(135deg, #38bdf8, #0ea5e9); box-shadow: 0 14px 22px rgba(0,0,0,.32), 0 0 0 1px rgba(125,211,252,.35)}
     .btn:active{transform: translateY(1px)}
-    .btn.primary{border-color: rgba(34,211,238,.85); background: linear-gradient(135deg, rgba(34,211,238,.30), rgba(34,211,238,.12))}
-    .btn.purple{border-color: rgba(168,85,247,.7); background: linear-gradient(135deg, rgba(168,85,247,.24), rgba(168,85,247,.10))}
-    .btn.bad{border-color: rgba(251,113,133,.65); background: linear-gradient(135deg, rgba(251,113,133,.22), rgba(251,113,133,.08))}
+    .btn.primary{border-color: rgba(45,212,191,.95); background: linear-gradient(135deg, #2dd4bf, #14b8a6); color:#04201a}
+    .btn.purple{border-color: rgba(217,70,239,.9); background: linear-gradient(135deg, #c084fc, #a855f7); color:#2b0a3a}
+    .btn.bad{border-color: rgba(244,63,94,.9); background: linear-gradient(135deg, #fb7185, #f43f5e); color:#2b0b14}
     .btn:disabled{opacity:.45; cursor:not-allowed}
     select,
     input[type="number"]{
@@ -174,8 +175,8 @@
     .hint code{color:#c7d2fe}
 
     .topActions{display:flex; gap:8px; align-items:center}
-    .btn.ghost{background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12)}
-    .btn.ghost:hover{background: rgba(255,255,255,.10)}
+    .btn.ghost{background: linear-gradient(135deg, #facc15, #fb923c); border-color: rgba(251,146,60,.95); color:#241200}
+    .btn.ghost:hover{background: linear-gradient(135deg, #fde047, #fb923c)}
     .helpBtn{display:inline-flex; align-items:center; gap:8px}
     .helpBtn .q{display:inline-flex; width:18px; height:18px; border-radius:999px; align-items:center; justify-content:center;
       border:1px solid rgba(255,255,255,.18); color: var(--txt); font-weight:800; font-size:12px; background: rgba(255,255,255,.06);
@@ -311,13 +312,14 @@
       border-color: var(--line);
     }
     html[data-theme="light"] .btn{
-      background: rgba(18,24,38,.04);
-      color: var(--txt);
-      border-color: var(--line);
+      background: linear-gradient(135deg, #2563eb, #38bdf8);
+      color: #f8fafc;
+      border-color: rgba(37,99,235,.85);
+      text-shadow: 0 1px 0 rgba(15,23,42,.35);
     }
     html[data-theme="light"] .btn:hover{
-      background: rgba(18,24,38,.07);
-      border-color: rgba(14,165,233,.35);
+      background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+      border-color: rgba(14,165,233,.6);
     }
     html[data-theme="light"] .pill{
       background: rgba(18,24,38,.04);
