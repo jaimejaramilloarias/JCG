@@ -387,13 +387,6 @@
             <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
             <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado">Exportar audio</button>
           </div>
-          <div class="progressWrap" id="stretchProgress" aria-live="polite">
-            <div class="progressRow">
-              <span id="stretchProgressLabel">Estirando audio…</span>
-              <span class="mini" id="stretchProgressPercent">0%</span>
-            </div>
-            <progress id="stretchProgressBar" value="0" max="100"></progress>
-          </div>
         </div>
 
         <div class="controlCluster">
@@ -443,13 +436,6 @@
             <div>
               <div class="label">BPM fijo referencias</div>
               <input id="refBpm" type="number" min="20" max="300" value="90" />
-            </div>
-            <div>
-              <div class="label">BPM reproducción / export</div>
-              <div class="row" style="gap:8px; align-items:center;">
-                <input id="playbackBpm" type="range" min="20" max="300" step="1" value="90" />
-                <span class="mini" id="playbackBpmValue">90 BPM</span>
-              </div>
             </div>
             <div>
               <div class="label">Crossfade (ms)</div>
@@ -546,7 +532,7 @@
       <p><b>Manual rápido</b></p>
       <ul>
         <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y elige la carpeta con tus WAVs.</li>
-        <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, BPM de reproducción, crossfades y fundamental inicial.</li>
+        <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
         <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
         <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
         <li><b>5) Guardar:</b> usa <span class="kbd">Guardar</span>, <span class="kbd">Exportar</span> para llevarte todas y <span class="kbd">Cargar archivo</span> para reimportarlas.</li>
@@ -589,12 +575,6 @@
   const barsPerChordInput = el("barsPerChord");
   const timeSignatureInput = el("timeSignature");
   const refBpmInput = el("refBpm");
-  const playbackBpmInput = el("playbackBpm");
-  const playbackBpmValue = el("playbackBpmValue");
-  const stretchProgressWrap = el("stretchProgress");
-  const stretchProgressBar = el("stretchProgressBar");
-  const stretchProgressLabel = el("stretchProgressLabel");
-  const stretchProgressPercent = el("stretchProgressPercent");
   const crossfadeMsInput = el("crossfadeMs");
   const loopBarsInput = el("loopBars");
   const startRootInput = el("startRoot");
@@ -634,44 +614,7 @@
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
   const FADE_CURVE_SAMPLES = 128;
-  const STRETCH_TEMPO_EPSILON = 0.0005;
   const STORAGE_KEY = "jcg_saved_progressions";
-  const stretchedBufferCache = new Map();
-  const stretchedLoopCache = new Map();
-
-  const createStretchProgressTracker = (totalFrames, label = "Estirando audio…") => {
-    if (!stretchProgressWrap || !stretchProgressBar || !stretchProgressPercent || totalFrames <= 0) {
-      return null;
-    }
-    let doneFrames = 0;
-    let rafPending = false;
-    stretchProgressLabel.textContent = label;
-    stretchProgressBar.value = 0;
-    stretchProgressPercent.textContent = "0%";
-    stretchProgressWrap.classList.add("active");
-    const updateUI = () => {
-      const pct = Math.min(100, Math.round((doneFrames / totalFrames) * 100));
-      stretchProgressBar.value = pct;
-      stretchProgressPercent.textContent = `${pct}%`;
-    };
-    const report = (frames) => {
-      doneFrames = Math.min(totalFrames, doneFrames + frames);
-      if (rafPending) return;
-      rafPending = true;
-      requestAnimationFrame(() => {
-        rafPending = false;
-        updateUI();
-      });
-    };
-    const finish = () => {
-      doneFrames = totalFrames;
-      updateUI();
-      setTimeout(() => {
-        stretchProgressWrap.classList.remove("active");
-      }, 350);
-    };
-    return { report, finish };
-  };
 
   const buildEqualPowerCurve = (samples, fadeIn = true) => {
     const curve = new Float32Array(samples);
@@ -1016,14 +959,6 @@
   const getBarsPerFile = () => Math.max(1, parseInt(barsPerFileInput.value, 10) || 1);
   const getBarsPerChord = () => Math.max(1, parseInt(barsPerChordInput.value, 10) || 1);
   const getRefBpm = () => Math.max(20, parseInt(refBpmInput.value, 10) || 90);
-  const clampPlaybackBpm = (value) => Math.max(20, Math.min(300, Math.round(value)));
-  const setPlaybackBpmDisplay = (value) => {
-    const bpm = clampPlaybackBpm(value);
-    if (playbackBpmInput) playbackBpmInput.value = String(bpm);
-    if (playbackBpmValue) playbackBpmValue.textContent = `${bpm} BPM`;
-    return bpm;
-  };
-  const getPlaybackBpm = () => clampPlaybackBpm(parseInt(playbackBpmInput?.value || "90", 10) || 90);
   const getCrossfadeSeconds = () => Math.max(0, parseInt(crossfadeMsInput.value, 10) || 0) / 1000;
   const getLoopBars = () => Math.max(1, parseInt(loopBarsInput?.value, 10) || 1);
 
@@ -1046,185 +981,9 @@
     return (60 / bpm) * num * (4 / den);
   };
 
-  const getPlaybackBarSeconds = () => {
-    const { num, den } = getTimeSignature();
-    const bpm = getPlaybackBpm();
-    return (60 / bpm) * num * (4 / den);
-  };
-
   const getRefSecondsPerEighth = () => {
     const bpm = getRefBpm();
     return (60 / bpm) / 2;
-  };
-
-  const getPlaybackSecondsPerEighth = () => {
-    const bpm = getPlaybackBpm();
-    return (60 / bpm) / 2;
-  };
-
-  const getPlaybackTempoRatio = () => {
-    const ref = getRefBpm();
-    const playback = getPlaybackBpm();
-    return Math.max(0.1, playback / ref);
-  };
-
-  const buildHannWindow = (size) => {
-    const win = new Float32Array(size);
-    const denom = size - 1;
-    for (let i = 0; i < size; i += 1) {
-      win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / denom);
-    }
-    return win;
-  };
-
-  const selectWsolaWindow = (sampleRate) => {
-    const target = Math.round(sampleRate * 0.046);
-    const clamped = Math.max(1024, Math.min(4096, target));
-    return Math.max(256, clamped);
-  };
-
-  const findBestOverlapOffset = (input, prevPos, searchStart, searchEnd, windowSize, window) => {
-    let bestOffset = searchStart;
-    let bestScore = -Infinity;
-    const prevStart = Math.max(0, prevPos);
-    const prevSlice = input.subarray(prevStart, prevStart + windowSize);
-    for (let pos = searchStart; pos <= searchEnd; pos += 1) {
-      const cand = input.subarray(pos, pos + windowSize);
-      let score = 0;
-      for (let i = 0; i < windowSize; i += 1) {
-        score += prevSlice[i] * cand[i] * window[i];
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        bestOffset = pos;
-      }
-    }
-    return bestOffset;
-  };
-
-  const wsolaStretchBuffer = (buffer, timeRatio, onProgress) => {
-    const channels = buffer.numberOfChannels;
-    const sampleRate = buffer.sampleRate;
-    const windowSize = selectWsolaWindow(sampleRate);
-    const analysisHop = Math.max(1, Math.round(windowSize / 2));
-    const synthesisHop = Math.max(1, Math.round(analysisHop * timeRatio));
-    const searchRange = Math.max(16, Math.round(windowSize / 4));
-    const window = buildHannWindow(windowSize);
-    const inputLength = buffer.length;
-    const estimatedLength = Math.max(windowSize, Math.round(inputLength * timeRatio + windowSize));
-    const outputLength = estimatedLength + windowSize;
-    const outputChannels = Array.from({ length: channels }, () => new Float32Array(outputLength));
-    const weights = new Float32Array(outputLength);
-    const refInput = buffer.getChannelData(0);
-
-    let inputPos = 0;
-    let outputPos = 0;
-    const writeWindow = (sourcePos) => {
-      const maxSamples = Math.min(windowSize, inputLength - sourcePos);
-      for (let i = 0; i < maxSamples; i += 1) {
-        const w = window[i];
-        const outIndex = outputPos + i;
-        if (outIndex >= outputLength) break;
-        weights[outIndex] += w;
-        for (let ch = 0; ch < channels; ch += 1) {
-          const inputData = buffer.getChannelData(ch);
-          outputChannels[ch][outIndex] += inputData[sourcePos + i] * w;
-        }
-      }
-    };
-
-    writeWindow(inputPos);
-    inputPos += analysisHop;
-
-    while (inputPos + windowSize < inputLength) {
-      const expected = inputPos;
-      const searchStart = Math.max(0, expected - searchRange);
-      const searchEnd = Math.min(inputLength - windowSize, expected + searchRange);
-      const bestOffset = findBestOverlapOffset(refInput, inputPos - analysisHop, searchStart, searchEnd, windowSize, window);
-
-      outputPos += synthesisHop;
-      writeWindow(bestOffset);
-
-      inputPos = expected + analysisHop;
-      if (onProgress) onProgress(Math.min(analysisHop, inputLength - expected));
-    }
-
-    const finalLength = Math.min(outputLength, outputPos + windowSize);
-    const outBuffer = ensureAudioContext().createBuffer(channels, finalLength, sampleRate);
-    for (let ch = 0; ch < channels; ch += 1) {
-      const outData = outBuffer.getChannelData(ch);
-      const src = outputChannels[ch];
-      for (let i = 0; i < finalLength; i += 1) {
-        const w = weights[i];
-        outData[i] = w > 0 ? src[i] / w : 0;
-      }
-    }
-    return outBuffer;
-  };
-
-  const stretchAudioBuffer = async (buffer, tempo, onProgress) => {
-    if (!buffer) return null;
-    if (Math.abs(tempo - 1) <= STRETCH_TEMPO_EPSILON) return buffer;
-    try {
-      const timeRatio = Math.max(0.1, 1 / tempo);
-      return wsolaStretchBuffer(buffer, timeRatio, onProgress);
-    } catch (err) {
-      log(`Error en WSOLA: ${String(err?.message || err)}`, "ERROR");
-      return buffer;
-    }
-  };
-
-  const getTempoCacheKey = (tempo) => tempo.toFixed(4);
-
-  const prepareStretchedBuffers = async (tempoRatio, qualities) => {
-    if (Math.abs(tempoRatio - 1) <= STRETCH_TEMPO_EPSILON) {
-      return { buffersByQuality: audioBuffersByQuality, loopBuffers };
-    }
-    const key = getTempoCacheKey(tempoRatio);
-    let cache = stretchedBufferCache.get(key);
-    if (!cache) {
-      cache = new Map();
-      stretchedBufferCache.set(key, cache);
-    }
-    let loopCache = stretchedLoopCache.get(key);
-    let totalFrames = 0;
-    for (const quality of qualities) {
-      const base = audioBuffersByQuality.get(quality);
-      if (!base) continue;
-      if (!cache.has(quality)) totalFrames += base.length;
-    }
-    if (!loopCache) {
-      for (const loop of loopBuffers) {
-        if (loop?.buffer) totalFrames += loop.buffer.length;
-      }
-    }
-    const progress = totalFrames > 0 ? createStretchProgressTracker(totalFrames) : null;
-    const out = new Map();
-    try {
-      for (const quality of qualities) {
-        const base = audioBuffersByQuality.get(quality);
-        if (!base) continue;
-        if (!cache.has(quality)) {
-          cache.set(quality, stretchAudioBuffer(base, tempoRatio, progress?.report));
-        }
-        out.set(quality, await cache.get(quality));
-      }
-      if (!loopCache) {
-        loopCache = loopBuffers.map((loop) => ({
-          name: loop.name,
-          bufferPromise: stretchAudioBuffer(loop.buffer, tempoRatio, progress?.report),
-        }));
-        stretchedLoopCache.set(key, loopCache);
-      }
-      const resolvedLoops = [];
-      for (const loop of loopCache) {
-        const buffer = await loop.bufferPromise;
-        if (buffer) resolvedLoops.push({ name: loop.name, buffer });
-      }
-      return { buffersByQuality: out, loopBuffers: resolvedLoops };
-    } finally {
-      progress?.finish();
-    }
   };
   const transposeRootLabel = (root, delta, preferFlat = false) => {
     const baseSemi = NOTE_TO_SEMI.get(root.toUpperCase());
@@ -1487,8 +1246,6 @@
     clearLog();
     audioBuffersByQuality.clear();
     loopBuffers = [];
-    stretchedBufferCache.clear();
-    stretchedLoopCache.clear();
     for (const url of audioUrlsByQuality.values()) {
       URL.revokeObjectURL(url);
     }
@@ -1711,9 +1468,8 @@
     const barsPerChord = getBarsPerChord();
     const eighthsPerBar = getEighthsPerBar();
     const segmentEighths = eighthsPerBar * barsPerChord;
-    const tempoRatio = getPlaybackTempoRatio();
-    const uniqueQualities = [...new Set(segments.map((seg) => seg.quality))];
-    const { buffersByQuality, loopBuffers: stretchedLoops } = await prepareStretchedBuffers(tempoRatio, uniqueQualities);
+    const buffersByQuality = audioBuffersByQuality;
+    const loopBufferSet = loopBuffers;
 
     for (const seg of segments) {
       if (!buffersByQuality.has(seg.quality)) {
@@ -1730,8 +1486,8 @@
     isAudioPlaying = true;
 
     const ctx = ensureAudioContext();
-    const secPerEighth = getPlaybackSecondsPerEighth();
-    const barSeconds = getPlaybackBarSeconds();
+    const secPerEighth = getRefSecondsPerEighth();
+    const barSeconds = getRefBarSeconds();
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
 
     scheduleLoopLayer({
@@ -1741,7 +1497,7 @@
       secPerEighth,
       barSeconds,
       trackNodes: true,
-      loopBufferSet: stretchedLoops,
+      loopBufferSet,
     });
 
     for (const seg of segments) {
@@ -1848,9 +1604,8 @@
     const barsPerChord = getBarsPerChord();
     const eighthsPerBar = getEighthsPerBar();
     const segmentEighths = eighthsPerBar * barsPerChord;
-    const tempoRatio = getPlaybackTempoRatio();
-    const uniqueQualities = [...new Set(segments.map((seg) => seg.quality))];
-    const { buffersByQuality, loopBuffers: stretchedLoops } = await prepareStretchedBuffers(tempoRatio, uniqueQualities);
+    const buffersByQuality = audioBuffersByQuality;
+    const loopBufferSet = loopBuffers;
 
     for (const seg of segments) {
       if (!buffersByQuality.has(seg.quality) || !audioUrlsByQuality.has(seg.quality)) {
@@ -1866,14 +1621,14 @@
     const buffers = [...buffersByQuality.values()];
     const sampleRate = buffers[0]?.sampleRate || 44100;
     const numChannels = Math.max(1, ...buffers.map((buf) => buf.numberOfChannels || 1));
-    const secPerEighth = getPlaybackSecondsPerEighth();
+    const secPerEighth = getRefSecondsPerEighth();
     const totalDuration = parsed.totalEighth * secPerEighth;
     const renderLength = Math.ceil((totalDuration + 0.4) * sampleRate);
     const offlineCtx = new OfflineAudioContext(numChannels, renderLength, sampleRate);
 
     log("Renderizando audio en segundo plano…", "OK");
 
-    const barSeconds = getPlaybackBarSeconds();
+    const barSeconds = getRefBarSeconds();
 
     scheduleLoopLayer({
       ctx: offlineCtx,
@@ -1882,7 +1637,7 @@
       secPerEighth,
       barSeconds,
       trackNodes: false,
-      loopBufferSet: stretchedLoops,
+      loopBufferSet,
     });
 
     for (const seg of segments) {
@@ -1921,7 +1676,7 @@
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `referencia_${getPlaybackBpm()}bpm.wav`;
+    anchor.download = `referencia_${getRefBpm()}bpm.wav`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -1977,10 +1732,6 @@
   timeSignatureInput.addEventListener("change", updateQualityMismatch);
   refBpmInput.addEventListener("input", () => {
     updateQualityMismatch();
-    setPlaybackBpmDisplay(getPlaybackBpm());
-  });
-  playbackBpmInput.addEventListener("input", (e) => {
-    setPlaybackBpmDisplay(parseInt(e.target.value, 10) || 90);
   });
   crossfadeMsInput.addEventListener("input", updateQualityMismatch);
   loopBarsInput.addEventListener("input", updateQualityMismatch);
@@ -2004,7 +1755,6 @@
   updateQualityMismatch();
   updateReadyState();
   updateLoopControls();
-  setPlaybackBpmDisplay(getPlaybackBpm());
 })();
 </script>
 </body>
