@@ -620,17 +620,6 @@
 
     const totalEighth = parts.length * eighthsPerBar;
     if (segments.length >= 2) {
-      for (let i = 1; i < segments.length; i++) {
-        const prevStart = segments[i - 1].startEighth;
-        const proposed = Math.max(0, segments[i].startEighth - 1);
-        const minAllowed = prevStart + 1;
-        segments[i].startEighth = Math.max(proposed, minAllowed);
-      }
-      for (let i = 1; i < segments.length; i++) {
-        if (segments[i].startEighth <= segments[i - 1].startEighth) {
-          segments[i].startEighth = segments[i - 1].startEighth + 1;
-        }
-      }
       for (let i = 0; i < segments.length - 1; i++) {
         segments[i].durEighth = segments[i + 1].startEighth - segments[i].startEighth;
       }
@@ -949,32 +938,34 @@
     audioNodes = [];
   };
 
-  const scheduleAudioChord = ({ ctx, buffer, startTime, endTime, bufferOffset, loopStart, loopEnd, trackNodes = true }) => {
+  const scheduleAudioChord = ({ ctx, buffer, startTime, endTime, bufferOffset, trackNodes = true }) => {
     if (!buffer) return;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.loop = true;
-    source.loopStart = loopStart;
-    source.loopEnd = loopEnd;
 
     const gain = ctx.createGain();
     gain.gain.value = 0;
     source.connect(gain).connect(ctx.destination);
 
     const duration = Math.max(0, endTime - startTime);
-    const crossfade = Math.min(getCrossfadeSeconds(), duration / 2);
-    const attack = Math.min(Math.max(MIN_FADE_SEC, crossfade || 0), duration / 2 || MIN_FADE_SEC);
-    const release = Math.min(Math.max(MIN_FADE_SEC, crossfade || 0), duration / 2 || MIN_FADE_SEC);
+    const safeOffset = Math.max(0, Math.min(buffer.duration - 0.002, bufferOffset));
+    const maxPlayable = Math.max(0, buffer.duration - safeOffset);
+    const playDuration = Math.min(duration, maxPlayable);
+    if (playDuration <= 0) return;
+
+    const crossfade = Math.min(getCrossfadeSeconds(), playDuration / 2);
+    const attack = Math.min(Math.max(MIN_FADE_SEC, crossfade || 0), playDuration / 2 || MIN_FADE_SEC);
+    const release = Math.min(Math.max(MIN_FADE_SEC, crossfade || 0), playDuration / 2 || MIN_FADE_SEC);
+    const effectiveEnd = startTime + playDuration;
     gain.gain.setValueAtTime(0, Math.max(0, startTime - attack));
     gain.gain.linearRampToValueAtTime(1, startTime + attack);
-    if (duration > attack + release) {
-      gain.gain.setValueAtTime(1, Math.max(startTime + attack, endTime - release));
+    if (playDuration > attack + release) {
+      gain.gain.setValueAtTime(1, Math.max(startTime + attack, effectiveEnd - release));
     }
-    gain.gain.linearRampToValueAtTime(0, endTime + release);
+    gain.gain.linearRampToValueAtTime(0, effectiveEnd + release);
 
-    const safeOffset = Math.max(0, Math.min(buffer.duration - 0.002, bufferOffset));
-    source.start(startTime, safeOffset);
-    source.stop(endTime + release + RELEASE_TAIL_SEC);
+    source.start(startTime, safeOffset, playDuration);
+    source.stop(effectiveEnd + release + RELEASE_TAIL_SEC);
 
     if (trackNodes) {
       audioNodes.push({ source, gain });
@@ -1029,7 +1020,6 @@
     const ctx = ensureAudioContext();
     const secPerEighth = getSecondsPerEighth();
     const barSeconds = getBarSeconds();
-    const segmentSeconds = barsPerChord * barSeconds;
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
 
     for (const seg of segments) {
@@ -1038,7 +1028,6 @@
       const offsetEighthInSegment = seg.startEighth % segmentEighths;
       const offsetSeconds = offsetEighthInSegment * secPerEighth;
       const loopStart = rootBarStart * barSeconds;
-      const loopEnd = loopStart + segmentSeconds;
 
       const startTime = baseTime + seg.startEighth * secPerEighth;
       const endTime = startTime + seg.durEighth * secPerEighth;
@@ -1051,8 +1040,6 @@
         startTime,
         endTime,
         bufferOffset,
-        loopStart,
-        loopEnd,
         trackNodes: true,
       });
     }
@@ -1161,7 +1148,6 @@
     log("Renderizando audio en segundo plano…", "OK");
 
     const barSeconds = getBarSeconds();
-    const segmentSeconds = barsPerChord * barSeconds;
 
     for (const seg of segments) {
       const buffer = audioBuffersByQuality.get(seg.quality);
@@ -1169,7 +1155,6 @@
       const offsetEighthInSegment = seg.startEighth % segmentEighths;
       const offsetSeconds = offsetEighthInSegment * secPerEighth;
       const loopStart = rootBarStart * barSeconds;
-      const loopEnd = loopStart + segmentSeconds;
 
       const startTime = seg.startEighth * secPerEighth;
       const endTime = startTime + seg.durEighth * secPerEighth;
@@ -1182,8 +1167,6 @@
         startTime,
         endTime,
         bufferOffset,
-        loopStart,
-        loopEnd,
         trackNodes: false,
       });
     }
