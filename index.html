@@ -435,6 +435,10 @@
               <input id="crossfadeMs" type="number" min="0" max="2000" value="20" />
             </div>
             <div>
+              <div class="label">Compases loop base</div>
+              <input id="loopBars" type="number" min="1" max="256" value="4" />
+            </div>
+            <div>
               <div class="label">Fundamental inicial</div>
               <select id="startRoot">
                 <option value="A">A</option>
@@ -562,6 +566,7 @@
   const timeSignatureInput = el("timeSignature");
   const refBpmInput = el("refBpm");
   const crossfadeMsInput = el("crossfadeMs");
+  const loopBarsInput = el("loopBars");
   const startRootInput = el("startRoot");
   const loopVolumeInput = el("loopVolume");
   const loopVolumeValue = el("loopVolumeValue");
@@ -929,6 +934,7 @@
   const getBarsPerChord = () => Math.max(1, parseInt(barsPerChordInput.value, 10) || 1);
   const getRefBpm = () => Math.max(20, parseInt(refBpmInput.value, 10) || 90);
   const getCrossfadeSeconds = () => Math.max(0, parseInt(crossfadeMsInput.value, 10) || 0) / 1000;
+  const getLoopBars = () => Math.max(1, parseInt(loopBarsInput?.value, 10) || 1);
 
   const buildRootBarStartMap = () => {
     const map = new Map();
@@ -1392,12 +1398,14 @@
     const loopVolume = getLoopVolume();
     if (loopVolume <= 0) return;
     const totalBars = Math.ceil(totalEighth / getEighthsPerBar());
+    const loopBars = getLoopBars();
     for (const loop of loopBuffers) {
       const duration = Math.max(loop.buffer.duration, 0.001);
       for (let bar = 0; bar < totalBars; bar += 1) {
         const startTime = baseTime + bar * barSeconds;
         const endTime = startTime + barSeconds;
-        const bufferOffset = (bar * barSeconds) % duration;
+        const loopBarIndex = loopBars > 0 ? bar % loopBars : bar;
+        const bufferOffset = (loopBarIndex * barSeconds) % duration;
         scheduleAudioChord({
           ctx,
           buffer: loop.buffer,
@@ -1689,6 +1697,7 @@
   timeSignatureInput.addEventListener("change", updateQualityMismatch);
   refBpmInput.addEventListener("input", updateQualityMismatch);
   crossfadeMsInput.addEventListener("input", updateQualityMismatch);
+  loopBarsInput.addEventListener("input", updateQualityMismatch);
   startRootInput.addEventListener("change", updateQualityMismatch);
   globalTranspose.addEventListener("input", applyGlobalTranspose);
 
