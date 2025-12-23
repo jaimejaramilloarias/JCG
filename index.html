@@ -363,7 +363,6 @@
         <button class="btn ghost helpBtn" id="btnHelp" title="Abrir ayuda">
           <span class="q">?</span><span>Ayuda</span>
         </button>
-        <button class="btn ghost" id="btnTheme" title="Cambiar modo claro/oscuro">Modo</button>
       </div>
     </div>
   </header>
@@ -483,8 +482,6 @@
             <span class="badge" id="savedCount">0 guardadas</span>
             <input id="importProgFile" type="file" accept=".json,application/json" style="display:none" />
           </div>
-          <div class="label" style="margin-top:8px">Vista rápida del cifrado</div>
-          <div class="chordPreview" id="progPreview"></div>
           <div class="pillRow" style="margin-top:8px">
             <div class="pill status" id="qualityMismatch" title="Estado de coincidencia de calidades">
               <span class="dot bad" id="qualityMismatchDot"></span>
@@ -1538,19 +1535,6 @@
   btnHelpClose.addEventListener("click", closeHelp);
   helpModal.addEventListener("click", (e) => { if (e.target === helpModal) closeHelp(); });
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelp(); });
-
-  const btnTheme = el("btnTheme");
-  const root = document.documentElement;
-  const setTheme = (t) => {
-    root.setAttribute("data-theme", t);
-    try { localStorage.setItem("jcg_theme", t); } catch (_) {}
-  };
-  const savedTheme = (() => { try { return localStorage.getItem("jcg_theme"); } catch (_) { return null; } })();
-  setTheme(savedTheme || "dark");
-  btnTheme.addEventListener("click", () => {
-    const cur = root.getAttribute("data-theme") || "dark";
-    setTheme(cur === "dark" ? "light" : "dark");
-  });
 
   el("btnPickAudioFolder").addEventListener("click", loadAudioFolder);
   el("btnPlay").addEventListener("click", playAudio);
