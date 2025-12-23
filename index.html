@@ -134,9 +134,9 @@
       display:inline-flex; align-items:center; gap:8px;
       padding:6px 10px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,.12);
-      background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(34,211,238,.08));
-      color:var(--txt);
+      border:1px solid rgba(255,255,255,.18);
+      background: linear-gradient(135deg, rgba(20,184,166,.28), rgba(99,102,241,.2));
+      color:#f8fafc;
       font-size:12px;
       cursor:pointer;
       user-select:none;
@@ -163,8 +163,8 @@
     .mini{font-size:12px; color:var(--muted)}
     .inputNumber{width:120px}
     .sectionGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:8px;}
-    .sectionCard{border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:8px 10px; background: linear-gradient(135deg, rgba(24,40,72,.98), rgba(12,24,44,.96)); display:flex; flex-direction:column; gap:6px; box-shadow: 0 10px 24px rgba(0,0,0,.26);}
-    .sectionTitle{font-size:11px; color:#c7d2fe; letter-spacing:.5px; text-transform:uppercase; font-weight:800;}
+    .sectionCard{border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:8px 10px; background: linear-gradient(135deg, rgba(15,55,110,.98), rgba(20,30,72,.96)); display:flex; flex-direction:column; gap:6px; box-shadow: 0 12px 28px rgba(0,0,0,.32);}
+    .sectionTitle{font-size:11px; color:#fef08a; letter-spacing:.6px; text-transform:uppercase; font-weight:800;}
     .inlineStats{display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:12px; color:var(--muted);}
     .pillRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
     .warn{color: #fbbf24}
@@ -186,8 +186,8 @@
       gap:6px;
       padding:10px;
       border-radius:12px;
-      border:1px solid rgba(255,255,255,.10);
-      background: linear-gradient(135deg, rgba(34,211,238,.16), rgba(17,24,39,.7));
+      border:1px solid rgba(255,255,255,.2);
+      background: linear-gradient(135deg, rgba(56,189,248,.3), rgba(217,70,239,.22));
       box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
       min-height:56px;
     }
@@ -220,12 +220,13 @@
     .chordToken{
       padding:6px 10px;
       border-radius:10px;
-      background: rgba(255,255,255,.08);
-      border:1px solid rgba(255,255,255,.14);
+      background: linear-gradient(135deg, rgba(56,189,248,.32), rgba(34,197,94,.28));
+      border:1px solid rgba(255,255,255,.22);
       font-size:12px;
       font-weight:700;
       letter-spacing:.2px;
-      color:#f8fafc;
+      color:#04111f;
+      text-shadow: 0 1px 0 rgba(255,255,255,.4);
     }
     .chordToken.bad{
       background: linear-gradient(135deg, rgba(251,113,133,.95), rgba(249,115,22,.85));
@@ -435,7 +436,9 @@
       <div class="sectionGrid">
         <div class="sectionCard">
           <div class="sectionTitle">Progresión y calidades</div>
-          <div class="label">Progresión</div>
+          <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
+          <div class="chips" id="qualityChips"></div>
+          <div class="label" style="margin-top:8px">Progresión</div>
           <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
           <div class="label" style="margin-top:8px">Guardar progresiones</div>
           <div class="savedRow">
@@ -464,8 +467,6 @@
           </div>
           <div class="label" style="margin-top:8px">Vista rápida del cifrado</div>
           <div class="chordPreview" id="progPreview"></div>
-          <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
-          <div class="chips" id="qualityChips"></div>
           <div class="pillRow" style="margin-top:8px">
             <div class="pill status" id="qualityMismatch" title="Estado de coincidencia de calidades">
               <span class="dot bad" id="qualityMismatchDot"></span>
