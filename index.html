@@ -431,6 +431,13 @@
               <input id="refBpm" type="number" min="20" max="300" value="90" />
             </div>
             <div>
+              <div class="label">BPM reproducción / export</div>
+              <div class="row" style="gap:8px; align-items:center;">
+                <input id="playbackBpm" type="range" min="20" max="300" step="1" value="90" />
+                <span class="mini" id="playbackBpmValue">90 BPM</span>
+              </div>
+            </div>
+            <div>
               <div class="label">Crossfade (ms)</div>
               <input id="crossfadeMs" type="number" min="0" max="2000" value="20" />
             </div>
@@ -491,6 +498,7 @@
             </div>
             <div class="row" style="gap:8px">
               <button class="btn" id="btnLoadProg" title="Cargar la progresión seleccionada">Cargar</button>
+              <button class="btn bad" id="btnDeleteProg" title="Eliminar la progresión seleccionada">Eliminar</button>
               <button class="btn ghost" id="btnExportProgs" title="Exportar todas las progresiones guardadas">Exportar</button>
               <button class="btn ghost" id="btnImportProgs" title="Cargar el archivo con progresiones exportadas">Cargar archivo</button>
             </div>
@@ -524,7 +532,7 @@
       <p><b>Manual rápido</b></p>
       <ul>
         <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y elige la carpeta con tus WAVs.</li>
-        <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
+        <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, BPM de reproducción, crossfades y fundamental inicial.</li>
         <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
         <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
         <li><b>5) Guardar:</b> usa <span class="kbd">Guardar</span>, <span class="kbd">Exportar</span> para llevarte todas y <span class="kbd">Cargar archivo</span> para reimportarlas.</li>
@@ -537,7 +545,9 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { SoundTouch, SimpleFilter, WebAudioBufferSource } from "https://unpkg.com/soundtouchjs@0.2.1/dist/soundtouch.js";
+
 (() => {
   const el = (id) => document.getElementById(id);
   const logEl = el("log");
@@ -555,6 +565,7 @@
   const savedProgSelect = el("savedProgSelect");
   const btnSaveProg = el("btnSaveProg");
   const btnLoadProg = el("btnLoadProg");
+  const btnDeleteProg = el("btnDeleteProg");
   const btnExportProgs = el("btnExportProgs");
   const btnImportProgs = el("btnImportProgs");
   const importProgFile = el("importProgFile");
@@ -565,6 +576,8 @@
   const barsPerChordInput = el("barsPerChord");
   const timeSignatureInput = el("timeSignature");
   const refBpmInput = el("refBpm");
+  const playbackBpmInput = el("playbackBpm");
+  const playbackBpmValue = el("playbackBpmValue");
   const crossfadeMsInput = el("crossfadeMs");
   const loopBarsInput = el("loopBars");
   const startRootInput = el("startRoot");
@@ -604,7 +617,11 @@
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
   const FADE_CURVE_SAMPLES = 128;
+  const STRETCH_BUFFER_SIZE = 16384;
+  const STRETCH_TEMPO_EPSILON = 0.0005;
   const STORAGE_KEY = "jcg_saved_progressions";
+  const stretchedBufferCache = new Map();
+  const stretchedLoopCache = new Map();
 
   const buildEqualPowerCurve = (samples, fadeIn = true) => {
     const curve = new Float32Array(samples);
@@ -659,6 +676,7 @@
       savedProgSelect.appendChild(opt);
       savedProgSelect.disabled = true;
       if (btnLoadProg) btnLoadProg.disabled = true;
+      if (btnDeleteProg) btnDeleteProg.disabled = true;
       if (btnExportProgs) btnExportProgs.disabled = true;
     } else {
       const placeholder = document.createElement("option");
@@ -675,6 +693,7 @@
       if (btnLoadProg) btnLoadProg.disabled = false;
       if (btnExportProgs) btnExportProgs.disabled = false;
       if (selectedName) savedProgSelect.value = selectedName;
+      if (btnDeleteProg) btnDeleteProg.disabled = !savedProgSelect.value;
     }
     if (savedCount) {
       savedCount.textContent = `${list.length} guardada${list.length === 1 ? "" : "s"}`;
@@ -723,6 +742,20 @@
     if (progName) progName.value = item.name;
     updateQualityMismatch();
     log(`Progresión "${item.name}" cargada.`, "OK");
+  };
+
+  const deleteSelectedProgression = () => {
+    const name = savedProgSelect?.value || "";
+    if (!name) {
+      log("Selecciona una progresión guardada para eliminar.", "WARN");
+      return;
+    }
+    const confirmed = window.confirm(`¿Eliminar la progresión "${name}"? Esta acción no se puede deshacer.`);
+    if (!confirmed) return;
+    const list = getSavedProgressions().filter((item) => item.name !== name);
+    writeSavedProgressions(list);
+    renderSavedProgressions(list);
+    log(`Progresión "${name}" eliminada.`, "OK");
   };
 
   const exportProgressions = () => {
@@ -933,6 +966,14 @@
   const getBarsPerFile = () => Math.max(1, parseInt(barsPerFileInput.value, 10) || 1);
   const getBarsPerChord = () => Math.max(1, parseInt(barsPerChordInput.value, 10) || 1);
   const getRefBpm = () => Math.max(20, parseInt(refBpmInput.value, 10) || 90);
+  const clampPlaybackBpm = (value) => Math.max(20, Math.min(300, Math.round(value)));
+  const setPlaybackBpmDisplay = (value) => {
+    const bpm = clampPlaybackBpm(value);
+    if (playbackBpmInput) playbackBpmInput.value = String(bpm);
+    if (playbackBpmValue) playbackBpmValue.textContent = `${bpm} BPM`;
+    return bpm;
+  };
+  const getPlaybackBpm = () => clampPlaybackBpm(parseInt(playbackBpmInput?.value || "90", 10) || 90);
   const getCrossfadeSeconds = () => Math.max(0, parseInt(crossfadeMsInput.value, 10) || 0) / 1000;
   const getLoopBars = () => Math.max(1, parseInt(loopBarsInput?.value, 10) || 1);
 
@@ -949,17 +990,97 @@
     return map;
   };
 
-  const getBarSeconds = () => {
+  const getRefBarSeconds = () => {
     const { num, den } = getTimeSignature();
     const bpm = getRefBpm();
     return (60 / bpm) * num * (4 / den);
   };
 
-  const getSecondsPerEighth = () => {
+  const getPlaybackBarSeconds = () => {
+    const { num, den } = getTimeSignature();
+    const bpm = getPlaybackBpm();
+    return (60 / bpm) * num * (4 / den);
+  };
+
+  const getRefSecondsPerEighth = () => {
     const bpm = getRefBpm();
     return (60 / bpm) / 2;
   };
 
+  const getPlaybackSecondsPerEighth = () => {
+    const bpm = getPlaybackBpm();
+    return (60 / bpm) / 2;
+  };
+
+  const getPlaybackTempoRatio = () => {
+    const ref = getRefBpm();
+    const playback = getPlaybackBpm();
+    return Math.max(0.1, playback / ref);
+  };
+
+  const stretchAudioBuffer = (buffer, tempo) => {
+    if (!buffer) return null;
+    if (Math.abs(tempo - 1) <= STRETCH_TEMPO_EPSILON) return buffer;
+    const soundtouch = new SoundTouch();
+    soundtouch.stretch.setParameters(buffer.sampleRate, 0, 0, 0);
+    soundtouch.tempo = tempo;
+    const source = new WebAudioBufferSource(buffer);
+    const filter = new SimpleFilter(source, soundtouch);
+    const samples = new Float32Array(STRETCH_BUFFER_SIZE * 2);
+    const chunks = [];
+    let totalFrames = 0;
+    while (true) {
+      const extracted = filter.extract(samples, STRETCH_BUFFER_SIZE);
+      if (!extracted) break;
+      chunks.push(samples.slice(0, extracted * 2));
+      totalFrames += extracted;
+    }
+    const channels = buffer.numberOfChannels > 1 ? 2 : 1;
+    const outBuffer = ensureAudioContext().createBuffer(channels, totalFrames, buffer.sampleRate);
+    const left = outBuffer.getChannelData(0);
+    const right = channels > 1 ? outBuffer.getChannelData(1) : null;
+    let offset = 0;
+    for (const chunk of chunks) {
+      for (let i = 0; i < chunk.length; i += 2) {
+        left[offset] = chunk[i];
+        if (right) right[offset] = chunk[i + 1];
+        offset += 1;
+      }
+    }
+    return outBuffer;
+  };
+
+  const getTempoCacheKey = (tempo) => tempo.toFixed(4);
+
+  const prepareStretchedBuffers = (tempoRatio, qualities) => {
+    if (Math.abs(tempoRatio - 1) <= STRETCH_TEMPO_EPSILON) {
+      return { buffersByQuality: audioBuffersByQuality, loopBuffers };
+    }
+    const key = getTempoCacheKey(tempoRatio);
+    let cache = stretchedBufferCache.get(key);
+    if (!cache) {
+      cache = new Map();
+      stretchedBufferCache.set(key, cache);
+    }
+    const out = new Map();
+    for (const quality of qualities) {
+      const base = audioBuffersByQuality.get(quality);
+      if (!base) continue;
+      if (!cache.has(quality)) {
+        cache.set(quality, stretchAudioBuffer(base, tempoRatio));
+      }
+      out.set(quality, cache.get(quality));
+    }
+    let loopCache = stretchedLoopCache.get(key);
+    if (!loopCache) {
+      loopCache = loopBuffers.map((loop) => ({
+        name: loop.name,
+        buffer: stretchAudioBuffer(loop.buffer, tempoRatio),
+      }));
+      stretchedLoopCache.set(key, loopCache);
+    }
+    return { buffersByQuality: out, loopBuffers: loopCache };
+  };
   const transposeRootLabel = (root, delta, preferFlat = false) => {
     const baseSemi = NOTE_TO_SEMI.get(root.toUpperCase());
     if (baseSemi == null) return root;
@@ -1221,6 +1342,8 @@
     clearLog();
     audioBuffersByQuality.clear();
     loopBuffers = [];
+    stretchedBufferCache.clear();
+    stretchedLoopCache.clear();
     for (const url of audioUrlsByQuality.values()) {
       URL.revokeObjectURL(url);
     }
@@ -1304,7 +1427,7 @@
         log(`Loops cargados: ${loopBuffers.length}.`, "OK");
       }
 
-      const expectedSeconds = getBarsPerFile() * getBarSeconds();
+      const expectedSeconds = getBarsPerFile() * getRefBarSeconds();
       for (const [quality, buffer] of audioBuffersByQuality.entries()) {
         if (buffer.duration + 0.1 < expectedSeconds) {
           log(`"${quality}": duración corta (${buffer.duration.toFixed(2)}s). Esperaba ~${expectedSeconds.toFixed(2)}s.`, "WARN");
@@ -1393,13 +1516,13 @@
     return { segments: repeated.segments, totalEighth: repeated.totalEighth };
   };
 
-  const scheduleLoopLayer = ({ ctx, baseTime, totalEighth, secPerEighth, barSeconds, trackNodes }) => {
-    if (!loopEnabled || !loopBuffers.length) return;
+  const scheduleLoopLayer = ({ ctx, baseTime, totalEighth, secPerEighth, barSeconds, trackNodes, loopBufferSet }) => {
+    if (!loopEnabled || !loopBufferSet.length) return;
     const loopVolume = getLoopVolume();
     if (loopVolume <= 0) return;
     const totalBars = Math.ceil(totalEighth / getEighthsPerBar());
     const loopBars = getLoopBars();
-    for (const loop of loopBuffers) {
+    for (const loop of loopBufferSet) {
       const duration = Math.max(loop.buffer.duration, 0.001);
       for (let bar = 0; bar < totalBars; bar += 1) {
         const startTime = baseTime + bar * barSeconds;
@@ -1419,7 +1542,7 @@
     }
   };
 
-  const playAudio = () => {
+  const playAudio = async () => {
     if (!audioFolderLoaded || !audioBuffersByQuality.size) {
       log("Carga una carpeta de WAVs para reproducir.", "ERROR");
       return;
@@ -1443,9 +1566,12 @@
     const barsPerChord = getBarsPerChord();
     const eighthsPerBar = getEighthsPerBar();
     const segmentEighths = eighthsPerBar * barsPerChord;
+    const tempoRatio = getPlaybackTempoRatio();
+    const uniqueQualities = [...new Set(segments.map((seg) => seg.quality))];
+    const { buffersByQuality, loopBuffers: stretchedLoops } = prepareStretchedBuffers(tempoRatio, uniqueQualities);
 
     for (const seg of segments) {
-      if (!audioBuffersByQuality.has(seg.quality)) {
+      if (!buffersByQuality.has(seg.quality)) {
         log(`No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
         return;
       }
@@ -1459,8 +1585,8 @@
     isAudioPlaying = true;
 
     const ctx = ensureAudioContext();
-    const secPerEighth = getSecondsPerEighth();
-    const barSeconds = getBarSeconds();
+    const secPerEighth = getPlaybackSecondsPerEighth();
+    const barSeconds = getPlaybackBarSeconds();
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
 
     scheduleLoopLayer({
@@ -1470,10 +1596,11 @@
       secPerEighth,
       barSeconds,
       trackNodes: true,
+      loopBufferSet: stretchedLoops,
     });
 
     for (const seg of segments) {
-      const buffer = audioBuffersByQuality.get(seg.quality);
+      const buffer = buffersByQuality.get(seg.quality);
       const rootBarStart = rootBarMap.get(seg.rootSemi);
       const offsetEighthInSegment = seg.startEighth % segmentEighths;
       const offsetSeconds = offsetEighthInSegment * secPerEighth;
@@ -1576,9 +1703,12 @@
     const barsPerChord = getBarsPerChord();
     const eighthsPerBar = getEighthsPerBar();
     const segmentEighths = eighthsPerBar * barsPerChord;
+    const tempoRatio = getPlaybackTempoRatio();
+    const uniqueQualities = [...new Set(segments.map((seg) => seg.quality))];
+    const { buffersByQuality, loopBuffers: stretchedLoops } = prepareStretchedBuffers(tempoRatio, uniqueQualities);
 
     for (const seg of segments) {
-      if (!audioBuffersByQuality.has(seg.quality) || !audioUrlsByQuality.has(seg.quality)) {
+      if (!buffersByQuality.has(seg.quality) || !audioUrlsByQuality.has(seg.quality)) {
         log(`No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
         return;
       }
@@ -1588,17 +1718,17 @@
       }
     }
 
-    const buffers = [...audioBuffersByQuality.values()];
+    const buffers = [...buffersByQuality.values()];
     const sampleRate = buffers[0]?.sampleRate || 44100;
     const numChannels = Math.max(1, ...buffers.map((buf) => buf.numberOfChannels || 1));
-    const secPerEighth = getSecondsPerEighth();
+    const secPerEighth = getPlaybackSecondsPerEighth();
     const totalDuration = parsed.totalEighth * secPerEighth;
     const renderLength = Math.ceil((totalDuration + 0.4) * sampleRate);
     const offlineCtx = new OfflineAudioContext(numChannels, renderLength, sampleRate);
 
     log("Renderizando audio en segundo plano…", "OK");
 
-    const barSeconds = getBarSeconds();
+    const barSeconds = getPlaybackBarSeconds();
 
     scheduleLoopLayer({
       ctx: offlineCtx,
@@ -1607,10 +1737,11 @@
       secPerEighth,
       barSeconds,
       trackNodes: false,
+      loopBufferSet: stretchedLoops,
     });
 
     for (const seg of segments) {
-      const buffer = audioBuffersByQuality.get(seg.quality);
+      const buffer = buffersByQuality.get(seg.quality);
       const rootBarStart = rootBarMap.get(seg.rootSemi);
       const offsetEighthInSegment = seg.startEighth % segmentEighths;
       const offsetSeconds = offsetEighthInSegment * secPerEighth;
@@ -1645,7 +1776,7 @@
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `referencia_${getRefBpm()}bpm.wav`;
+    anchor.download = `referencia_${getPlaybackBpm()}bpm.wav`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -1680,6 +1811,7 @@
   });
   btnSaveProg.addEventListener("click", saveCurrentProgression);
   btnLoadProg.addEventListener("click", loadSelectedProgression);
+  btnDeleteProg.addEventListener("click", deleteSelectedProgression);
   btnExportProgs.addEventListener("click", exportProgressions);
   btnImportProgs.addEventListener("click", () => importProgFile.click());
   importProgFile.addEventListener("change", (e) => {
@@ -1689,13 +1821,22 @@
     }
     e.target.value = "";
   });
+  savedProgSelect.addEventListener("change", () => {
+    if (btnDeleteProg) btnDeleteProg.disabled = !savedProgSelect.value;
+  });
 
   prog.addEventListener("input", updateQualityMismatch);
   repeatCount.addEventListener("input", updateQualityMismatch);
   barsPerFileInput.addEventListener("input", updateQualityMismatch);
   barsPerChordInput.addEventListener("input", updateQualityMismatch);
   timeSignatureInput.addEventListener("change", updateQualityMismatch);
-  refBpmInput.addEventListener("input", updateQualityMismatch);
+  refBpmInput.addEventListener("input", () => {
+    updateQualityMismatch();
+    setPlaybackBpmDisplay(getPlaybackBpm());
+  });
+  playbackBpmInput.addEventListener("input", (e) => {
+    setPlaybackBpmDisplay(parseInt(e.target.value, 10) || 90);
+  });
   crossfadeMsInput.addEventListener("input", updateQualityMismatch);
   loopBarsInput.addEventListener("input", updateQualityMismatch);
   startRootInput.addEventListener("change", updateQualityMismatch);
@@ -1718,6 +1859,7 @@
   updateQualityMismatch();
   updateReadyState();
   updateLoopControls();
+  setPlaybackBpmDisplay(getPlaybackBpm());
 })();
 </script>
 </body>
