@@ -47,47 +47,47 @@
       opacity:.85;
     }
     .wrap{
-      max-width:1120px; margin:20px auto 36px; padding:0 16px 32px;
+      max-width:1120px; margin:16px auto 28px; padding:0 14px 28px;
     }
     header{
       display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap;
     }
-    header.hero{padding:16px; border:1px solid rgba(255,255,255,.08); background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); box-shadow: var(--glow); backdrop-filter: var(--frost); border-radius:16px;}
+    header.hero{padding:14px; border:1px solid rgba(255,255,255,.08); background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.02)); box-shadow: var(--glow); backdrop-filter: var(--frost); border-radius:16px;}
     .brand{display:flex; flex-direction:column; gap:6px;}
     .eyebrow{margin:0; font-size:11px; letter-spacing:.4px; text-transform:uppercase; color:rgba(255,255,255,.68); font-weight:800;}
     h1{margin:0; font-size:28px; letter-spacing:.1px; font-weight:800; color:#f8fafc; text-shadow:0 14px 40px rgba(0,0,0,.35); font-family:'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;}
     .sub{color:var(--muted); font-size:12px; margin-top:2px; line-height:1.5;}
     .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
       border:1px solid rgba(255,255,255,.08);
       border-radius: var(--r);
       box-shadow: var(--shadow);
       overflow:hidden;
       backdrop-filter: var(--frost);
     }
-    .megaCard{padding:8px 8px 14px; border:1px solid rgba(255,255,255,.06); box-shadow: var(--glow);}
-    .megaHd{border-bottom:1px solid rgba(35,50,74,.7); background: rgba(24,34,56,.72); padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+    .megaCard{padding:6px 6px 12px; border:1px solid rgba(255,255,255,.06); box-shadow: var(--glow);}
+    .megaHd{border-bottom:1px solid rgba(35,50,74,.7); background: linear-gradient(135deg, rgba(24,34,56,.9), rgba(18,30,56,.75)); padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
     .megaHd .title{font-size:13px; letter-spacing:.3px; text-transform:uppercase; color:var(--muted);}
     .megaHd .mini{color:rgba(255,255,255,.82); font-size:12px;}
-    .megaBd{display:flex; flex-direction:column; gap:12px; padding:12px;}
+    .megaBd{display:flex; flex-direction:column; gap:10px; padding:10px;}
     .heroMeta{display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:flex-end;}
     .controlBar{display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px; align-items:stretch;}
-    .controlCluster{border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; background: linear-gradient(180deg, rgba(18,30,54,.92), rgba(10,18,34,.94)); display:flex; flex-direction:column; gap:8px; box-shadow: 0 12px 28px rgba(0,0,0,.30); position:relative; overflow:hidden;}
+    .controlCluster{border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; background: linear-gradient(180deg, rgba(18,30,54,.94), rgba(10,18,34,.96)); display:flex; flex-direction:column; gap:8px; box-shadow: 0 10px 22px rgba(0,0,0,.32); position:relative; overflow:hidden;}
     .controlCluster::before{content:""; position:absolute; inset:0; background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(168,85,247,.08) 45%, transparent 70%); opacity:.9; pointer-events:none;}
     .controlCluster > *{position:relative;}
     .clusterTitle{font-size:11px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; font-weight:800;}
     .clusterActions{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
     .miniStat{font-size:12px; color:var(--muted); margin-left:auto;}
     .card .hd{
-      padding:12px 12px 8px;
+      padding:10px 12px 8px;
       border-bottom:1px solid rgba(35,50,74,.8);
       display:flex; align-items:center; justify-content:space-between; gap:10px;
       background: linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
     }
     .card .hd .title{font-size:13px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; letter-spacing:.32px}
-    .card .bd{padding:12px}
+    .card .bd{padding:10px}
     textarea{
-      width:100%; min-height:130px; padding:12px 12px;
+      width:100%; min-height:120px; padding:10px 12px;
       border-radius:14px; border:1px solid rgba(255,255,255,.10);
       background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
       color:var(--txt); font-size:14px; line-height:1.45;
@@ -162,8 +162,8 @@
     }
     .mini{font-size:12px; color:var(--muted)}
     .inputNumber{width:120px}
-    .sectionGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:12px;}
-    .sectionCard{border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; background: linear-gradient(180deg, rgba(20,34,60,.92), rgba(14,26,46,.9)); display:flex; flex-direction:column; gap:8px; box-shadow: 0 10px 24px rgba(0,0,0,.26);}
+    .sectionGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:10px;}
+    .sectionCard{border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; background: linear-gradient(135deg, rgba(25,40,72,.95), rgba(12,24,44,.92)); display:flex; flex-direction:column; gap:8px; box-shadow: 0 10px 24px rgba(0,0,0,.26);}
     .sectionTitle{font-size:11px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; font-weight:800;}
     .inlineStats{display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:12px; color:var(--muted);}
     .pillRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
@@ -173,7 +173,7 @@
     .hint{color:var(--muted); font-size:12px; margin-top:10px; line-height:1.35}
     .hint code{color:#c7d2fe}
 
-    .topActions{display:flex; gap:10px; align-items:center}
+    .topActions{display:flex; gap:8px; align-items:center}
     .btn.ghost{background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12)}
     .btn.ghost:hover{background: rgba(255,255,255,.10)}
     .helpBtn{display:inline-flex; align-items:center; gap:8px}
@@ -190,6 +190,30 @@
       background: linear-gradient(135deg, rgba(34,211,238,.16), rgba(17,24,39,.7));
       box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
       min-height:56px;
+    }
+    .savedRow{display:grid; gap:8px; grid-template-columns: minmax(140px, 1.1fr) minmax(120px, 0.8fr); align-items:end;}
+    .savedRow .btn{width:100%}
+    .savedRow select,
+    .savedRow input[type="text"]{width:100%}
+    .savedMeta{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+    input[type="text"]{
+      width:100%;
+      padding:9px 10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      color:var(--txt);
+      outline:none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    input[type="text"]:focus{border-color: rgba(125,211,252,.6); box-shadow:0 0 0 4px rgba(125,211,252,.12)}
+    .badge{
+      font-size:11px;
+      font-weight:700;
+      color:#0b1220;
+      background: linear-gradient(135deg, rgba(34,211,238,.9), rgba(168,85,247,.85));
+      padding:4px 8px;
+      border-radius:999px;
     }
     .barRow{display:flex; flex-wrap:wrap; align-items:center; gap:6px}
     .barSep{color:var(--muted); font-weight:700; letter-spacing:.4px}
@@ -279,7 +303,8 @@
     }
     html[data-theme="light"] textarea,
     html[data-theme="light"] select,
-    html[data-theme="light"] input[type="number"]{
+    html[data-theme="light"] input[type="number"],
+    html[data-theme="light"] input[type="text"]{
       background: rgba(18,24,38,.04);
       color: var(--txt);
       border-color: var(--line);
@@ -395,6 +420,14 @@
                 <option value="G#">G#</option>
               </select>
             </div>
+            <div>
+              <div class="label">Repeticiones</div>
+              <input id="repeatCount" type="number" min="1" max="64" value="1" class="inputNumber" title="Número de veces que se repetirá la progresión" />
+            </div>
+            <div>
+              <div class="label">Transposición</div>
+              <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
+            </div>
           </div>
         </div>
       </div>
@@ -402,18 +435,33 @@
       <div class="sectionGrid">
         <div class="sectionCard">
           <div class="sectionTitle">Progresión y calidades</div>
-          <div class="label">Repeticiones</div>
-          <div class="row" style="gap:14px; align-items:flex-end">
-            <input id="repeatCount" type="number" min="1" max="64" value="1" class="inputNumber" title="Número de veces que se repetirá la progresión" />
-          </div>
-
-          <div class="label" style="margin-top:10px">Transposición</div>
-          <div class="row" style="gap:14px; align-items:flex-end">
-            <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
-          </div>
-
-          <div class="label" style="margin-top:10px">Progresión</div>
+          <div class="label">Progresión</div>
           <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
+          <div class="label" style="margin-top:8px">Guardar progresiones</div>
+          <div class="savedRow">
+            <div>
+              <div class="label">Nombre de progresión</div>
+              <input id="progName" type="text" placeholder="Ej: Blues en F, Turnaround" />
+            </div>
+            <div>
+              <button class="btn primary" id="btnSaveProg" title="Guardar la progresión actual">Guardar</button>
+            </div>
+          </div>
+          <div class="savedRow">
+            <div>
+              <div class="label">Progresiones guardadas</div>
+              <select id="savedProgSelect"></select>
+            </div>
+            <div class="row" style="gap:8px">
+              <button class="btn" id="btnLoadProg" title="Cargar la progresión seleccionada">Cargar</button>
+              <button class="btn ghost" id="btnExportProgs" title="Exportar todas las progresiones guardadas">Exportar</button>
+            </div>
+          </div>
+          <div class="savedMeta">
+            <span class="badge" id="savedCount">0 guardadas</span>
+            <button class="btn ghost" id="btnImportProgs" title="Importar progresiones guardadas">Importar</button>
+            <input id="importProgFile" type="file" accept=".json,application/json" style="display:none" />
+          </div>
           <div class="label" style="margin-top:8px">Vista rápida del cifrado</div>
           <div class="chordPreview" id="progPreview"></div>
           <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
@@ -446,8 +494,9 @@
         <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
         <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
         <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
-        <li><b>5) Escuchar:</b> pulsa <span class="kbd">Reproducir</span>. Usa <span class="kbd">Stop</span> para detener.</li>
-        <li><b>6) Exportar:</b> guarda el audio con <span class="kbd">Exportar audio</span>.</li>
+        <li><b>5) Guardar:</b> usa <span class="kbd">Guardar</span> para guardar y <span class="kbd">Exportar</span> para llevarte todas.</li>
+        <li><b>6) Escuchar:</b> pulsa <span class="kbd">Reproducir</span>. Usa <span class="kbd">Stop</span> para detener.</li>
+        <li><b>7) Exportar:</b> guarda el audio con <span class="kbd">Exportar audio</span>.</li>
       </ul>
       <p class="mini">Atajo: <span class="kbd">Espacio</span> alterna Reproducir / Stop (cuando no estás escribiendo).</p>
 
@@ -468,6 +517,14 @@
   const progPreview = el("progPreview");
 
   const prog = el("prog");
+  const progName = el("progName");
+  const savedProgSelect = el("savedProgSelect");
+  const btnSaveProg = el("btnSaveProg");
+  const btnLoadProg = el("btnLoadProg");
+  const btnExportProgs = el("btnExportProgs");
+  const btnImportProgs = el("btnImportProgs");
+  const importProgFile = el("importProgFile");
+  const savedCount = el("savedCount");
   const repeatCount = el("repeatCount");
   const globalTranspose = el("globalTranspose");
   const barsPerFileInput = el("barsPerFile");
@@ -507,6 +564,7 @@
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
   const FADE_CURVE_SAMPLES = 128;
+  const STORAGE_KEY = "jcg_saved_progressions";
 
   const buildEqualPowerCurve = (samples, fadeIn = true) => {
     const curve = new Float32Array(samples);
@@ -529,6 +587,148 @@
     }
     logEl.textContent += `[${stamp}] ${prefix} ${msg}\n`;
     logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  const readSavedProgressions = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((item) => item && typeof item.name === "string" && typeof item.text === "string");
+    } catch (_) {
+      return [];
+    }
+  };
+
+  const writeSavedProgressions = (list) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch (err) {
+      log(`No pude guardar progresiones: ${String(err?.message || err)}`, "ERROR");
+    }
+  };
+
+  const renderSavedProgressions = (list, selectedName = "") => {
+    if (!savedProgSelect) return;
+    savedProgSelect.innerHTML = "";
+    if (!list.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Sin progresiones guardadas";
+      savedProgSelect.appendChild(opt);
+      savedProgSelect.disabled = true;
+      if (btnLoadProg) btnLoadProg.disabled = true;
+      if (btnExportProgs) btnExportProgs.disabled = true;
+    } else {
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Selecciona una progresión";
+      savedProgSelect.appendChild(placeholder);
+      for (const item of list) {
+        const opt = document.createElement("option");
+        opt.value = item.name;
+        opt.textContent = item.name;
+        savedProgSelect.appendChild(opt);
+      }
+      savedProgSelect.disabled = false;
+      if (btnLoadProg) btnLoadProg.disabled = false;
+      if (btnExportProgs) btnExportProgs.disabled = false;
+      if (selectedName) savedProgSelect.value = selectedName;
+    }
+    if (savedCount) {
+      savedCount.textContent = `${list.length} guardada${list.length === 1 ? "" : "s"}`;
+    }
+  };
+
+  const getSavedProgressions = () => readSavedProgressions().sort((a, b) => a.name.localeCompare(b.name, "es"));
+
+  const saveCurrentProgression = () => {
+    const name = (progName?.value || "").trim();
+    const text = (prog?.value || "").trim();
+    if (!name) {
+      log("Escribe un nombre para guardar la progresión.", "WARN");
+      return;
+    }
+    if (!text) {
+      log("Escribe una progresión antes de guardar.", "WARN");
+      return;
+    }
+    const list = getSavedProgressions();
+    const existingIndex = list.findIndex((item) => item.name.toLowerCase() === name.toLowerCase());
+    const payload = { name, text, updatedAt: new Date().toISOString() };
+    if (existingIndex >= 0) {
+      list[existingIndex] = payload;
+    } else {
+      list.push(payload);
+    }
+    writeSavedProgressions(list);
+    renderSavedProgressions(list, name);
+    log(`Progresión "${name}" guardada.`, "OK");
+  };
+
+  const loadSelectedProgression = () => {
+    const name = savedProgSelect?.value || "";
+    if (!name) {
+      log("Selecciona una progresión guardada.", "WARN");
+      return;
+    }
+    const list = getSavedProgressions();
+    const item = list.find((p) => p.name === name);
+    if (!item) {
+      log("No encontré esa progresión.", "WARN");
+      return;
+    }
+    prog.value = item.text;
+    if (progName) progName.value = item.name;
+    updateQualityMismatch();
+    log(`Progresión "${item.name}" cargada.`, "OK");
+  };
+
+  const exportProgressions = () => {
+    const list = getSavedProgressions();
+    if (!list.length) {
+      log("No hay progresiones guardadas para exportar.", "WARN");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(list, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "progresiones_guardadas.json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    log("Exportadas progresiones guardadas.", "OK");
+  };
+
+  const importProgressions = async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const incoming = JSON.parse(text);
+      if (!Array.isArray(incoming)) throw new Error("El archivo no tiene formato válido.");
+      const sanitized = incoming
+        .filter((item) => item && typeof item.name === "string" && typeof item.text === "string")
+        .map((item) => ({ name: item.name.trim(), text: item.text.trim() }))
+        .filter((item) => item.name && item.text);
+      if (!sanitized.length) {
+        log("No encontré progresiones válidas en el archivo.", "WARN");
+        return;
+      }
+      const list = getSavedProgressions();
+      const map = new Map(list.map((item) => [item.name.toLowerCase(), item]));
+      for (const item of sanitized) {
+        map.set(item.name.toLowerCase(), { ...item, updatedAt: new Date().toISOString() });
+      }
+      const merged = [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
+      writeSavedProgressions(merged);
+      renderSavedProgressions(merged);
+      log(`Importadas ${sanitized.length} progresiones.`, "OK");
+    } catch (err) {
+      log(`No pude importar: ${String(err?.message || err)}`, "ERROR");
+    }
   };
 
   const clearLog = () => {
@@ -1337,6 +1537,17 @@
   el("btnPlay").addEventListener("click", playAudio);
   el("btnStop").addEventListener("click", stopAudioPlayback);
   el("btnExportAudio").addEventListener("click", exportAudio);
+  btnSaveProg.addEventListener("click", saveCurrentProgression);
+  btnLoadProg.addEventListener("click", loadSelectedProgression);
+  btnExportProgs.addEventListener("click", exportProgressions);
+  btnImportProgs.addEventListener("click", () => importProgFile.click());
+  importProgFile.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      importProgressions(file);
+    }
+    e.target.value = "";
+  });
 
   prog.addEventListener("input", updateQualityMismatch);
   repeatCount.addEventListener("input", updateQualityMismatch);
@@ -1361,6 +1572,7 @@
 
   prog.value = "";
   renderQualityChips();
+  renderSavedProgressions(getSavedProgressions());
   updateQualityMismatch();
   updateReadyState();
 })();
