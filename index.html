@@ -86,6 +86,13 @@
     .clusterTitle{font-size:11px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; font-weight:800;}
     .clusterActions{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
     .miniStat{font-size:12px; color:var(--muted); margin-left:auto;}
+    .progressWrap{display:none; flex-direction:column; gap:4px; margin-top:6px;}
+    .progressWrap.active{display:flex;}
+    .progressRow{display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--muted);}
+    progress{width:100%; height:10px; border-radius:999px; overflow:hidden; appearance:none; background: rgba(255,255,255,.08);}
+    progress::-webkit-progress-bar{background: rgba(255,255,255,.08); border-radius:999px;}
+    progress::-webkit-progress-value{background: linear-gradient(90deg, rgba(47,129,247,.85), rgba(139,92,246,.9)); border-radius:999px;}
+    progress::-moz-progress-bar{background: linear-gradient(90deg, rgba(47,129,247,.85), rgba(139,92,246,.9)); border-radius:999px;}
     .card .hd{
       padding:8px 10px 6px;
       border-bottom:1px solid rgba(35,50,74,.75);
@@ -380,6 +387,13 @@
             <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
             <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado">Exportar audio</button>
           </div>
+          <div class="progressWrap" id="stretchProgress" aria-live="polite">
+            <div class="progressRow">
+              <span id="stretchProgressLabel">Estirando audio…</span>
+              <span class="mini" id="stretchProgressPercent">0%</span>
+            </div>
+            <progress id="stretchProgressBar" value="0" max="100"></progress>
+          </div>
         </div>
 
         <div class="controlCluster">
@@ -578,6 +592,10 @@ import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberb
   const refBpmInput = el("refBpm");
   const playbackBpmInput = el("playbackBpm");
   const playbackBpmValue = el("playbackBpmValue");
+  const stretchProgressWrap = el("stretchProgress");
+  const stretchProgressBar = el("stretchProgressBar");
+  const stretchProgressLabel = el("stretchProgressLabel");
+  const stretchProgressPercent = el("stretchProgressPercent");
   const crossfadeMsInput = el("crossfadeMs");
   const loopBarsInput = el("loopBars");
   const startRootInput = el("startRoot");
@@ -624,6 +642,40 @@ import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberb
   const stretchedLoopCache = new Map();
   const RUBBERBAND_WASM_URL = "https://unpkg.com/rubberband-wasm@3.3.0/dist/rubberband.wasm";
   let rubberBandPromise = null;
+
+  const createStretchProgressTracker = (totalFrames, label = "Estirando audio…") => {
+    if (!stretchProgressWrap || !stretchProgressBar || !stretchProgressPercent || totalFrames <= 0) {
+      return null;
+    }
+    let doneFrames = 0;
+    let rafPending = false;
+    stretchProgressLabel.textContent = label;
+    stretchProgressBar.value = 0;
+    stretchProgressPercent.textContent = "0%";
+    stretchProgressWrap.classList.add("active");
+    const updateUI = () => {
+      const pct = Math.min(100, Math.round((doneFrames / totalFrames) * 100));
+      stretchProgressBar.value = pct;
+      stretchProgressPercent.textContent = `${pct}%`;
+    };
+    const report = (frames) => {
+      doneFrames = Math.min(totalFrames, doneFrames + frames);
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        updateUI();
+      });
+    };
+    const finish = () => {
+      doneFrames = totalFrames;
+      updateUI();
+      setTimeout(() => {
+        stretchProgressWrap.classList.remove("active");
+      }, 350);
+    };
+    return { report, finish };
+  };
 
   const buildEqualPowerCurve = (samples, fadeIn = true) => {
     const curve = new Float32Array(samples);
@@ -1049,7 +1101,7 @@ import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberb
     RubberBandOption.RubberBandOptionEngineFiner
   );
 
-  const stretchAudioBuffer = async (buffer, tempo) => {
+  const stretchAudioBuffer = async (buffer, tempo, onProgress) => {
     if (!buffer) return null;
     if (Math.abs(tempo - 1) <= STRETCH_TEMPO_EPSILON) return buffer;
     try {
@@ -1119,6 +1171,7 @@ import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberb
             }
             available = rb.rubberband_available(state);
           }
+          if (onProgress) onProgress(frameCount);
         }
       } finally {
         freeChannelBuffers();
@@ -1156,29 +1209,45 @@ import { RubberBandInterface, RubberBandOption } from "https://unpkg.com/rubberb
       cache = new Map();
       stretchedBufferCache.set(key, cache);
     }
-    const out = new Map();
+    let loopCache = stretchedLoopCache.get(key);
+    let totalFrames = 0;
     for (const quality of qualities) {
       const base = audioBuffersByQuality.get(quality);
       if (!base) continue;
-      if (!cache.has(quality)) {
-        cache.set(quality, stretchAudioBuffer(base, tempoRatio));
-      }
-      out.set(quality, await cache.get(quality));
+      if (!cache.has(quality)) totalFrames += base.length;
     }
-    let loopCache = stretchedLoopCache.get(key);
     if (!loopCache) {
-      loopCache = loopBuffers.map((loop) => ({
-        name: loop.name,
-        bufferPromise: stretchAudioBuffer(loop.buffer, tempoRatio),
-      }));
-      stretchedLoopCache.set(key, loopCache);
+      for (const loop of loopBuffers) {
+        if (loop?.buffer) totalFrames += loop.buffer.length;
+      }
     }
-    const resolvedLoops = [];
-    for (const loop of loopCache) {
-      const buffer = await loop.bufferPromise;
-      if (buffer) resolvedLoops.push({ name: loop.name, buffer });
+    const progress = totalFrames > 0 ? createStretchProgressTracker(totalFrames) : null;
+    const out = new Map();
+    try {
+      for (const quality of qualities) {
+        const base = audioBuffersByQuality.get(quality);
+        if (!base) continue;
+        if (!cache.has(quality)) {
+          cache.set(quality, stretchAudioBuffer(base, tempoRatio, progress?.report));
+        }
+        out.set(quality, await cache.get(quality));
+      }
+      if (!loopCache) {
+        loopCache = loopBuffers.map((loop) => ({
+          name: loop.name,
+          bufferPromise: stretchAudioBuffer(loop.buffer, tempoRatio, progress?.report),
+        }));
+        stretchedLoopCache.set(key, loopCache);
+      }
+      const resolvedLoops = [];
+      for (const loop of loopCache) {
+        const buffer = await loop.bufferPromise;
+        if (buffer) resolvedLoops.push({ name: loop.name, buffer });
+      }
+      return { buffersByQuality: out, loopBuffers: resolvedLoops };
+    } finally {
+      progress?.finish();
     }
-    return { buffersByQuality: out, loopBuffers: resolvedLoops };
   };
   const transposeRootLabel = (root, delta, preferFlat = false) => {
     const baseSemi = NOTE_TO_SEMI.get(root.toUpperCase());
