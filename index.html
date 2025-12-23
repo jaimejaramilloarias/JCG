@@ -11,19 +11,20 @@
   <style>
     :root{
       --bg:#0a0f1c;
-      --panel:#0f1628;
-      --panel2:#12213c;
+      --panel:#0d1526;
+      --panel2:#111f38;
       --txt:#e8edf7;
       --muted:#9bb1c9;
       --line:#1f2e46;
-      --accent:#1dd4f2;
-      --accent2:#f59e0b;
-      --bad:#f87171;
+      --accent:#22d3ee;
+      --accent2:#f97316;
+      --accent3:#a855f7;
+      --bad:#fb7185;
       --ok:#22c55e;
-      --shadow: 0 18px 36px rgba(4,6,12,.32);
-      --glow: 0 0 0 1px rgba(29,212,242,.26), 0 18px 32px rgba(0,0,0,.48);
+      --shadow: 0 12px 28px rgba(4,6,12,.32);
+      --glow: 0 0 0 1px rgba(34,211,238,.26), 0 16px 30px rgba(0,0,0,.48);
       --frost: blur(18px);
-      --r:16px;
+      --r:14px;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -46,16 +47,16 @@
       opacity:.85;
     }
     .wrap{
-      max-width:1180px; margin:26px auto 42px; padding:0 18px 40px;
+      max-width:1120px; margin:20px auto 36px; padding:0 16px 32px;
     }
     header{
-      display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:18px; flex-wrap:wrap;
+      display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap;
     }
-    header.hero{padding:18px 18px 16px; border:1px solid rgba(255,255,255,.08); background: linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); box-shadow: var(--glow); backdrop-filter: var(--frost); border-radius:18px;}
+    header.hero{padding:16px; border:1px solid rgba(255,255,255,.08); background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); box-shadow: var(--glow); backdrop-filter: var(--frost); border-radius:16px;}
     .brand{display:flex; flex-direction:column; gap:6px;}
     .eyebrow{margin:0; font-size:11px; letter-spacing:.4px; text-transform:uppercase; color:rgba(255,255,255,.68); font-weight:800;}
-    h1{margin:0; font-size:32px; letter-spacing:.1px; font-weight:800; color:#f8fafc; text-shadow:0 14px 40px rgba(0,0,0,.35); font-family:'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;}
-    .sub{color:var(--muted); font-size:13px; margin-top:2px; line-height:1.55;}
+    h1{margin:0; font-size:28px; letter-spacing:.1px; font-weight:800; color:#f8fafc; text-shadow:0 14px 40px rgba(0,0,0,.35); font-family:'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;}
+    .sub{color:var(--muted); font-size:12px; margin-top:2px; line-height:1.5;}
     .card{
       background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
       border:1px solid rgba(255,255,255,.08);
@@ -64,30 +65,30 @@
       overflow:hidden;
       backdrop-filter: var(--frost);
     }
-    .megaCard{padding:10px 10px 18px; border:1px solid rgba(255,255,255,.06); box-shadow: var(--glow);}
-    .megaHd{border-bottom:1px solid rgba(35,50,74,.7); background: rgba(24,34,56,.65); padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+    .megaCard{padding:8px 8px 14px; border:1px solid rgba(255,255,255,.06); box-shadow: var(--glow);}
+    .megaHd{border-bottom:1px solid rgba(35,50,74,.7); background: rgba(24,34,56,.72); padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
     .megaHd .title{font-size:13px; letter-spacing:.3px; text-transform:uppercase; color:var(--muted);}
     .megaHd .mini{color:rgba(255,255,255,.82); font-size:12px;}
-    .megaBd{display:flex; flex-direction:column; gap:16px; padding:14px;}
+    .megaBd{display:flex; flex-direction:column; gap:12px; padding:12px;}
     .heroMeta{display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:flex-end;}
-    .controlBar{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; align-items:stretch;}
-    .controlCluster{border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:12px 14px; background: linear-gradient(180deg, rgba(18,26,44,.88), rgba(12,18,32,.92)); display:flex; flex-direction:column; gap:10px; box-shadow: 0 14px 32px rgba(0,0,0,.30); position:relative; overflow:hidden;}
-    .controlCluster::before{content:""; position:absolute; inset:0; background: linear-gradient(135deg, rgba(29,212,242,.10), transparent 45%); opacity:.9; pointer-events:none;}
+    .controlBar{display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px; align-items:stretch;}
+    .controlCluster{border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; background: linear-gradient(180deg, rgba(18,30,54,.92), rgba(10,18,34,.94)); display:flex; flex-direction:column; gap:8px; box-shadow: 0 12px 28px rgba(0,0,0,.30); position:relative; overflow:hidden;}
+    .controlCluster::before{content:""; position:absolute; inset:0; background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(168,85,247,.08) 45%, transparent 70%); opacity:.9; pointer-events:none;}
     .controlCluster > *{position:relative;}
-    .clusterTitle{font-size:12px; color:var(--muted); letter-spacing:.3px; text-transform:uppercase; font-weight:800;}
+    .clusterTitle{font-size:11px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; font-weight:800;}
     .clusterActions{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
     .miniStat{font-size:12px; color:var(--muted); margin-left:auto;}
     .card .hd{
-      padding:14px 14px 10px;
+      padding:12px 12px 8px;
       border-bottom:1px solid rgba(35,50,74,.8);
       display:flex; align-items:center; justify-content:space-between; gap:10px;
       background: linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
     }
     .card .hd .title{font-size:13px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; letter-spacing:.32px}
-    .card .bd{padding:14px}
+    .card .bd{padding:12px}
     textarea{
-      width:100%; min-height:150px; padding:14px 14px;
-      border-radius:16px; border:1px solid rgba(255,255,255,.10);
+      width:100%; min-height:130px; padding:12px 12px;
+      border-radius:14px; border:1px solid rgba(255,255,255,.10);
       background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
       color:var(--txt); font-size:14px; line-height:1.45;
       outline:none;
@@ -97,29 +98,29 @@
     .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
     .btn{
       border:1px solid rgba(255,255,255,.12);
-      background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(29,212,242,.08));
+      background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(34,211,238,.12));
       color:var(--txt);
-      padding:10px 14px;
-      border-radius:14px;
+      padding:8px 12px;
+      border-radius:12px;
       cursor:pointer;
       font-weight:700;
       letter-spacing:.15px;
       font-size:13px;
       transition: transform .06s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
       user-select:none;
-      box-shadow: 0 12px 20px rgba(0,0,0,.26);
+      box-shadow: 0 10px 18px rgba(0,0,0,.28);
     }
-    .btn:hover{border-color: rgba(29,212,242,.45); background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(29,212,242,.12)); box-shadow: 0 16px 24px rgba(0,0,0,.32)}
+    .btn:hover{border-color: rgba(34,211,238,.55); background: linear-gradient(135deg, rgba(255,255,255,.16), rgba(34,211,238,.14)); box-shadow: 0 14px 22px rgba(0,0,0,.32)}
     .btn:active{transform: translateY(1px)}
-    .btn.primary{border-color: rgba(29,212,242,.70); background: linear-gradient(135deg, rgba(29,212,242,.24), rgba(29,212,242,.10))}
-    .btn.purple{border-color: rgba(245,158,11,.65); background: linear-gradient(135deg, rgba(245,158,11,.20), rgba(245,158,11,.08))}
-    .btn.bad{border-color: rgba(251,113,133,.65); background: linear-gradient(135deg, rgba(251,113,133,.18), rgba(251,113,133,.08))}
+    .btn.primary{border-color: rgba(34,211,238,.85); background: linear-gradient(135deg, rgba(34,211,238,.30), rgba(34,211,238,.12))}
+    .btn.purple{border-color: rgba(168,85,247,.7); background: linear-gradient(135deg, rgba(168,85,247,.24), rgba(168,85,247,.10))}
+    .btn.bad{border-color: rgba(251,113,133,.65); background: linear-gradient(135deg, rgba(251,113,133,.22), rgba(251,113,133,.08))}
     .btn:disabled{opacity:.45; cursor:not-allowed}
     select,
     input[type="number"]{
       width:100%;
-      padding:10px 12px;
-      border-radius:14px;
+      padding:9px 10px;
+      border-radius:12px;
       border:1px solid rgba(255,255,255,.12);
       background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
       color:var(--txt);
@@ -128,13 +129,13 @@
     }
     select:focus,
     input[type="number"]:focus{border-color: rgba(125,211,252,.6); box-shadow:0 0 0 4px rgba(125,211,252,.12)}
-    .label{font-size:12px; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; gap:8px}
+    .label{font-size:11px; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; gap:8px}
     .pill{
       display:inline-flex; align-items:center; gap:8px;
-      padding:7px 12px;
+      padding:6px 10px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,.12);
-      background: linear-gradient(135deg, rgba(255,255,255,.09), rgba(29,212,242,.05));
+      background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(34,211,238,.08));
       color:var(--txt);
       font-size:12px;
       cursor:pointer;
@@ -142,7 +143,7 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
     }
     .pill:hover{border-color: rgba(29,212,242,.42)}
-    .pill.status{padding:10px 14px; font-weight:700; letter-spacing:.2px; box-shadow:0 12px 22px rgba(0,0,0,.28)}
+    .pill.status{padding:8px 12px; font-weight:700; letter-spacing:.2px; box-shadow:0 10px 18px rgba(0,0,0,.28)}
     .pill small{color:var(--muted); font-weight:600}
     .chips{display:flex; flex-wrap:wrap; gap:8px}
     .split{display:grid; grid-template-columns: 1fr 1fr; gap:10px}
@@ -161,9 +162,9 @@
     }
     .mini{font-size:12px; color:var(--muted)}
     .inputNumber{width:120px}
-    .sectionGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:14px;}
-    .sectionCard{border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px 14px; background: linear-gradient(180deg, rgba(20,32,56,.88), rgba(16,26,44,.86)); display:flex; flex-direction:column; gap:10px; box-shadow: 0 12px 28px rgba(0,0,0,.26);}
-    .sectionTitle{font-size:12px; color:var(--muted); letter-spacing:.3px; text-transform:uppercase; font-weight:800;}
+    .sectionGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:12px;}
+    .sectionCard{border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; background: linear-gradient(180deg, rgba(20,34,60,.92), rgba(14,26,46,.9)); display:flex; flex-direction:column; gap:8px; box-shadow: 0 10px 24px rgba(0,0,0,.26);}
+    .sectionTitle{font-size:11px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; font-weight:800;}
     .inlineStats{display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:12px; color:var(--muted);}
     .pillRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
     .warn{color: #fbbf24}
@@ -178,6 +179,40 @@
     .helpBtn{display:inline-flex; align-items:center; gap:8px}
     .helpBtn .q{display:inline-flex; width:18px; height:18px; border-radius:999px; align-items:center; justify-content:center;
       border:1px solid rgba(255,255,255,.18); color: var(--txt); font-weight:800; font-size:12px; background: rgba(255,255,255,.06);
+    }
+    .chordPreview{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background: linear-gradient(135deg, rgba(34,211,238,.16), rgba(17,24,39,.7));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+      min-height:56px;
+    }
+    .barRow{display:flex; flex-wrap:wrap; align-items:center; gap:6px}
+    .barSep{color:var(--muted); font-weight:700; letter-spacing:.4px}
+    .chordToken{
+      padding:6px 10px;
+      border-radius:10px;
+      background: rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.14);
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.2px;
+      color:#f8fafc;
+    }
+    .chordToken.bad{
+      background: linear-gradient(135deg, rgba(251,113,133,.95), rgba(249,115,22,.85));
+      border-color: rgba(251,113,133,.9);
+      color:#0b0f1c;
+      box-shadow: 0 0 0 1px rgba(251,113,133,.4), 0 8px 18px rgba(251,113,133,.35);
+    }
+    .previewEmpty,
+    .previewError{
+      color:var(--muted);
+      font-size:12px;
     }
 
     /* Modal */
@@ -270,7 +305,6 @@
 <div class="wrap">
   <header class="hero card">
     <div class="brand">
-      <p class="eyebrow">Suite creativa</p>
       <h1>Jazz Comping Generator - Jaime Jaramillo Arias</h1>
       <div class="sub">Escribe una progresión, controla tus referencias de audio y genera playback desde archivos WAV.</div>
     </div>
@@ -293,7 +327,6 @@
   <div class="card megaCard">
     <div class="hd megaHd">
       <div class="title">Panel principal</div>
-      <div class="mini">Solo audio de referencia: controla playback, ajustes y exportación.</div>
     </div>
     <div class="megaBd">
       <div class="controlBar">
@@ -303,9 +336,6 @@
             <button class="btn primary" id="btnPlay" title="Reproducir la progresión usando tus referencias de audio">Reproducir</button>
             <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
             <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado">Exportar audio</button>
-          </div>
-          <div class="inlineStats">
-            <span class="mini">El playback usa los WAVs cargados y los ajustes de referencia.</span>
           </div>
         </div>
 
@@ -375,17 +405,17 @@
           <div class="label">Repeticiones</div>
           <div class="row" style="gap:14px; align-items:flex-end">
             <input id="repeatCount" type="number" min="1" max="64" value="1" class="inputNumber" title="Número de veces que se repetirá la progresión" />
-            <div class="mini">Cuántas veces se repetirá la progresión al reproducir o exportar el audio.</div>
           </div>
 
           <div class="label" style="margin-top:10px">Transposición</div>
           <div class="row" style="gap:14px; align-items:flex-end">
             <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
-            <div class="mini">Ajusta las fundamentales del cifrado sin alterar las referencias cargadas.</div>
           </div>
 
           <div class="label" style="margin-top:10px">Progresión</div>
           <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
+          <div class="label" style="margin-top:8px">Vista rápida del cifrado</div>
+          <div class="chordPreview" id="progPreview"></div>
           <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
           <div class="chips" id="qualityChips"></div>
           <div class="pillRow" style="margin-top:8px">
@@ -394,23 +424,6 @@
               <span id="qualityMismatchText">Carga referencias de audio para validar calidades.</span>
             </div>
           </div>
-          <div class="hint">
-            <div><b>Calidades:</b> aparecen en la lista después de cargar tus WAVs.</div>
-            <div style="margin-top:6px">Usa exactamente las calidades que ves (ej: <code>G7alt</code>, <code>F13(b9)</code>).</div>
-          </div>
-        </div>
-
-        <div class="sectionCard">
-          <div class="sectionTitle">Diagnóstico en vivo</div>
-          <div id="logBlock">
-            <div class="label">Log</div>
-            <div class="log" id="log"></div>
-          </div>
-          <div class="hint">
-            Si “cargar carpeta” no aparece, abre esto desde <code>http://localhost</code>.
-            En mac: <code>python3 -m http.server 8000</code> y abre <code>http://localhost:8000</code>.
-          </div>
-          <div class="hint">El bloque de log se limpia cada vez que cargas una carpeta.</div>
         </div>
       </div>
     </div>
@@ -452,6 +465,7 @@
   const qualityChips = el("qualityChips");
   const qualityMismatchText = el("qualityMismatchText");
   const qualityMismatchDot = el("qualityMismatchDot");
+  const progPreview = el("progPreview");
 
   const prog = el("prog");
   const repeatCount = el("repeatCount");
@@ -508,12 +522,17 @@
   const log = (msg, level = "INFO") => {
     const prefix = level === "ERROR" ? "❌" : level === "WARN" ? "⚠️" : "✅";
     const stamp = new Date().toLocaleTimeString();
+    if (!logEl) {
+      const method = level === "ERROR" ? "error" : level === "WARN" ? "warn" : "log";
+      console[method](`[${stamp}] ${prefix} ${msg}`);
+      return;
+    }
     logEl.textContent += `[${stamp}] ${prefix} ${msg}\n`;
     logEl.scrollTop = logEl.scrollHeight;
   };
 
   const clearLog = () => {
-    logEl.textContent = "";
+    if (logEl) logEl.textContent = "";
   };
 
   const setReady = (ready, text) => {
@@ -766,18 +785,84 @@
     }
   };
 
+  const renderProgressionPreview = (parsed, parseError, missingSet) => {
+    if (!progPreview) return;
+    progPreview.innerHTML = "";
+    const raw = prog.value.trim();
+    if (!raw) {
+      const empty = document.createElement("span");
+      empty.className = "previewEmpty";
+      empty.textContent = "Escribe una progresión para verla aquí.";
+      progPreview.appendChild(empty);
+      return;
+    }
+    if (parseError) {
+      const errText = document.createElement("span");
+      errText.className = "previewError";
+      errText.textContent = `Progresión inválida: ${String(parseError?.message || parseError)}`;
+      progPreview.appendChild(errText);
+      return;
+    }
+    if (!parsed) return;
+
+    const bars = Array.from({ length: parsed.totalBars }, () => []);
+    for (const seg of parsed.segments) {
+      if (bars[seg.barIndex]) bars[seg.barIndex].push(seg);
+    }
+    bars.forEach((barSegs) => {
+      const barRow = document.createElement("div");
+      barRow.className = "barRow";
+      const barStart = document.createElement("span");
+      barStart.className = "barSep";
+      barStart.textContent = "|";
+      barRow.appendChild(barStart);
+
+      for (const seg of barSegs) {
+        const token = document.createElement("span");
+        token.className = "chordToken";
+        token.textContent = seg.token || `${seg.root}${seg.quality}`;
+        if (missingSet && missingSet.has(seg.quality)) {
+          token.classList.add("bad");
+        }
+        barRow.appendChild(token);
+      }
+
+      const barEnd = document.createElement("span");
+      barEnd.className = "barSep";
+      barEnd.textContent = "|";
+      barRow.appendChild(barEnd);
+      progPreview.appendChild(barRow);
+    });
+  };
+
   const updateQualityMismatch = () => {
+    let parsed = null;
+    let parseError = null;
+    try {
+      parsed = parseProgression(prog.value, { maxChordsPerBar: 4 });
+    } catch (err) {
+      parseError = err;
+    }
     if (!audioFolderLoaded || !audioQualities.length) {
       qualityMismatchText.textContent = "Carga referencias de audio para validar calidades.";
       qualityMismatchDot.classList.remove("ok");
       qualityMismatchDot.classList.add("bad");
+      renderProgressionPreview(parsed, parseError, null);
+      return;
+    }
+
+    if (parseError) {
+      qualityMismatchText.textContent = `Progresión inválida: ${String(parseError?.message || parseError)}`;
+      qualityMismatchDot.classList.remove("ok");
+      qualityMismatchDot.classList.add("bad");
+      renderProgressionPreview(parsed, parseError, null);
       return;
     }
 
     try {
-      const parsed = parseProgression(prog.value, { maxChordsPerBar: 4 });
       const qualities = new Set(parsed.segments.map((s) => s.quality));
       const missing = [...qualities].filter((q) => !audioQualities.includes(q));
+      const missingSet = new Set(missing);
       if (missing.length) {
         qualityMismatchText.textContent = `Faltan referencias para: ${missing.join(", ")}`;
         qualityMismatchDot.classList.remove("ok");
@@ -787,10 +872,12 @@
         qualityMismatchDot.classList.remove("bad");
         qualityMismatchDot.classList.add("ok");
       }
+      renderProgressionPreview(parsed, null, missingSet);
     } catch (err) {
       qualityMismatchText.textContent = `Progresión inválida: ${String(err?.message || err)}`;
       qualityMismatchDot.classList.remove("ok");
       qualityMismatchDot.classList.add("bad");
+      renderProgressionPreview(parsed, err, null);
     }
   };
 
