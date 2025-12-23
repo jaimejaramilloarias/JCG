@@ -476,6 +476,21 @@
 
       <div class="sectionGrid">
         <div class="sectionCard">
+          <div class="sectionTitle">Anticipaciones</div>
+          <div class="label">Presets de clave (selección excluyente)</div>
+          <div class="row">
+            <label class="pill">
+              <input id="clave23" type="checkbox" />
+              <span>Clave 2-3</span>
+            </label>
+            <label class="pill">
+              <input id="clave32" type="checkbox" />
+              <span>Clave 3-2</span>
+            </label>
+          </div>
+          <div class="hint">Controla la duración de cada acorde según el número de corcheas. En 4/4 se anticipan cambios de acordes según el preset elegido.</div>
+        </div>
+        <div class="sectionCard">
           <div class="sectionTitle">Progresión y calidades</div>
           <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
           <div class="chips" id="qualityChips"></div>
@@ -581,6 +596,8 @@
   const loopVolumeInput = el("loopVolume");
   const loopVolumeValue = el("loopVolumeValue");
   const btnLoopToggle = el("btnLoopToggle");
+  const clave23Input = el("clave23");
+  const clave32Input = el("clave32");
 
   const NOTE_TO_SEMI = new Map([
     ["C",0], ["B#",0],
@@ -929,6 +946,8 @@
       addBar(chords, bar, barIndex);
     }
 
+    applyClaveAnticipations(segments, eighthsPerBar, getClaveMode());
+
     const totalEighth = parts.length * eighthsPerBar;
     if (segments.length >= 2) {
       for (let i = 0; i < segments.length - 1; i++) {
@@ -961,6 +980,47 @@
   const getRefBpm = () => Math.max(20, parseInt(refBpmInput.value, 10) || 90);
   const getCrossfadeSeconds = () => Math.max(0, parseInt(crossfadeMsInput.value, 10) || 0) / 1000;
   const getLoopBars = () => Math.max(1, parseInt(loopBarsInput?.value, 10) || 1);
+  const getClaveMode = () => {
+    if (clave23Input?.checked) return "2-3";
+    if (clave32Input?.checked) return "3-2";
+    return "none";
+  };
+
+  const sameChord = (a, b) => a && b && a.rootSemi === b.rootSemi && a.quality === b.quality;
+
+  const applyClaveAnticipations = (segments, eighthsPerBar, claveMode) => {
+    if (!segments.length || eighthsPerBar !== 8) return segments;
+    if (claveMode !== "2-3" && claveMode !== "3-2") return segments;
+
+    const byBar = new Map();
+    for (const seg of segments) {
+      if (!byBar.has(seg.barIndex)) byBar.set(seg.barIndex, []);
+      byBar.get(seg.barIndex).push(seg);
+    }
+
+    const sortedBars = [...byBar.keys()].sort((a, b) => a - b);
+    for (let i = 0; i < sortedBars.length - 1; i += 2) {
+      const barA = byBar.get(sortedBars[i]) || [];
+      const barB = byBar.get(sortedBars[i + 1]) || [];
+      if (barA.length === 1 && barB.length === 1) {
+        if (!sameChord(barA[0], barB[0])) {
+          const shift = claveMode === "2-3" ? 1 : 2;
+          barB[0].startEighth = Math.max(0, barB[0].startEighth - shift);
+        }
+      } else if (barA.length === 2 && barB.length === 2) {
+        barA[1].startEighth = Math.max(0, barA[1].startEighth - 1);
+        if (claveMode === "2-3") {
+          barB[0].startEighth = Math.max(0, barB[0].startEighth - 1);
+          barB[1].startEighth = Math.max(0, barB[1].startEighth - 2);
+        } else {
+          barB[0].startEighth = Math.max(0, barB[0].startEighth - 2);
+          barB[1].startEighth = Math.max(0, barB[1].startEighth - 1);
+        }
+      }
+    }
+
+    return segments;
+  };
 
   const buildRootBarStartMap = () => {
     const map = new Map();
@@ -1737,6 +1797,14 @@
   loopBarsInput.addEventListener("input", updateQualityMismatch);
   startRootInput.addEventListener("change", updateQualityMismatch);
   globalTranspose.addEventListener("input", applyGlobalTranspose);
+  if (clave23Input && clave32Input) {
+    clave23Input.addEventListener("change", () => {
+      if (clave23Input.checked) clave32Input.checked = false;
+    });
+    clave32Input.addEventListener("change", () => {
+      if (clave32Input.checked) clave23Input.checked = false;
+    });
+  }
 
   window.addEventListener("keydown", (e) => {
     if (e.code !== "Space" && e.key !== " ") return;
