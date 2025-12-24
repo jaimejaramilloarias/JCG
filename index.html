@@ -1016,6 +1016,19 @@
     log(`BPM fijo detectado en carpeta: ${clamped}.`, "OK");
   };
 
+  const findClaveInFolderName = (name) => {
+    if (!name) return "none";
+    if (name.includes("2-3")) return "2-3";
+    if (name.includes("3-2")) return "3-2";
+    return "none";
+  };
+
+  const applyFolderClave = (name) => {
+    const claveMode = findClaveInFolderName(name);
+    if (clave23Input) clave23Input.checked = claveMode === "2-3";
+    if (clave32Input) clave32Input.checked = claveMode === "3-2";
+  };
+
   const sameChord = (a, b) => a && b && a.rootSemi === b.rootSemi && a.quality === b.quality;
 
   const applyClaveAnticipations = (segments, eighthsPerBar, claveMode) => {
@@ -1362,6 +1375,7 @@
       const statusLabel = `Carpeta (audio): ${name} — ${folderFiles.length} archivo(s).`;
       audioFolderStatus.textContent = statusLabel;
       applyFolderBpm(name);
+      applyFolderClave(name);
 
       const skipped = [];
       const dups = [];
