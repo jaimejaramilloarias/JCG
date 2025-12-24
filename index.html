@@ -493,7 +493,7 @@
             </div>
             <div>
               <div class="label">Ajuste reinicio loop (ms)</div>
-              <input id="loopRestartOffset" type="number" min="-1000" max="2000" value="0" />
+              <input id="loopRestartOffset" type="number" min="-1000" max="2000" value="90" />
             </div>
             <div>
               <div class="label">Fundamental inicial</div>
@@ -639,6 +639,8 @@
   const PLAYBACK_SCHEDULE_AHEAD_SEC = 0.08;
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
+  const LOOP_CROSSFADE_SEC = 0.02;
+  const LOOP_FADE_NO_OVERLAP_SEC = 0.01;
   const FADE_CURVE_SAMPLES = 128;
   const STORAGE_KEY = "jcg_saved_progressions";
 
@@ -996,6 +998,24 @@
     return "none";
   };
 
+  const findBpmInFolderName = (name) => {
+    if (!name) return null;
+    const match = name.match(/(\d+(?:[.,]\d+)?)\s*bpm\b/i);
+    if (!match) return null;
+    const parsed = parseFloat(match[1].replace(",", "."));
+    if (!Number.isFinite(parsed)) return null;
+    return parsed;
+  };
+
+  const applyFolderBpm = (name) => {
+    if (!refBpmInput) return;
+    const parsed = findBpmInFolderName(name);
+    if (!Number.isFinite(parsed)) return;
+    const clamped = Math.min(300, Math.max(20, parsed));
+    refBpmInput.value = String(clamped);
+    log(`BPM fijo detectado en carpeta: ${clamped}.`, "OK");
+  };
+
   const sameChord = (a, b) => a && b && a.rootSemi === b.rootSemi && a.quality === b.quality;
 
   const applyClaveAnticipations = (segments, eighthsPerBar, claveMode) => {
@@ -1341,6 +1361,7 @@
       const folderFiles = files;
       const statusLabel = `Carpeta (audio): ${name} — ${folderFiles.length} archivo(s).`;
       audioFolderStatus.textContent = statusLabel;
+      applyFolderBpm(name);
 
       const skipped = [];
       const dups = [];
@@ -1446,7 +1467,17 @@
     audioNodes = [];
   };
 
-  const scheduleAudioChord = ({ ctx, buffer, startTime, endTime, bufferOffset, trackNodes = true, gainValue = 1 }) => {
+  const scheduleAudioChord = ({
+    ctx,
+    buffer,
+    startTime,
+    endTime,
+    bufferOffset,
+    trackNodes = true,
+    gainValue = 1,
+    fadeInSec = null,
+    fadeOutSec = null,
+  }) => {
     if (!buffer) return;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
@@ -1461,11 +1492,12 @@
     const playDuration = Math.min(duration, maxPlayable);
     if (playDuration <= 0) return;
 
-    const requestedFade = Math.max(MIN_FADE_SEC, getCrossfadeSeconds());
+    const baseFade = Math.max(MIN_FADE_SEC, getCrossfadeSeconds());
+    const attackRequest = fadeInSec == null ? baseFade : Math.max(0, fadeInSec);
+    const releaseRequest = fadeOutSec == null ? baseFade : Math.max(0, fadeOutSec);
     const maxFade = Math.max(MIN_FADE_SEC, playDuration / 2);
-    const fade = Math.min(requestedFade, maxFade);
-    const attack = fade;
-    const release = fade;
+    const attack = Math.min(attackRequest, maxFade);
+    const release = Math.min(releaseRequest, maxFade);
     const effectiveEnd = startTime + playDuration;
     const sustainStart = startTime + attack;
     const releaseStart = Math.max(sustainStart, effectiveEnd - release);
@@ -1505,13 +1537,19 @@
     if (loopVolume <= 0) return;
     const totalBars = Math.ceil(totalEighth / getEighthsPerBar());
     const loopBars = getLoopBars();
+    const overlapSec = LOOP_CROSSFADE_SEC;
     for (const loop of loopBufferSet) {
       const duration = Math.max(loop.buffer.duration, 0.001);
       for (let bar = 0; bar < totalBars; bar += 1) {
         const startTime = baseTime + bar * barSeconds;
-        const endTime = startTime + barSeconds;
         const loopBarIndex = loopBars > 0 ? bar % loopBars : bar;
         const bufferOffset = (loopBarIndex * barSeconds) % duration;
+        const safeOffset = Math.max(0, Math.min(loop.buffer.duration - 0.002, bufferOffset));
+        const maxPlayable = Math.max(0, loop.buffer.duration - safeOffset);
+        const useOverlap = maxPlayable >= barSeconds + overlapSec;
+        const endTime = startTime + (useOverlap ? barSeconds + overlapSec : barSeconds);
+        const fadeInSec = useOverlap ? overlapSec : LOOP_FADE_NO_OVERLAP_SEC;
+        const fadeOutSec = useOverlap ? overlapSec : LOOP_FADE_NO_OVERLAP_SEC;
         scheduleAudioChord({
           ctx,
           buffer: loop.buffer,
@@ -1520,6 +1558,8 @@
           bufferOffset,
           trackNodes,
           gainValue: loopVolume,
+          fadeInSec,
+          fadeOutSec,
         });
       }
     }
