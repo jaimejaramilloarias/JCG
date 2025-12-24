@@ -1598,15 +1598,16 @@
       });
     }
 
-    const playbackDurationMs = (parsed.totalEighth * secPerEighth + PLAYBACK_SCHEDULE_AHEAD_SEC + 0.4) * 1000;
+    const playbackDurationSec = parsed.totalEighth * secPerEighth;
     const doneTimer = setTimeout(() => {
       isAudioPlaying = false;
-    }, playbackDurationMs);
+    }, playbackDurationSec * 1000);
     audioTimers.push(doneTimer);
+    const loopDelayMs = Math.max(0, (playbackDurationSec - PLAYBACK_SCHEDULE_AHEAD_SEC) * 1000);
     playbackLoopTimer = setTimeout(() => {
       if (!loopProgressionEnabled) return;
       playAudio();
-    }, playbackDurationMs);
+    }, loopDelayMs);
     log("Playback iniciado.", "OK");
   };
 
