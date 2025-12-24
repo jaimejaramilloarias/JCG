@@ -429,6 +429,10 @@
             <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
             <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado">Exportar audio</button>
           </div>
+          <div class="label" style="margin-top:8px">Loop de reproducción</div>
+          <div class="clusterActions">
+            <button class="btn ghost" id="btnLoopProgression" title="Repetir la progresión solo en playback">Loop progresión: OFF</button>
+          </div>
         </div>
 
         <div class="controlCluster">
@@ -593,6 +597,7 @@
   const loopVolumeInput = el("loopVolume");
   const loopVolumeValue = el("loopVolumeValue");
   const btnLoopToggle = el("btnLoopToggle");
+  const btnLoopProgression = el("btnLoopProgression");
   const clave23Input = el("clave23");
   const clave32Input = el("clave32");
 
@@ -624,6 +629,8 @@
   let audioTimers = [];
   let currentGlobalTranspose = 0;
   let loopEnabled = true;
+  let loopProgressionEnabled = false;
+  let playbackLoopTimer = null;
   const PLAYBACK_SCHEDULE_AHEAD_SEC = 0.08;
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
@@ -1267,6 +1274,13 @@
     }
   };
 
+  const updatePlaybackLoopControls = () => {
+    if (!btnLoopProgression) return;
+    btnLoopProgression.textContent = loopProgressionEnabled ? "Loop progresión: ON" : "Loop progresión: OFF";
+    btnLoopProgression.classList.toggle("purple", loopProgressionEnabled);
+    btnLoopProgression.classList.toggle("ghost", !loopProgressionEnabled);
+  };
+
   const loadFolderViaPicker = async () => {
     if (window.showDirectoryPicker) {
       const dir = await window.showDirectoryPicker();
@@ -1406,6 +1420,10 @@
 
   const stopAudioPlayback = () => {
     isAudioPlaying = false;
+    if (playbackLoopTimer) {
+      clearTimeout(playbackLoopTimer);
+      playbackLoopTimer = null;
+    }
     for (const t of audioTimers) {
       clearTimeout(t);
     }
@@ -1580,11 +1598,15 @@
       });
     }
 
-    const doneTimer = setTimeout(
-      () => { isAudioPlaying = false; },
-      (parsed.totalEighth * secPerEighth + PLAYBACK_SCHEDULE_AHEAD_SEC + 0.4) * 1000
-    );
+    const playbackDurationMs = (parsed.totalEighth * secPerEighth + PLAYBACK_SCHEDULE_AHEAD_SEC + 0.4) * 1000;
+    const doneTimer = setTimeout(() => {
+      isAudioPlaying = false;
+    }, playbackDurationMs);
     audioTimers.push(doneTimer);
+    playbackLoopTimer = setTimeout(() => {
+      if (!loopProgressionEnabled) return;
+      playAudio();
+    }, playbackDurationMs);
     log("Playback iniciado.", "OK");
   };
 
@@ -1766,6 +1788,10 @@
     loopEnabled = !loopEnabled;
     updateLoopControls();
   });
+  btnLoopProgression.addEventListener("click", () => {
+    loopProgressionEnabled = !loopProgressionEnabled;
+    updatePlaybackLoopControls();
+  });
   btnSaveProg.addEventListener("click", saveCurrentProgression);
   btnLoadProg.addEventListener("click", loadSelectedProgression);
   btnDeleteProg.addEventListener("click", deleteSelectedProgression);
@@ -1820,6 +1846,7 @@
   updateQualityMismatch();
   updateReadyState();
   updateLoopControls();
+  updatePlaybackLoopControls();
 })();
 </script>
 </body>
