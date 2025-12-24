@@ -508,7 +508,7 @@
                 <option value="E">E</option>
                 <option value="F">F</option>
                 <option value="F#">F#</option>
-                <option value="G">G</option>
+                <option value="G" selected>G</option>
                 <option value="G#">G#</option>
               </select>
             </div>
@@ -1067,7 +1067,7 @@
 
   const buildRootBarStartMap = () => {
     const map = new Map();
-    const startRoot = (startRootInput.value || "A").toUpperCase();
+    const startRoot = (startRootInput.value || "G").toUpperCase();
     const startSemi = NOTE_TO_SEMI.get(startRoot);
     if (startSemi == null) return map;
     const barsPerChord = getBarsPerChord();
