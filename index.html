@@ -492,6 +492,10 @@
               <input id="loopBars" type="number" min="1" max="256" value="4" />
             </div>
             <div>
+              <div class="label">Ajuste reinicio loop (ms)</div>
+              <input id="loopRestartOffset" type="number" min="-1000" max="2000" value="0" />
+            </div>
+            <div>
               <div class="label">Fundamental inicial</div>
               <select id="startRoot">
                 <option value="A">A</option>
@@ -593,6 +597,7 @@
   const refBpmInput = el("refBpm");
   const crossfadeMsInput = el("crossfadeMs");
   const loopBarsInput = el("loopBars");
+  const loopRestartOffsetInput = el("loopRestartOffset");
   const startRootInput = el("startRoot");
   const loopVolumeInput = el("loopVolume");
   const loopVolumeValue = el("loopVolumeValue");
@@ -984,6 +989,7 @@
   const getRefBpm = () => Math.max(20, parseInt(refBpmInput.value, 10) || 90);
   const getCrossfadeSeconds = () => Math.max(0, parseInt(crossfadeMsInput.value, 10) || 0) / 1000;
   const getLoopBars = () => Math.max(1, parseInt(loopBarsInput?.value, 10) || 1);
+  const getLoopRestartOffsetMs = () => parseInt(loopRestartOffsetInput?.value, 10) || 0;
   const getClaveMode = () => {
     if (clave23Input?.checked) return "2-3";
     if (clave32Input?.checked) return "3-2";
@@ -1603,7 +1609,7 @@
       isAudioPlaying = false;
     }, playbackDurationSec * 1000);
     audioTimers.push(doneTimer);
-    const loopDelayMs = Math.max(0, (playbackDurationSec - PLAYBACK_SCHEDULE_AHEAD_SEC) * 1000);
+    const loopDelayMs = Math.max(0, (playbackDurationSec - PLAYBACK_SCHEDULE_AHEAD_SEC) * 1000 + getLoopRestartOffsetMs());
     playbackLoopTimer = setTimeout(() => {
       if (!loopProgressionEnabled) return;
       playAudio();
@@ -1819,6 +1825,7 @@
   });
   crossfadeMsInput.addEventListener("input", updateQualityMismatch);
   loopBarsInput.addEventListener("input", updateQualityMismatch);
+  loopRestartOffsetInput.addEventListener("input", updateQualityMismatch);
   startRootInput.addEventListener("change", updateQualityMismatch);
   globalTranspose.addEventListener("input", applyGlobalTranspose);
   if (clave23Input && clave32Input) {
