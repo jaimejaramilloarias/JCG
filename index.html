@@ -1469,12 +1469,29 @@
   };
 
   const collectFoldersFromFileList = (list) => {
+    const entries = list.map((file) => {
+      const rel = file.webkitRelativePath || file._relativePath || file.name || "";
+      const parts = rel.split("/").filter(Boolean);
+      return { file, parts };
+    });
+    const rootNames = new Set(entries.map((entry) => entry.parts[0]).filter(Boolean));
+    let useSecondLevel = false;
+    if (rootNames.size === 1) {
+      const secondLevel = new Set(
+        entries
+          .filter((entry) => entry.parts.length > 2)
+          .map((entry) => entry.parts[1])
+          .filter(Boolean)
+      );
+      useSecondLevel = secondLevel.size > 1;
+    }
+
     const byFolder = new Map();
-    for (const file of list) {
-      const rel = file.webkitRelativePath || file.name || "";
-      const top = rel.split("/")[0] || "carpeta";
-      if (!byFolder.has(top)) byFolder.set(top, []);
-      byFolder.get(top).push(file);
+    for (const entry of entries) {
+      const parts = entry.parts;
+      const folderName = (useSecondLevel && parts.length > 2 ? parts[1] : parts[0]) || "carpeta";
+      if (!byFolder.has(folderName)) byFolder.set(folderName, []);
+      byFolder.get(folderName).push(entry.file);
     }
     return [...byFolder.entries()].map(([name, files]) => ({ name, files }));
   };
@@ -1505,7 +1522,7 @@
       })
     );
 
-    if (window.showDirectoryPicker && !allowMultiple) {
+    if (window.showDirectoryPicker) {
       let dir;
       try {
         dir = await window.showDirectoryPicker();
@@ -1513,19 +1530,24 @@
         if (err?.name === "AbortError") return null;
         throw err;
       }
-      const collect = async (handle, acc) => {
+      const collect = async (handle, prefix, acc) => {
         for await (const [, child] of handle.entries()) {
           if (child.kind === "file") {
-            acc.push(await child.getFile());
+            const file = await child.getFile();
+            file._relativePath = `${prefix}${child.name}`;
+            acc.push(file);
           } else if (child.kind === "directory") {
-            await collect(child, acc);
+            await collect(child, `${prefix}${child.name}/`, acc);
           }
         }
       };
       const files = [];
-      await collect(dir, files);
-      const folder = { name: dir.name || "carpeta", files };
-      return folder;
+      await collect(dir, `${dir.name}/`, files);
+      if (allowMultiple) {
+        const folders = collectFoldersFromFileList(files);
+        return folders.length ? folders : null;
+      }
+      return { name: dir.name || "carpeta", files };
     }
 
     return await pickViaFileInput();
