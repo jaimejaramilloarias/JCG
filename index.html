@@ -1464,7 +1464,7 @@
     return [...byFolder.entries()].map(([name, files]) => ({ name, files }));
   };
 
-  const loadFolderViaPicker = async () => {
+  const loadFolderViaPicker = async ({ allowMultiple = false } = {}) => {
     if (window.showDirectoryPicker) {
       let dir;
       try {
@@ -1484,11 +1484,13 @@
       };
       const files = [];
       await collect(dir, files);
-      return { name: dir.name || "carpeta", files };
+      const folder = { name: dir.name || "carpeta", files };
+      return allowMultiple ? [folder] : folder;
     }
 
     return await new Promise((resolve, reject) => {
       const input = el("audioFolderFallback");
+      input.multiple = allowMultiple;
       input.onchange = () => {
         const list = [...input.files];
         input.value = "";
@@ -1501,10 +1503,10 @@
           reject(new Error("No se encontraron archivos en esa carpeta."));
           return;
         }
-        if (folders.length > 1) {
+        if (!allowMultiple && folders.length > 1) {
           log("Se detectaron múltiples carpetas. Se usará la primera.", "WARN");
         }
-        resolve(folders[0]);
+        resolve(allowMultiple ? folders : folders[0]);
       };
       input.click();
     });
@@ -1547,28 +1549,9 @@
     renderMixer();
   };
 
-  const loadAudioFolder = async ({ reset = false } = {}) => {
-    const previousStatus = audioFolderStatus?.textContent || "";
-    if (reset) {
-      clearLog();
-      resetAudioTracks();
-    }
-
-    if (audioFolderStatus) audioFolderStatus.textContent = "Cargando…";
-    if (loopStatus && reset) loopStatus.textContent = "Cargando…";
-    updateReadyState();
-    if (reset) updateQualityMismatch();
-
+  const addTrackFromFolder = async ({ folder, ctx }) => {
     let track = null;
     try {
-      const ctx = ensureAudioContext();
-      const folder = await loadFolderViaPicker();
-      if (!folder) {
-        renderAudioFolderStatus();
-        updateLoopControls();
-        updateReadyState();
-        return;
-      }
       if (!folder.files?.length) {
         throw new Error("No se encontraron archivos en esa carpeta.");
       }
@@ -1712,6 +1695,52 @@
       if (track.loopBuffers.length) {
         loopLoadedOnce = true;
       }
+      return track;
+    } catch (err) {
+      cleanupTrackResources(track);
+      throw err;
+    }
+  };
+
+  const loadAudioFolder = async ({ reset = false, allowMultiple = false } = {}) => {
+    const previousStatus = audioFolderStatus?.textContent || "";
+    if (reset) {
+      clearLog();
+      resetAudioTracks();
+    }
+
+    const hasExisting = audioTracks.length > 0;
+    if (audioFolderStatus) {
+      audioFolderStatus.textContent = hasExisting && !reset ? "Añadiendo instrumentos…" : "Cargando…";
+    }
+    if (loopStatus && reset) loopStatus.textContent = "Cargando…";
+    updateReadyState();
+    if (reset) updateQualityMismatch();
+
+    let loadedAny = false;
+    try {
+      const ctx = ensureAudioContext();
+      const folderResult = await loadFolderViaPicker({ allowMultiple });
+      if (!folderResult) {
+        renderAudioFolderStatus();
+        updateLoopControls();
+        updateReadyState();
+        return;
+      }
+
+      const folders = Array.isArray(folderResult) ? folderResult : [folderResult];
+      for (const folder of folders) {
+        try {
+          await addTrackFromFolder({ folder, ctx });
+          loadedAny = true;
+        } catch (err) {
+          log(String(err?.message || err), "ERROR");
+        }
+      }
+
+      if (!loadedAny) {
+        throw new Error("No se pudo cargar ninguna carpeta.");
+      }
 
       renderQualityChips();
       renderMixer();
@@ -1720,14 +1749,21 @@
       renderAudioFolderStatus();
       updateReadyState();
     } catch (err) {
-      cleanupTrackResources(track);
-      if (reset) {
+      if (reset && !loadedAny) {
         resetAudioTracks();
         if (audioFolderStatus) audioFolderStatus.textContent = "Error al cargar carpeta.";
       } else if (audioFolderStatus) {
         audioFolderStatus.textContent = previousStatus || audioFolderStatus.textContent;
       }
-      log(String(err?.message || err), "ERROR");
+      if (!loadedAny) {
+        log(String(err?.message || err), "ERROR");
+      }
+      if (loadedAny) {
+        renderQualityChips();
+        renderMixer();
+        updateQualityMismatch();
+        renderAudioFolderStatus();
+      }
       updateLoopControls();
       updateReadyState();
     }
@@ -2147,8 +2183,8 @@
   helpModal.addEventListener("click", (e) => { if (e.target === helpModal) closeHelp(); });
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelp(); });
 
-  el("btnPickAudioFolder").addEventListener("click", () => loadAudioFolder({ reset: true }));
-  el("btnAddAudioFolder").addEventListener("click", () => loadAudioFolder({ reset: false }));
+  el("btnPickAudioFolder").addEventListener("click", () => loadAudioFolder({ reset: true, allowMultiple: false }));
+  el("btnAddAudioFolder").addEventListener("click", () => loadAudioFolder({ reset: false, allowMultiple: true }));
   el("btnPlay").addEventListener("click", playAudio);
   el("btnStop").addEventListener("click", stopAudioPlayback);
   el("btnExportAudio").addEventListener("click", exportAudio);
