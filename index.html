@@ -459,11 +459,11 @@
         <div class="controlCluster">
           <div class="clusterTitle">Carpetas de audio</div>
           <div class="clusterActions">
-            <button class="btn" id="btnPickAudioFolder" title="Cargar una o más carpetas con archivos WAV de referencia">Cargar carpetas</button>
+            <button class="btn" id="btnPickAudioFolder" title="Cargar una o más carpetas con archivos WAV de referencia">Cargar carpeta</button>
             <button class="btn ghost" id="btnAddAudioFolder" title="Agregar otra carpeta de instrumentos">+</button>
             <input id="audioFolderFallback" type="file" webkitdirectory style="display:none" />
           </div>
-          <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin carpetas cargadas.</div>
+          <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin instrumentos cargados.</div>
           <div class="chips" id="audioFolderList" style="margin-top:6px"></div>
         </div>
 
@@ -565,7 +565,7 @@
           <div class="mini" id="mixerSummary">0 instrumentos</div>
         </div>
         <div class="bd">
-          <div class="mixerEmpty" id="mixerEmpty">Carga carpetas para ver instrumentos en el mezclador.</div>
+          <div class="mixerEmpty" id="mixerEmpty">Carga una carpeta para ver instrumentos en el mezclador.</div>
           <div class="mixerGrid" id="mixerGrid"></div>
         </div>
       </div>
@@ -585,7 +585,7 @@
     <div class="modalBd">
       <p><b>Manual rápido</b></p>
       <ul>
-        <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y usa <span class="kbd">+</span> para agregar más carpetas con los mismos nombres de archivo.</li>
+        <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y usa el formato <span class="kbd">calidad__instrumento.wav</span> (ej: <span class="kbd">∆__guitarra.wav</span>).</li>
         <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
         <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
         <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
@@ -1193,7 +1193,7 @@
     if (!audioQualities.length) {
       const s = document.createElement("span");
       s.className = "mini";
-      s.textContent = "Carga carpetas de audio para ver las calidades disponibles.";
+      s.textContent = "Carga una carpeta de audio para ver las calidades disponibles.";
       qualityChips.appendChild(s);
       return;
     }
@@ -1323,9 +1323,14 @@
     if (!/\.wav$/i.test(fullName)) return null;
     if (isLoopFileName(fullName)) return null;
     const base = fullName.replace(/\.[^.]+$/, "");
-    const qualityKey = normalizeQuality(base);
+    const separator = "__";
+    if (!base.includes(separator)) return null;
+    const [qualityRaw, ...instrumentParts] = base.split(separator);
+    const instrument = instrumentParts.join(separator).trim();
+    if (!instrument) return null;
+    const qualityKey = normalizeQuality(qualityRaw.trim());
     if (!qualityKey) return null;
-    return qualityKey;
+    return { qualityKey, instrument };
   };
 
   const getLoopVolume = () => {
@@ -1563,12 +1568,12 @@
   const renderAudioFolderStatus = () => {
     if (!audioFolderStatus) return;
     if (!audioTracks.length) {
-      audioFolderStatus.textContent = "Sin carpetas cargadas.";
+      audioFolderStatus.textContent = "Sin instrumentos cargados.";
       if (audioFolderList) audioFolderList.innerHTML = "";
       return;
     }
     const instrumentNames = audioTracks.map((track) => track.name);
-    audioFolderStatus.textContent = `Carpetas cargadas: ${instrumentNames.length}.`;
+    audioFolderStatus.textContent = `Instrumentos cargados: ${instrumentNames.length}.`;
     if (audioFolderList) {
       audioFolderList.innerHTML = "";
       for (const name of instrumentNames) {
@@ -1602,7 +1607,8 @@
   };
 
   const addTrackFromFolder = async ({ folder, ctx }) => {
-    let track = null;
+    let createdTracks = [];
+    let newTracks = [];
     try {
       if (!folder.files?.length) {
         throw new Error("No se encontraron archivos en esa carpeta.");
@@ -1645,21 +1651,10 @@
         }
       }
 
-      track = {
-        id: trackIdCounter += 1,
-        name: (folder.name || "").trim() || `Instrumento ${trackIdCounter}`,
-        buffersByQuality: new Map(),
-        urlsByQuality: new Map(),
-        loopBuffers: [],
-        volume: 1,
-        mute: false,
-        solo: false,
-        qualities: [],
-      };
-
       const skipped = [];
       const dups = [];
       const loopSkipped = [];
+      const tracksByInstrument = new Map();
 
       for (const f of folder.files) {
         const fullName = (f.name || "").trim();
@@ -1675,10 +1670,26 @@
           }
           continue;
         }
-        const qualityKey = parseAudioFileName(fullName);
-        if (!qualityKey) { skipped.push(fullName); continue; }
+        const parsed = parseAudioFileName(fullName);
+        if (!parsed) { skipped.push(fullName); continue; }
+        const { qualityKey, instrument } = parsed;
+        if (!tracksByInstrument.has(instrument)) {
+          const trackId = trackIdCounter += 1;
+          tracksByInstrument.set(instrument, {
+            id: trackId,
+            name: instrument || `Instrumento ${trackId}`,
+            buffersByQuality: new Map(),
+            urlsByQuality: new Map(),
+            loopBuffers: [],
+            volume: 1,
+            mute: false,
+            solo: false,
+            qualities: [],
+          });
+        }
+        const track = tracksByInstrument.get(instrument);
         if (track.buffersByQuality.has(qualityKey)) {
-          dups.push(qualityKey);
+          dups.push(`${instrument}:${qualityKey}`);
           const oldUrl = track.urlsByQuality.get(qualityKey);
           if (oldUrl) URL.revokeObjectURL(oldUrl);
         }
@@ -1694,51 +1705,75 @@
         }
       }
 
-      track.qualities = [...new Set(track.buffersByQuality.keys())].sort((a, b) => a.localeCompare(b, "en"));
-      if (!track.qualities.length) {
-        throw new Error(`No encontré WAVs válidos en la carpeta "${track.name}".`);
+      newTracks = [...tracksByInstrument.values()];
+      if (!newTracks.length) {
+        throw new Error(`No encontré WAVs válidos en la carpeta "${folder.name}".`);
       }
 
-      if (!audioQualities.length) {
-        audioQualities = [...track.qualities];
-      } else {
-        const missing = audioQualities.filter((q) => !track.qualities.includes(q));
-        const extra = track.qualities.filter((q) => !audioQualities.includes(q));
-        if (missing.length || extra.length) {
-          const details = [
-            missing.length ? `Faltan: ${missing.join(", ")}` : "",
-            extra.length ? `Sobran: ${extra.join(", ")}` : "",
-          ].filter(Boolean).join(" — ");
-          throw new Error(`Las calidades de "${track.name}" no coinciden con las demás. ${details}`);
+      const referenceQualities = audioQualities.length ? [...audioQualities] : null;
+      let resolvedQualities = referenceQualities;
+
+      for (const track of newTracks) {
+        track.qualities = [...new Set(track.buffersByQuality.keys())].sort((a, b) => a.localeCompare(b, "en"));
+        if (!track.qualities.length) {
+          throw new Error(`No encontré WAVs válidos para el instrumento "${track.name}".`);
         }
+
+        if (!resolvedQualities) {
+          resolvedQualities = [...track.qualities];
+        } else {
+          const missing = resolvedQualities.filter((q) => !track.qualities.includes(q));
+          const extra = track.qualities.filter((q) => !resolvedQualities.includes(q));
+          if (missing.length || extra.length) {
+            const details = [
+              missing.length ? `Faltan: ${missing.join(", ")}` : "",
+              extra.length ? `Sobran: ${extra.join(", ")}` : "",
+            ].filter(Boolean).join(" — ");
+            throw new Error(`Las calidades de "${track.name}" no coinciden con las demás. ${details}`);
+          }
+        }
+
+        if (track.loopBuffers.length) {
+          log(`(${track.name}) Loops cargados: ${track.loopBuffers.length}.`, "OK");
+        }
+
+        const expectedSeconds = getBarsPerFile() * getRefBarSeconds();
+        for (const [quality, buffer] of track.buffersByQuality.entries()) {
+          if (buffer.duration + 0.1 < expectedSeconds) {
+            log(`(${track.name}) "${quality}": duración corta (${buffer.duration.toFixed(2)}s). Esperaba ~${expectedSeconds.toFixed(2)}s.`, "WARN");
+          }
+        }
+
+        log(`(${track.name}) Cargados ${track.qualities.length} WAV(s) de referencia.`, "OK");
+      }
+
+      if (!audioQualities.length && resolvedQualities) {
+        audioQualities = resolvedQualities;
+      }
+
+      for (const track of newTracks) {
+        audioTracks.push(track);
+        createdTracks.push(track);
       }
 
       if (skipped.length) {
-        log(`(${track.name}) Archivos ignorados (no WAV / nombre inválido): ${skipped.join(", ")}`, "WARN");
+        log(`Archivos ignorados (no WAV / nombre inválido): ${skipped.join(", ")}`, "WARN");
       }
       if (dups.length) {
-        log(`(${track.name}) Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
+        log(`Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
       }
       if (loopSkipped.length) {
-        log(`(${track.name}) Loops ignorados (error al leer): ${loopSkipped.join(", ")}`, "WARN");
-      }
-      if (track.loopBuffers.length) {
-        log(`(${track.name}) Loops cargados: ${track.loopBuffers.length}.`, "OK");
+        log(`Loops ignorados (error al leer): ${loopSkipped.join(", ")}`, "WARN");
       }
 
-      const expectedSeconds = getBarsPerFile() * getRefBarSeconds();
-      for (const [quality, buffer] of track.buffersByQuality.entries()) {
-        if (buffer.duration + 0.1 < expectedSeconds) {
-          log(`(${track.name}) "${quality}": duración corta (${buffer.duration.toFixed(2)}s). Esperaba ~${expectedSeconds.toFixed(2)}s.`, "WARN");
-        }
-      }
-
-      log(`(${track.name}) Cargados ${track.qualities.length} WAV(s) de referencia.`, "OK");
-      audioTracks.push(track);
-
-      return track;
+      return createdTracks[createdTracks.length - 1] || null;
     } catch (err) {
-      cleanupTrackResources(track);
+      for (const track of createdTracks) {
+        cleanupTrackResources(track);
+      }
+      for (const track of newTracks) {
+        cleanupTrackResources(track);
+      }
       throw err;
     }
   };
