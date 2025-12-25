@@ -1190,7 +1190,7 @@
 
   const applyClaveAnticipations = (segments, eighthsPerBar, claveMode) => {
     if (!segments.length || eighthsPerBar !== 8) return segments;
-    if (claveMode !== "2-3") return segments;
+    if (claveMode !== "2-3" && claveMode !== "3-2") return segments;
 
     const byBar = new Map();
     for (const seg of segments) {
@@ -1206,12 +1206,18 @@
       const barB = byBar.get(sortedBars[i + 1]) || [];
       if (barA.length === 1 && barB.length === 1) {
         if (!sameChord(barA[0], barB[0])) {
-          barB[0].startEighth = Math.max(0, barB[0].startEighth - 1);
+          const shift = claveMode === "2-3" ? 1 : 2;
+          barB[0].startEighth = Math.max(0, barB[0].startEighth - shift);
         }
       } else if (barA.length === 2 && barB.length === 2) {
         barA[1].startEighth = Math.max(0, barA[1].startEighth - 1);
-        barB[0].startEighth = Math.max(0, barB[0].startEighth - 1);
-        barB[1].startEighth = Math.max(0, barB[1].startEighth - 2);
+        if (claveMode === "2-3") {
+          barB[0].startEighth = Math.max(0, barB[0].startEighth - 1);
+          barB[1].startEighth = Math.max(0, barB[1].startEighth - 2);
+        } else {
+          barB[0].startEighth = Math.max(0, barB[0].startEighth - 2);
+          barB[1].startEighth = Math.max(0, barB[1].startEighth - 1);
+        }
       }
     }
 
