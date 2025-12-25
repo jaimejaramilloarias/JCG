@@ -513,16 +513,8 @@
               <input id="refBpm" type="number" min="20" max="300" value="90" />
             </div>
             <div>
-              <div class="label">Crossfade (ms)</div>
-              <input id="crossfadeMs" type="number" min="0" max="2000" value="20" />
-            </div>
-            <div>
               <div class="label">Compases loop base</div>
               <input id="loopBars" type="number" min="1" max="256" value="4" />
-            </div>
-            <div>
-              <div class="label">Ajuste reinicio loop (ms)</div>
-              <input id="loopRestartOffset" type="number" min="-1000" max="2000" value="90" />
             </div>
             <div>
               <div class="label">Fundamental inicial</div>
@@ -577,18 +569,25 @@
       </div>
     </div>
     <div class="modalBd">
-      <p><b>Manual rápido</b></p>
+      <p><b>Guía amigable paso a paso</b></p>
       <ul>
-        <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y usa el formato <span class="kbd">calidad__instrumento.wav</span> o <span class="kbd">calidad_instrumento.wav</span> (ej: <span class="kbd">∆__guitarra.wav</span>).</li>
-        <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
-        <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>. Usa <span class="kbd">|/|</span> para mutear instrumentos, <span class="kbd">|-|</span> para mutear todo, y <span class="kbd">||:</span> ... <span class="kbd">:||</span> para repetir. Para aplicar clave, escribe <span class="kbd">2-3</span> o <span class="kbd">3-2</span> antes de la progresión.</li>
-        <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
-        <li><b>5) Mezclador:</b> ajusta volumen, solo y mute por instrumento.</li>
-        <li><b>6) Guardar:</b> usa <span class="kbd">Guardar</span>, <span class="kbd">Exportar</span> para llevarte todas y <span class="kbd">Cargar archivo</span> para reimportarlas.</li>
-        <li><b>7) Escuchar:</b> pulsa <span class="kbd">Reproducir</span>. Usa <span class="kbd">Stop</span> para detener.</li>
-        <li><b>8) Exportar:</b> guarda el audio con <span class="kbd">Exportar audio</span>.</li>
+        <li><b>1) Prepara tus WAVs:</b> cada archivo debe nombrarse como <span class="kbd">calidad__instrumento.wav</span> o <span class="kbd">calidad_instrumento.wav</span>. Ejemplos: <span class="kbd">maj7__piano.wav</span>, <span class="kbd">m7_guitarra.wav</span>, <span class="kbd">7alt__rhodes.wav</span>. El texto antes del separador es la <i>calidad</i> (maj7, m7, 7b9, ø7, etc.).</li>
+        <li><b>2) Carga tu carpeta:</b> pulsa <span class="kbd">Cargar carpeta</span>. Al cargar, revisa el indicador de <b>Calidades detectadas</b> para confirmar que el sistema reconoce todo lo que necesitas.</li>
+        <li><b>3) Ajusta la base:</b> define <span class="kbd">Compases por archivo</span>, <span class="kbd">Compases por acorde</span>, el <span class="kbd">BPM fijo</span> de referencia y la <span class="kbd">Fundamental inicial</span>. Estos parámetros determinan cómo se alinean los audios con tu progresión.</li>
+        <li><b>4) Escribe la progresión:</b> usa barras para separar compases. Ejemplo: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>. Puedes usar:
+          <ul>
+            <li><span class="kbd">|/|</span> para mutear instrumentos dentro de un compás.</li>
+            <li><span class="kbd">|-|</span> para mutear todo el compás.</li>
+            <li><span class="kbd">||:</span> … <span class="kbd">:||</span> para repetir secciones.</li>
+            <li><span class="kbd">2-3</span> o <span class="kbd">3-2</span> al inicio para aplicar clave.</li>
+          </ul>
+        </li>
+        <li><b>5) Transposición:</b> el control <span class="kbd">Transposición</span> sube o baja las <b>fundamentales</b> de los acordes en semitonos <i>sin alterar sus calidades</i>. Ejemplo: si subes +2, <span class="kbd">Dm7</span> pasa a <span class="kbd">Em7</span> y <span class="kbd">G7</span> pasa a <span class="kbd">A7</span>.</li>
+        <li><b>6) Mezclador:</b> ajusta volumen, mute y solo por instrumento para construir tu balance. El resumen del mezclador te indica cuántos instrumentos están activos.</li>
+        <li><b>7) Guardar y recuperar:</b> usa <span class="kbd">Guardar</span> para registrar una progresión, <span class="kbd">Exportar</span> para descargar todas, y <span class="kbd">Cargar archivo</span> para reimportarlas más tarde.</li>
+        <li><b>8) Escuchar y exportar:</b> pulsa <span class="kbd">Reproducir</span> para escuchar, <span class="kbd">Stop</span> para detener y <span class="kbd">Exportar audio</span> para generar un WAV final.</li>
       </ul>
-      <p class="mini">Atajo: <span class="kbd">Espacio</span> alterna Reproducir / Stop (cuando no estás escribiendo).</p>
+      <p class="mini">Atajo: <span class="kbd">Espacio</span> alterna Reproducir / Stop (cuando no estás escribiendo en un campo de texto).</p>
 
     </div>
   </div>
@@ -628,9 +627,7 @@
   const barsPerChordInput = el("barsPerChord");
   const timeSignatureInput = el("timeSignature");
   const refBpmInput = el("refBpm");
-  const crossfadeMsInput = el("crossfadeMs");
   const loopBarsInput = el("loopBars");
-  const loopRestartOffsetInput = el("loopRestartOffset");
   const startRootInput = el("startRoot");
   const loopVolumeInput = el("loopVolume");
   const loopVolumeValue = el("loopVolumeValue");
@@ -1164,9 +1161,8 @@
   const getBarsPerFile = () => Math.max(1, parseInt(barsPerFileInput.value, 10) || 1);
   const getBarsPerChord = () => Math.max(1, parseInt(barsPerChordInput.value, 10) || 1);
   const getRefBpm = () => Math.max(20, parseInt(refBpmInput.value, 10) || 90);
-  const getCrossfadeSeconds = () => Math.max(0, parseInt(crossfadeMsInput.value, 10) || 0) / 1000;
+  const getCrossfadeSeconds = () => LOOP_CROSSFADE_SEC;
   const getLoopBars = () => Math.max(1, parseInt(loopBarsInput?.value, 10) || 1);
-  const getLoopRestartOffsetMs = () => parseInt(loopRestartOffsetInput?.value, 10) || 0;
 
   const findBpmInFolderName = (name) => {
     if (!name) return null;
@@ -1258,14 +1254,32 @@
   const transposeChordTokenText = (tok, delta) => {
     if (!delta) return tok;
     const normalized = normalizeAccidentals(tok.trim());
-    const m = normalized.match(/^([A-Ga-g])([#b]?)(.*)$/);
+    const slashIndex = normalized.indexOf("/");
+    const mainToken = slashIndex === -1 ? normalized : normalized.slice(0, slashIndex);
+    const bassToken = slashIndex === -1 ? null : normalized.slice(slashIndex + 1);
+    const m = mainToken.match(/^([A-Ga-g])([#b]?)(.*)$/);
     if (!m) return tok;
-    const rootKey = (m[1].toUpperCase() + (m[2] || "" )).toUpperCase();
+    const rootKey = (m[1].toUpperCase() + (m[2] || "")).toUpperCase();
     const preferFlat = m[2] === "b" || m[2] === "♭";
     if (!NOTE_TO_SEMI.has(rootKey)) return tok;
     const rest = m[3] || "";
     const newRoot = transposeRootLabel(rootKey, delta, preferFlat);
-    return newRoot + rest;
+    let output = newRoot + rest;
+    if (bassToken != null) {
+      const bassMatch = bassToken.match(/^([A-Ga-g])([#b]?)(.*)$/);
+      if (bassMatch) {
+        const bassKey = (bassMatch[1].toUpperCase() + (bassMatch[2] || "")).toUpperCase();
+        const preferFlatBass = bassMatch[2] === "b" || bassMatch[2] === "♭";
+        if (NOTE_TO_SEMI.has(bassKey)) {
+          const bassRest = bassMatch[3] || "";
+          const newBass = transposeRootLabel(bassKey, delta, preferFlatBass);
+          output += `/${newBass}${bassRest}`;
+          return output;
+        }
+      }
+      output += `/${bassToken}`;
+    }
+    return output;
   };
 
   const transposeProgressionText = (text, delta) => {
@@ -2272,7 +2286,7 @@
       isAudioPlaying = false;
     }, playbackDurationSec * 1000);
     audioTimers.push(doneTimer);
-    const loopDelayMs = Math.max(0, (playbackDurationSec - PLAYBACK_SCHEDULE_AHEAD_SEC) * 1000 + getLoopRestartOffsetMs());
+    const loopDelayMs = Math.max(0, (playbackDurationSec - PLAYBACK_SCHEDULE_AHEAD_SEC) * 1000);
     playbackLoopTimer = setTimeout(() => {
       if (!loopProgressionEnabled) return;
       playAudio();
@@ -2523,9 +2537,7 @@
   refBpmInput.addEventListener("input", () => {
     updateQualityMismatch();
   });
-  crossfadeMsInput.addEventListener("input", updateQualityMismatch);
   loopBarsInput.addEventListener("input", updateQualityMismatch);
-  loopRestartOffsetInput.addEventListener("input", updateQualityMismatch);
   startRootInput.addEventListener("change", updateQualityMismatch);
   globalTranspose.addEventListener("input", applyGlobalTranspose);
   window.addEventListener("keydown", (e) => {
