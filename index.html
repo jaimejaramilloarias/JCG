@@ -1155,23 +1155,11 @@
     return { segments, totalEighth, totalBars: parts.length, bars };
   };
 
-  const repeatSegments = (segments, bars, totalEighth, times) => {
+  const repeatProgressionText = (text, times) => {
     const t = Math.max(1, parseInt(times, 10) || 1);
-    if (t === 1) return { segments, bars, totalEighth };
-    const out = [];
-    const outBars = [];
-    const barCount = bars.length;
-    for (let i = 0; i < t; i++) {
-      const offset = i * totalEighth;
-      const barOffset = i * barCount;
-      for (const s of segments) {
-        out.push({ ...s, startEighth: s.startEighth + offset, barIndex: s.barIndex + barOffset });
-      }
-      for (const bar of bars) {
-        outBars.push({ ...bar, barIndex: bar.barIndex + barOffset });
-      }
-    }
-    return { segments: out, bars: outBars, totalEighth: totalEighth * t };
+    const base = (text || "").trim();
+    if (t === 1 || !base) return text;
+    return Array.from({ length: t }, () => base).join(" ");
   };
 
   const getBarsPerFile = () => Math.max(1, parseInt(barsPerFileInput.value, 10) || 1);
@@ -1411,7 +1399,8 @@
     let parsed = null;
     let parseError = null;
     try {
-      parsed = parseProgression(prog.value, { maxChordsPerBar: 4 });
+      const repeatedText = repeatProgressionText(prog.value, repeatCount.value);
+      parsed = parseProgression(repeatedText, { maxChordsPerBar: 4 });
     } catch (err) {
       parseError = err;
     }
@@ -2136,14 +2125,9 @@
   };
 
   const buildAudioSegments = () => {
-    const parsed = parseProgression(prog.value, { maxChordsPerBar: 4 });
-    const repeated = repeatSegments(
-      parsed.segments,
-      parsed.bars,
-      parsed.totalEighth,
-      parseInt(repeatCount.value, 10) || 1,
-    );
-    return { segments: repeated.segments, bars: repeated.bars, totalEighth: repeated.totalEighth };
+    const repeatedText = repeatProgressionText(prog.value, repeatCount.value);
+    const parsed = parseProgression(repeatedText, { maxChordsPerBar: 4 });
+    return { segments: parsed.segments, bars: parsed.bars, totalEighth: parsed.totalEighth };
   };
 
   const scheduleLoopLayer = ({
