@@ -1513,10 +1513,11 @@
             reject(new Error("No se encontraron archivos en esa carpeta."));
             return;
           }
-          if (!allowMultiple && folders.length > 1) {
-            log("Se detectaron múltiples carpetas. Se usará la primera.", "WARN");
+          if (folders.length > 1) {
+            resolve(folders);
+            return;
           }
-          resolve(allowMultiple ? folders : folders[0]);
+          resolve(folders[0]);
         };
         input.click();
       })
@@ -1543,11 +1544,12 @@
       };
       const files = [];
       await collect(dir, `${dir.name}/`, files);
-      if (allowMultiple) {
-        const folders = collectFoldersFromFileList(files);
-        return folders.length ? folders : null;
+      const folders = collectFoldersFromFileList(files);
+      if (!folders.length) return null;
+      if (allowMultiple || folders.length > 1) {
+        return folders;
       }
-      return { name: dir.name || "carpeta", files };
+      return folders[0];
     }
 
     return await pickViaFileInput();
