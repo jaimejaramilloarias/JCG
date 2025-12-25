@@ -445,8 +445,9 @@
         <div class="controlCluster">
           <div class="clusterTitle">Carpetas de audio</div>
           <div class="clusterActions">
-            <button class="btn" id="btnPickAudioFolder" title="Cargar carpetas con archivos WAV de referencia">Cargar carpetas</button>
-            <input id="audioFolderFallback" type="file" webkitdirectory multiple style="display:none" />
+            <button class="btn" id="btnPickAudioFolder" title="Cargar una carpeta con archivos WAV de referencia">Cargar carpeta</button>
+            <button class="btn ghost" id="btnAddAudioFolder" title="Agregar otra carpeta de instrumentos">+</button>
+            <input id="audioFolderFallback" type="file" webkitdirectory style="display:none" />
           </div>
           <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin carpetas cargadas.</div>
         </div>
@@ -569,7 +570,7 @@
     <div class="modalBd">
       <p><b>Manual rápido</b></p>
       <ul>
-        <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpetas</span> y elige dos o más carpetas con los mismos nombres de archivo.</li>
+        <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y usa <span class="kbd">+</span> para agregar más carpetas con los mismos nombres de archivo.</li>
         <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
         <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
         <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
@@ -657,6 +658,9 @@
   let loopProgressionEnabled = false;
   let trackIdCounter = 0;
   let playbackLoopTimer = null;
+  let loopLoadedOnce = false;
+  let referenceBpmFromFolder = null;
+  let referenceClaveMode = "none";
   const PLAYBACK_SCHEDULE_AHEAD_SEC = 0.08;
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
@@ -1460,48 +1464,72 @@
     return [...byFolder.entries()].map(([name, files]) => ({ name, files }));
   };
 
-  const loadFoldersViaPicker = async () => {
+  const loadFolderViaPicker = async () => {
     if (window.showDirectoryPicker) {
-      const folders = [];
-      let keepPicking = true;
-      while (keepPicking) {
-        let dir;
-        try {
-          dir = await window.showDirectoryPicker();
-        } catch (err) {
-          if (err?.name === "AbortError") break;
-          throw err;
-        }
-        const collect = async (handle, acc) => {
-          for await (const [, child] of handle.entries()) {
-            if (child.kind === "file") {
-              acc.push(await child.getFile());
-            } else if (child.kind === "directory") {
-              await collect(child, acc);
-            }
-          }
-        };
-        const files = [];
-        await collect(dir, files);
-        folders.push({ name: dir.name || "carpeta", files });
-        keepPicking = window.confirm("¿Deseas agregar otra carpeta de instrumento?");
+      let dir;
+      try {
+        dir = await window.showDirectoryPicker();
+      } catch (err) {
+        if (err?.name === "AbortError") return null;
+        throw err;
       }
-      return folders;
+      const collect = async (handle, acc) => {
+        for await (const [, child] of handle.entries()) {
+          if (child.kind === "file") {
+            acc.push(await child.getFile());
+          } else if (child.kind === "directory") {
+            await collect(child, acc);
+          }
+        }
+      };
+      const files = [];
+      await collect(dir, files);
+      return { name: dir.name || "carpeta", files };
     }
 
     return await new Promise((resolve, reject) => {
       const input = el("audioFolderFallback");
       input.onchange = () => {
         const list = [...input.files];
-        if (!list.length) reject(new Error("No se encontraron archivos en esa carpeta."));
-        else resolve(collectFoldersFromFileList(list));
+        input.value = "";
+        if (!list.length) {
+          reject(new Error("No se encontraron archivos en esa carpeta."));
+          return;
+        }
+        const folders = collectFoldersFromFileList(list);
+        if (!folders.length) {
+          reject(new Error("No se encontraron archivos en esa carpeta."));
+          return;
+        }
+        if (folders.length > 1) {
+          log("Se detectaron múltiples carpetas. Se usará la primera.", "WARN");
+        }
+        resolve(folders[0]);
       };
       input.click();
     });
   };
 
   const updateReadyState = () => {
-    setReady(!!audioFolderLoaded, audioFolderLoaded ? "Listo" : "No listo");
+    audioFolderLoaded = audioTracks.length > 0;
+    setReady(audioFolderLoaded, audioFolderLoaded ? "Listo" : "No listo");
+  };
+
+  const renderAudioFolderStatus = () => {
+    if (!audioFolderStatus) return;
+    if (!audioTracks.length) {
+      audioFolderStatus.textContent = "Sin carpetas cargadas.";
+      return;
+    }
+    const instrumentNames = audioTracks.map((track) => track.name).join(", ");
+    audioFolderStatus.textContent = `Instrumentos cargados: ${instrumentNames}. Usa + para agregar más.`;
+  };
+
+  const cleanupTrackResources = (track) => {
+    if (!track) return;
+    for (const url of track.urlsByQuality?.values() ?? []) {
+      URL.revokeObjectURL(url);
+    }
   };
 
   const resetAudioTracks = () => {
@@ -1512,162 +1540,193 @@
     }
     audioTracks = [];
     audioQualities = [];
+    loopLoadedOnce = false;
+    referenceBpmFromFolder = null;
+    referenceClaveMode = "none";
     renderQualityChips();
     renderMixer();
   };
 
-  const loadAudioFolders = async () => {
-    clearLog();
-    resetAudioTracks();
+  const loadAudioFolder = async ({ reset = false } = {}) => {
+    const previousStatus = audioFolderStatus?.textContent || "";
+    if (reset) {
+      clearLog();
+      resetAudioTracks();
+    }
 
-    audioFolderLoaded = false;
-    audioFolderStatus.textContent = "Cargando…";
-    if (loopStatus) loopStatus.textContent = "Cargando…";
+    if (audioFolderStatus) audioFolderStatus.textContent = "Cargando…";
+    if (loopStatus && reset) loopStatus.textContent = "Cargando…";
     updateReadyState();
+    if (reset) updateQualityMismatch();
 
+    let track = null;
     try {
       const ctx = ensureAudioContext();
-      const folders = await loadFoldersViaPicker();
-      if (!folders.length) {
-        throw new Error("No se encontraron carpetas con audio.");
+      const folder = await loadFolderViaPicker();
+      if (!folder) {
+        renderAudioFolderStatus();
+        updateLoopControls();
+        updateReadyState();
+        return;
       }
-      if (folders.length < 2) {
-        throw new Error("Selecciona al menos dos carpetas de instrumentos.");
+      if (!folder.files?.length) {
+        throw new Error("No se encontraron archivos en esa carpeta.");
       }
 
-      const bpmValues = folders.map((folder) => findBpmInFolderName(folder.name)).filter((v) => Number.isFinite(v));
-      if (bpmValues.length) {
-        if (bpmValues.length !== folders.length) {
-          throw new Error("Todas las carpetas deben incluir el BPM en el nombre.");
+      const folderBpm = findBpmInFolderName(folder.name);
+      const folderClave = findClaveInFolderName(folder.name);
+      const hasExisting = audioTracks.length > 0;
+
+      if (hasExisting) {
+        if (referenceBpmFromFolder != null) {
+          if (!Number.isFinite(folderBpm)) {
+            throw new Error("Todas las carpetas deben incluir el BPM en el nombre.");
+          }
+          if (Math.abs(folderBpm - referenceBpmFromFolder) > 0.01) {
+            throw new Error("Las carpetas tienen BPM distintos. Usa el mismo BPM en todas.");
+          }
+        } else if (Number.isFinite(folderBpm)) {
+          throw new Error("Las carpetas cargadas no tenían BPM. Usa el mismo formato en todas.");
         }
-        const refBpm = bpmValues[0];
-        if (bpmValues.some((v) => Math.abs(v - refBpm) > 0.01)) {
-          throw new Error("Las carpetas tienen BPM distintos. Usa el mismo BPM en todas.");
+
+        if (referenceClaveMode !== "none") {
+          if (folderClave === "none") {
+            throw new Error("Las carpetas deben incluir la misma clave (2-3 o 3-2).");
+          }
+          if (folderClave !== referenceClaveMode) {
+            throw new Error("Las carpetas tienen clave distinta. Usa la misma clave en todas.");
+          }
+        } else if (folderClave !== "none") {
+          throw new Error("Las carpetas cargadas no tenían clave. Usa el mismo formato en todas.");
+        }
+      } else {
+        if (Number.isFinite(folderBpm)) {
+          referenceBpmFromFolder = folderBpm;
+          applyFolderBpm(folder.name);
+        }
+        if (folderClave !== "none") {
+          referenceClaveMode = folderClave;
+          applyFolderClave(folder.name);
         }
       }
 
-      const claveValues = folders.map((folder) => findClaveInFolderName(folder.name));
-      const claveWithValue = claveValues.filter((c) => c !== "none");
-      if (claveWithValue.length) {
-        const target = claveWithValue[0];
-        if (claveValues.some((c) => c !== target)) {
-          throw new Error("Las carpetas tienen clave distinta. Usa la misma clave en todas.");
-        }
-      }
+      track = {
+        id: trackIdCounter += 1,
+        name: (folder.name || "").trim() || `Instrumento ${trackIdCounter}`,
+        buffersByQuality: new Map(),
+        urlsByQuality: new Map(),
+        loopBuffers: [],
+        volume: 1,
+        mute: false,
+        solo: false,
+        qualities: [],
+      };
 
-      if (bpmValues.length) {
-        applyFolderBpm(folders[0].name);
-      }
-      if (claveWithValue.length) {
-        applyFolderClave(folders[0].name);
-      }
+      const skipped = [];
+      const dups = [];
+      const loopSkipped = [];
+      const loopIgnored = [];
 
-      for (const folder of folders) {
-        const track = {
-          id: trackIdCounter += 1,
-          name: (folder.name || "").trim() || `Instrumento ${trackIdCounter}`,
-          buffersByQuality: new Map(),
-          urlsByQuality: new Map(),
-          loopBuffers: [],
-          volume: 1,
-          mute: false,
-          solo: false,
-          qualities: [],
-        };
-
-        const skipped = [];
-        const dups = [];
-        const loopSkipped = [];
-
-        for (const f of folder.files) {
-          const fullName = (f.name || "").trim();
-          if (!fullName) { skipped.push("(sin nombre)"); continue; }
-          if (isLoopFileName(fullName)) {
-            if (!/\.wav$/i.test(fullName)) { skipped.push(fullName); continue; }
-            try {
-              const buf = await f.arrayBuffer();
-              const audioBuf = await ctx.decodeAudioData(buf.slice(0));
-              track.loopBuffers.push({ name: fullName, buffer: audioBuf });
-            } catch (err) {
-              loopSkipped.push(fullName);
-            }
+      for (const f of folder.files) {
+        const fullName = (f.name || "").trim();
+        if (!fullName) { skipped.push("(sin nombre)"); continue; }
+        if (isLoopFileName(fullName)) {
+          if (!/\.wav$/i.test(fullName)) { skipped.push(fullName); continue; }
+          if (loopLoadedOnce) {
+            loopIgnored.push(fullName);
             continue;
           }
-          const qualityKey = parseAudioFileName(fullName);
-          if (!qualityKey) { skipped.push(fullName); continue; }
-          if (track.buffersByQuality.has(qualityKey)) {
-            dups.push(qualityKey);
-            const oldUrl = track.urlsByQuality.get(qualityKey);
-            if (oldUrl) URL.revokeObjectURL(oldUrl);
-          }
-
           try {
             const buf = await f.arrayBuffer();
             const audioBuf = await ctx.decodeAudioData(buf.slice(0));
-            track.buffersByQuality.set(qualityKey, audioBuf);
-            const objectUrl = URL.createObjectURL(f);
-            track.urlsByQuality.set(qualityKey, objectUrl);
+            track.loopBuffers.push({ name: fullName, buffer: audioBuf });
           } catch (err) {
-            skipped.push(fullName);
+            loopSkipped.push(fullName);
           }
+          continue;
+        }
+        const qualityKey = parseAudioFileName(fullName);
+        if (!qualityKey) { skipped.push(fullName); continue; }
+        if (track.buffersByQuality.has(qualityKey)) {
+          dups.push(qualityKey);
+          const oldUrl = track.urlsByQuality.get(qualityKey);
+          if (oldUrl) URL.revokeObjectURL(oldUrl);
         }
 
-        track.qualities = [...new Set(track.buffersByQuality.keys())].sort((a, b) => a.localeCompare(b, "en"));
-        if (!track.qualities.length) {
-          throw new Error(`No encontré WAVs válidos en la carpeta "${track.name}".`);
+        try {
+          const buf = await f.arrayBuffer();
+          const audioBuf = await ctx.decodeAudioData(buf.slice(0));
+          track.buffersByQuality.set(qualityKey, audioBuf);
+          const objectUrl = URL.createObjectURL(f);
+          track.urlsByQuality.set(qualityKey, objectUrl);
+        } catch (err) {
+          skipped.push(fullName);
         }
+      }
 
-        if (!audioQualities.length) {
-          audioQualities = [...track.qualities];
-        } else {
-          const missing = audioQualities.filter((q) => !track.qualities.includes(q));
-          const extra = track.qualities.filter((q) => !audioQualities.includes(q));
-          if (missing.length || extra.length) {
-            const details = [
-              missing.length ? `Faltan: ${missing.join(", ")}` : "",
-              extra.length ? `Sobran: ${extra.join(", ")}` : "",
-            ].filter(Boolean).join(" — ");
-            throw new Error(`Las calidades de "${track.name}" no coinciden con las demás. ${details}`);
-          }
-        }
+      track.qualities = [...new Set(track.buffersByQuality.keys())].sort((a, b) => a.localeCompare(b, "en"));
+      if (!track.qualities.length) {
+        throw new Error(`No encontré WAVs válidos en la carpeta "${track.name}".`);
+      }
 
-        if (skipped.length) {
-          log(`(${track.name}) Archivos ignorados (no WAV / nombre inválido): ${skipped.join(", ")}`, "WARN");
+      if (!audioQualities.length) {
+        audioQualities = [...track.qualities];
+      } else {
+        const missing = audioQualities.filter((q) => !track.qualities.includes(q));
+        const extra = track.qualities.filter((q) => !audioQualities.includes(q));
+        if (missing.length || extra.length) {
+          const details = [
+            missing.length ? `Faltan: ${missing.join(", ")}` : "",
+            extra.length ? `Sobran: ${extra.join(", ")}` : "",
+          ].filter(Boolean).join(" — ");
+          throw new Error(`Las calidades de "${track.name}" no coinciden con las demás. ${details}`);
         }
-        if (dups.length) {
-          log(`(${track.name}) Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
-        }
-        if (loopSkipped.length) {
-          log(`(${track.name}) Loops ignorados (error al leer): ${loopSkipped.join(", ")}`, "WARN");
-        }
-        if (track.loopBuffers.length) {
-          log(`(${track.name}) Loops cargados: ${track.loopBuffers.length}.`, "OK");
-        }
+      }
 
-        const expectedSeconds = getBarsPerFile() * getRefBarSeconds();
-        for (const [quality, buffer] of track.buffersByQuality.entries()) {
-          if (buffer.duration + 0.1 < expectedSeconds) {
-            log(`(${track.name}) "${quality}": duración corta (${buffer.duration.toFixed(2)}s). Esperaba ~${expectedSeconds.toFixed(2)}s.`, "WARN");
-          }
-        }
+      if (skipped.length) {
+        log(`(${track.name}) Archivos ignorados (no WAV / nombre inválido): ${skipped.join(", ")}`, "WARN");
+      }
+      if (dups.length) {
+        log(`(${track.name}) Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
+      }
+      if (loopSkipped.length) {
+        log(`(${track.name}) Loops ignorados (error al leer): ${loopSkipped.join(", ")}`, "WARN");
+      }
+      if (loopIgnored.length) {
+        log(`(${track.name}) Loop base ignorado (ya cargado).`, "WARN");
+      }
+      if (track.loopBuffers.length) {
+        log(`(${track.name}) Loops cargados: ${track.loopBuffers.length}.`, "OK");
+      }
 
-        log(`(${track.name}) Cargados ${track.qualities.length} WAV(s) de referencia.`, "OK");
-        audioTracks.push(track);
+      const expectedSeconds = getBarsPerFile() * getRefBarSeconds();
+      for (const [quality, buffer] of track.buffersByQuality.entries()) {
+        if (buffer.duration + 0.1 < expectedSeconds) {
+          log(`(${track.name}) "${quality}": duración corta (${buffer.duration.toFixed(2)}s). Esperaba ~${expectedSeconds.toFixed(2)}s.`, "WARN");
+        }
+      }
+
+      log(`(${track.name}) Cargados ${track.qualities.length} WAV(s) de referencia.`, "OK");
+      audioTracks.push(track);
+
+      if (track.loopBuffers.length) {
+        loopLoadedOnce = true;
       }
 
       renderQualityChips();
       renderMixer();
       updateQualityMismatch();
       updateLoopControls();
-
-      const instrumentNames = audioTracks.map((track) => track.name).join(", ");
-      audioFolderStatus.textContent = `Instrumentos cargados: ${instrumentNames}.`;
-      audioFolderLoaded = true;
+      renderAudioFolderStatus();
       updateReadyState();
     } catch (err) {
-      resetAudioTracks();
-      audioFolderLoaded = false;
-      audioFolderStatus.textContent = "Error al cargar carpetas.";
+      cleanupTrackResources(track);
+      if (reset) {
+        resetAudioTracks();
+        if (audioFolderStatus) audioFolderStatus.textContent = "Error al cargar carpeta.";
+      } else if (audioFolderStatus) {
+        audioFolderStatus.textContent = previousStatus || audioFolderStatus.textContent;
+      }
       log(String(err?.message || err), "ERROR");
       updateLoopControls();
       updateReadyState();
@@ -2088,7 +2147,8 @@
   helpModal.addEventListener("click", (e) => { if (e.target === helpModal) closeHelp(); });
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelp(); });
 
-  el("btnPickAudioFolder").addEventListener("click", loadAudioFolders);
+  el("btnPickAudioFolder").addEventListener("click", () => loadAudioFolder({ reset: true }));
+  el("btnAddAudioFolder").addEventListener("click", () => loadAudioFolder({ reset: false }));
   el("btnPlay").addEventListener("click", playAudio);
   el("btnStop").addEventListener("click", stopAudioPlayback);
   el("btnExportAudio").addEventListener("click", exportAudio);
