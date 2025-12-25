@@ -1200,19 +1200,39 @@
       if (sortedBars[i + 1] !== sortedBars[i] + 1) continue;
       const barA = byBar.get(sortedBars[i]) || [];
       const barB = byBar.get(sortedBars[i + 1]) || [];
+      const barAClave = claveMode === "2-3" ? "2" : "3";
+      const barBClave = barAClave === "2" ? "3" : "2";
+
+      const applyShift = (segment, shift) => {
+        segment.startEighth = Math.max(0, segment.startEighth - shift);
+      };
+
+      const applyTwoSideShifts = (bar) => {
+        applyShift(bar[0], 2);
+        applyShift(bar[1], 1);
+      };
+
+      const applyThreeSideShifts = (bar) => {
+        applyShift(bar[1], 1);
+      };
       if (barA.length === 1 && barB.length === 1) {
         if (!sameChord(barA[0], barB[0])) {
-          const shift = claveMode === "2-3" ? 1 : 2;
-          barB[0].startEighth = Math.max(0, barB[0].startEighth - shift);
+          if (barAClave === "2") {
+            applyShift(barA[0], 2);
+          } else {
+            applyShift(barB[0], 2);
+          }
         }
       } else if (barA.length === 2 && barB.length === 2) {
-        barA[1].startEighth = Math.max(0, barA[1].startEighth - 1);
-        if (claveMode === "2-3") {
-          barB[0].startEighth = Math.max(0, barB[0].startEighth - 1);
-          barB[1].startEighth = Math.max(0, barB[1].startEighth - 2);
+        if (barAClave === "2") {
+          applyTwoSideShifts(barA);
         } else {
-          barB[0].startEighth = Math.max(0, barB[0].startEighth - 2);
-          barB[1].startEighth = Math.max(0, barB[1].startEighth - 1);
+          applyThreeSideShifts(barA);
+        }
+        if (barBClave === "2") {
+          applyTwoSideShifts(barB);
+        } else {
+          applyThreeSideShifts(barB);
         }
       }
     }
