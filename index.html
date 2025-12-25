@@ -664,6 +664,7 @@
 
   let audioCtx = null;
   let audioTracks = [];
+  let baseLoopBuffers = [];
   let audioQualities = [];
   let audioFolderLoaded = false;
   let isAudioPlaying = false;
@@ -1353,7 +1354,7 @@
   };
 
   const updateLoopControls = () => {
-    const totalLoops = audioTracks.reduce((sum, track) => sum + track.loopBuffers.length, 0);
+    const totalLoops = baseLoopBuffers.length;
     if (loopVolumeValue) {
       loopVolumeValue.textContent = `${Math.round(getLoopVolume() * 100)}%`;
     }
@@ -1367,8 +1368,7 @@
       if (!totalLoops) {
         loopStatus.textContent = "Sin loop cargado.";
       } else {
-        const trackCount = audioTracks.filter((track) => track.loopBuffers.length).length;
-        loopStatus.textContent = `${totalLoops} loop(s) cargado(s) en ${trackCount} instrumento(s).`;
+        loopStatus.textContent = `${totalLoops} loop(s) base cargado(s).`;
       }
     }
   };
@@ -1609,19 +1609,24 @@
   };
 
   const updateReadyState = () => {
-    audioFolderLoaded = audioTracks.length > 0;
+    audioFolderLoaded = audioTracks.length > 0 || baseLoopBuffers.length > 0;
     setReady(audioFolderLoaded, audioFolderLoaded ? "Listo" : "No listo");
   };
 
   const renderAudioFolderStatus = () => {
     if (!audioFolderStatus) return;
     if (!audioTracks.length) {
-      audioFolderStatus.textContent = "Sin instrumentos cargados.";
+      if (baseLoopBuffers.length) {
+        audioFolderStatus.textContent = `Sin instrumentos cargados. Loop base: ${baseLoopBuffers.length}.`;
+      } else {
+        audioFolderStatus.textContent = "Sin instrumentos cargados.";
+      }
       if (audioFolderList) audioFolderList.innerHTML = "";
       return;
     }
     const instrumentNames = audioTracks.map((track) => track.name);
-    audioFolderStatus.textContent = `Instrumentos cargados: ${instrumentNames.length}.`;
+    const loopSuffix = baseLoopBuffers.length ? ` · Loop base: ${baseLoopBuffers.length}` : "";
+    audioFolderStatus.textContent = `Instrumentos cargados: ${instrumentNames.length}.${loopSuffix}`;
     if (audioFolderList) {
       audioFolderList.innerHTML = "";
       for (const name of instrumentNames) {
@@ -1647,6 +1652,7 @@
       }
     }
     audioTracks = [];
+    baseLoopBuffers = [];
     audioQualities = [];
     referenceBpmFromFolder = null;
     referenceClaveMode = "none";
@@ -1713,8 +1719,7 @@
           try {
             const buf = await f.arrayBuffer();
             const audioBuf = await ctx.decodeAudioData(buf.slice(0));
-            const instrumentName = parseLoopInstrumentName(fullName);
-            pendingLoops.push({ name: fullName, buffer: audioBuf, instrumentName });
+            pendingLoops.push({ name: fullName, buffer: audioBuf });
           } catch (err) {
             loopSkipped.push(fullName);
           }
@@ -1757,27 +1762,13 @@
       }
 
       newTracks = [...tracksByInstrument.values()];
-      if (!newTracks.length) {
+      if (!newTracks.length && !pendingLoops.length) {
         throw new Error(`No encontré WAVs válidos en la carpeta "${folder.name}".`);
       }
 
       if (pendingLoops.length) {
-        const trackByName = new Map(
-          newTracks.map((track) => [track.name.toLowerCase(), track])
-        );
         for (const loop of pendingLoops) {
-          let assigned = false;
-          const instrumentKey = loop.instrumentName.toLowerCase();
-          if (instrumentKey && trackByName.has(instrumentKey)) {
-            trackByName.get(instrumentKey).loopBuffers.push({ name: loop.name, buffer: loop.buffer });
-            assigned = true;
-          } else if (!instrumentKey && newTracks.length === 1) {
-            newTracks[0].loopBuffers.push({ name: loop.name, buffer: loop.buffer });
-            assigned = true;
-          }
-          if (!assigned) {
-            loopSkipped.push(loop.name);
-          }
+          baseLoopBuffers.push({ name: loop.name, buffer: loop.buffer });
         }
       }
 
@@ -1804,10 +1795,6 @@
           }
         }
 
-        if (track.loopBuffers.length) {
-          log(`(${track.name}) Loops cargados: ${track.loopBuffers.length}.`, "OK");
-        }
-
         const expectedSeconds = getBarsPerFile() * getRefBarSeconds();
         for (const [quality, buffer] of track.buffersByQuality.entries()) {
           if (buffer.duration + 0.1 < expectedSeconds) {
@@ -1827,6 +1814,9 @@
         createdTracks.push(track);
       }
 
+      if (pendingLoops.length) {
+        log(`Loops base cargados: ${pendingLoops.length}.`, "OK");
+      }
       if (skipped.length) {
         log(`Archivos ignorados (no WAV / nombre inválido): ${skipped.join(", ")}`, "WARN");
       }
@@ -1834,7 +1824,7 @@
         log(`Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
       }
       if (loopSkipped.length) {
-        log(`Loops ignorados (sin instrumento o error al leer): ${loopSkipped.join(", ")}`, "WARN");
+        log(`Loops ignorados (error al leer): ${loopSkipped.join(", ")}`, "WARN");
       }
 
       return createdTracks[createdTracks.length - 1] || null;
@@ -2049,7 +2039,7 @@
   };
 
   const playAudio = async () => {
-    if (!audioFolderLoaded || !audioTracks.length) {
+    if (!audioTracks.length && !baseLoopBuffers.length) {
       log("Carga carpetas de WAVs para reproducir.", "ERROR");
       return;
     }
@@ -2096,28 +2086,29 @@
     const secPerEighth = getRefSecondsPerEighth();
     const barSeconds = getRefBarSeconds();
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
-    const anyAudible = tracks.some((track) => getTrackEffectiveVolume(track) > 0);
+    const loopAudible = loopEnabled && baseLoopBuffers.length && getLoopVolume() > 0;
+    const anyAudible = tracks.some((track) => getTrackEffectiveVolume(track) > 0) || loopAudible;
     if (!anyAudible) {
       log("Todos los instrumentos están en mute/solo silencioso.", "WARN");
       isAudioPlaying = false;
       return;
     }
 
+    scheduleLoopLayer({
+      ctx,
+      baseTime,
+      totalEighth: parsed.totalEighth,
+      secPerEighth,
+      barSeconds,
+      trackNodes: true,
+      loopBufferSet: baseLoopBuffers,
+      loopGain: 1,
+      panValue: 0,
+    });
+
     for (const track of tracks) {
       const trackGain = getTrackEffectiveVolume(track);
       if (trackGain <= 0) continue;
-
-      scheduleLoopLayer({
-        ctx,
-        baseTime,
-        totalEighth: parsed.totalEighth,
-        secPerEighth,
-        barSeconds,
-        trackNodes: true,
-        loopBufferSet: track.loopBuffers,
-        loopGain: trackGain,
-        panValue: track.pan ?? 0,
-      });
 
       for (const seg of segments) {
         const buffer = track.buffersByQuality.get(seg.quality);
@@ -2207,7 +2198,7 @@
   };
 
   const exportAudio = async () => {
-    if (!audioFolderLoaded || !audioTracks.length) {
+    if (!audioTracks.length && !baseLoopBuffers.length) {
       log("Carga carpetas de WAVs para exportar audio.", "ERROR");
       return;
     }
@@ -2260,27 +2251,28 @@
 
     const barSeconds = getRefBarSeconds();
 
-    const anyAudible = tracks.some((track) => getTrackEffectiveVolume(track) > 0);
+    const loopAudible = loopEnabled && baseLoopBuffers.length && getLoopVolume() > 0;
+    const anyAudible = tracks.some((track) => getTrackEffectiveVolume(track) > 0) || loopAudible;
     if (!anyAudible) {
       log("Todos los instrumentos están en mute/solo silencioso.", "WARN");
       return;
     }
 
+    scheduleLoopLayer({
+      ctx: offlineCtx,
+      baseTime: 0,
+      totalEighth: parsed.totalEighth,
+      secPerEighth,
+      barSeconds,
+      trackNodes: false,
+      loopBufferSet: baseLoopBuffers,
+      loopGain: 1,
+      panValue: 0,
+    });
+
     for (const track of tracks) {
       const trackGain = getTrackEffectiveVolume(track);
       if (trackGain <= 0) continue;
-
-      scheduleLoopLayer({
-        ctx: offlineCtx,
-        baseTime: 0,
-        totalEighth: parsed.totalEighth,
-        secPerEighth,
-        barSeconds,
-        trackNodes: false,
-        loopBufferSet: track.loopBuffers,
-        loopGain: trackGain,
-        panValue: track.pan ?? 0,
-      });
 
       for (const seg of segments) {
         const buffer = track.buffersByQuality.get(seg.quality);
