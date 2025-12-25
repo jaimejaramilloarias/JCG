@@ -456,10 +456,6 @@
             <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
             <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado">Exportar audio</button>
           </div>
-          <div class="label" style="margin-top:8px">Loop de reproducción</div>
-          <div class="clusterActions">
-            <button class="btn ghost" id="btnLoopProgression" title="Repetir la progresión solo en playback">Loop progresión: OFF</button>
-          </div>
         </div>
 
         <div class="controlCluster">
@@ -514,7 +510,7 @@
             </div>
             <div>
               <div class="label">Compases loop base</div>
-              <input id="loopBars" type="number" min="1" max="256" value="4" />
+              <input id="loopBars" type="number" min="1" max="256" value="8" />
             </div>
             <div>
               <div class="label">Fundamental inicial</div>
@@ -632,7 +628,6 @@
   const loopVolumeInput = el("loopVolume");
   const loopVolumeValue = el("loopVolumeValue");
   const btnLoopToggle = el("btnLoopToggle");
-  const btnLoopProgression = el("btnLoopProgression");
 
   const NOTE_TO_SEMI = new Map([
     ["C",0], ["B#",0],
@@ -661,7 +656,6 @@
   let audioTimers = [];
   let currentGlobalTranspose = 0;
   let loopEnabled = true;
-  let loopProgressionEnabled = false;
   let trackIdCounter = 0;
   let playbackLoopTimer = null;
   let referenceBpmFromFolder = null;
@@ -1532,13 +1526,6 @@
     }
   };
 
-  const updatePlaybackLoopControls = () => {
-    if (!btnLoopProgression) return;
-    btnLoopProgression.textContent = loopProgressionEnabled ? "Loop progresión: ON" : "Loop progresión: OFF";
-    btnLoopProgression.classList.toggle("purple", loopProgressionEnabled);
-    btnLoopProgression.classList.toggle("ghost", !loopProgressionEnabled);
-  };
-
   const getAnySolo = () => audioTracks.some((track) => track.solo);
 
   const getTrackEffectiveVolume = (track) => {
@@ -1879,7 +1866,7 @@
             buffersByQuality: new Map(),
             urlsByQuality: new Map(),
             loopBuffers: [],
-            volume: 1,
+            volume: 0.6,
             pan: 0,
             mute: false,
             solo: false,
@@ -2321,11 +2308,7 @@
       isAudioPlaying = false;
     }, playbackDurationSec * 1000);
     audioTimers.push(doneTimer);
-    const loopDelayMs = Math.max(0, (playbackDurationSec - PLAYBACK_SCHEDULE_AHEAD_SEC) * 1000);
-    playbackLoopTimer = setTimeout(() => {
-      if (!loopProgressionEnabled) return;
-      playAudio();
-    }, loopDelayMs);
+    playbackLoopTimer = null;
     log("Playback iniciado.", "OK");
   };
 
@@ -2544,10 +2527,6 @@
     loopEnabled = !loopEnabled;
     updateLoopControls();
   });
-  btnLoopProgression.addEventListener("click", () => {
-    loopProgressionEnabled = !loopProgressionEnabled;
-    updatePlaybackLoopControls();
-  });
   btnSaveProg.addEventListener("click", saveCurrentProgression);
   btnLoadProg.addEventListener("click", loadSelectedProgression);
   btnDeleteProg.addEventListener("click", deleteSelectedProgression);
@@ -2593,7 +2572,6 @@
   updateQualityMismatch();
   updateReadyState();
   updateLoopControls();
-  updatePlaybackLoopControls();
 })();
 </script>
 </body>
