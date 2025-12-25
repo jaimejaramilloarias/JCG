@@ -1089,6 +1089,7 @@
       const durations = durationsForBar(chordCount, eighthsPerBar);
       const tokens = [];
 
+      let barEighthOffset = 0;
       for (const [idx, c] of barChords.entries()) {
         const parsed = parseChordToken(c);
         segments.push({
@@ -1099,9 +1100,11 @@
           barIndex,
           barChordCount: chordCount,
           barChordIndex: idx,
+          barEighthOffset,
           windowFromStart: chordCount === 4 || (chordCount === 3 && idx > 0),
         });
         startEighth += durations[idx];
+        barEighthOffset += durations[idx];
         tokens.push({ text: parsed.token || c, quality: parsed.quality, isMute: false });
       }
 
@@ -2280,7 +2283,7 @@
         if (seg.type !== "chord") continue;
         const buffer = track.buffersByQuality.get(seg.quality);
         const rootBarStart = rootBarMap.get(seg.rootSemi);
-        const offsetEighthInSegment = seg.startEighth % segmentEighths;
+        const offsetEighthInSegment = ((seg.barIndex % barsPerChord) * eighthsPerBar) + (seg.barEighthOffset || 0);
         const offsetSeconds = offsetEighthInSegment * secPerEighth;
         const loopStart = rootBarStart * barSeconds;
 
@@ -2456,7 +2459,7 @@
         if (seg.type !== "chord") continue;
         const buffer = track.buffersByQuality.get(seg.quality);
         const rootBarStart = rootBarMap.get(seg.rootSemi);
-        const offsetEighthInSegment = seg.startEighth % segmentEighths;
+        const offsetEighthInSegment = ((seg.barIndex % barsPerChord) * eighthsPerBar) + (seg.barEighthOffset || 0);
         const offsetSeconds = offsetEighthInSegment * secPerEighth;
         const loopStart = rootBarStart * barSeconds;
 
