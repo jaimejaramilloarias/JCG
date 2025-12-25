@@ -585,7 +585,7 @@
     <div class="modalBd">
       <p><b>Manual rápido</b></p>
       <ul>
-        <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y usa el formato <span class="kbd">calidad__instrumento.wav</span> (ej: <span class="kbd">∆__guitarra.wav</span>).</li>
+        <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y usa el formato <span class="kbd">calidad__instrumento.wav</span> o <span class="kbd">calidad_instrumento.wav</span> (ej: <span class="kbd">∆__guitarra.wav</span>).</li>
         <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
         <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
         <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
@@ -1323,7 +1323,10 @@
     if (!/\.wav$/i.test(fullName)) return null;
     if (isLoopFileName(fullName)) return null;
     const base = fullName.replace(/\.[^.]+$/, "");
-    const separator = "__";
+    let separator = "__";
+    if (!base.includes(separator)) {
+      separator = "_";
+    }
     if (!base.includes(separator)) return null;
     const [qualityRaw, ...instrumentParts] = base.split(separator);
     const instrument = instrumentParts.join(separator).trim();
