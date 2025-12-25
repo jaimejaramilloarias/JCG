@@ -272,6 +272,12 @@
       color:#0b0f1c;
       box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(0,0,0,.35), 0 0 0 1px rgba(249,115,22,.4), 0 8px 18px rgba(180,83,9,.35);
     }
+    .chordToken.mute{
+      background: linear-gradient(150deg, rgba(100,116,139,.9), rgba(71,85,105,.9) 60%, rgba(51,65,85,.95));
+      border-color: rgba(148,163,184,.7);
+      color:#f8fafc;
+      text-shadow: none;
+    }
     .previewEmpty,
     .previewError{
       color:var(--muted);
@@ -406,7 +412,7 @@
           <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
           <div class="chips" id="qualityChips"></div>
           <div class="label" style="margin-top:8px">Progresión</div>
-          <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |" placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |" ></textarea>
+          <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |. Usa |/|, |-|, ||: y :||." placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |. Usa |/|, |-|, ||: y :|| para loops." ></textarea>
           <div class="label" style="margin-top:8px">Guardar progresiones</div>
           <div class="savedRow">
             <div>
@@ -587,7 +593,7 @@
       <ul>
         <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y usa el formato <span class="kbd">calidad__instrumento.wav</span> o <span class="kbd">calidad_instrumento.wav</span> (ej: <span class="kbd">∆__guitarra.wav</span>).</li>
         <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
-        <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>.</li>
+        <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>. Usa <span class="kbd">|/|</span> para mutear instrumentos, <span class="kbd">|-|</span> para mutear todo, y <span class="kbd">||:</span> ... <span class="kbd">:||</span> para repetir.</li>
         <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
         <li><b>5) Mezclador:</b> ajusta volumen, solo y mute por instrumento.</li>
         <li><b>6) Guardar:</b> usa <span class="kbd">Guardar</span>, <span class="kbd">Exportar</span> para llevarte todas y <span class="kbd">Cargar archivo</span> para reimportarlas.</li>
@@ -954,17 +960,122 @@
     });
   };
 
+  const tokenizeBarsWithLoops = (raw) => {
+    const bars = [];
+    let current = "";
+    let pendingLoopStart = false;
+    const flush = ({ loopEnd = false } = {}) => {
+      const trimmed = current.trim();
+      if (!trimmed) {
+        current = "";
+        return;
+      }
+      bars.push({
+        text: trimmed,
+        loopStart: pendingLoopStart,
+        loopEnd,
+      });
+      pendingLoopStart = false;
+      current = "";
+    };
+
+    const re = /(\|\|:|:\|\||\|)/g;
+    let lastIndex = 0;
+    let match;
+    while ((match = re.exec(raw)) !== null) {
+      current += raw.slice(lastIndex, match.index);
+      const token = match[1];
+      if (token === "||:") {
+        flush();
+        pendingLoopStart = true;
+      } else if (token === ":||") {
+        if (current.trim()) {
+          flush({ loopEnd: true });
+        } else if (bars.length) {
+          bars[bars.length - 1].loopEnd = true;
+          pendingLoopStart = false;
+          current = "";
+        } else {
+          throw new Error("Marcador :|| sin barra previa.");
+        }
+      } else {
+        flush();
+      }
+      lastIndex = re.lastIndex;
+    }
+    current += raw.slice(lastIndex);
+    flush();
+
+    if (pendingLoopStart) {
+      throw new Error("Marcador ||: sin cierre :||.");
+    }
+
+    return bars;
+  };
+
+  const expandLoopBars = (bars) => {
+    const out = [];
+    let loopStartIndex = null;
+    for (const bar of bars) {
+      if (bar.loopStart) {
+        if (loopStartIndex !== null) {
+          throw new Error("No se permiten loops anidados.");
+        }
+        loopStartIndex = out.length;
+      }
+      out.push({ ...bar, loopStart: false, loopEnd: false });
+      if (bar.loopEnd) {
+        if (loopStartIndex === null) {
+          throw new Error("Marcador :|| sin ||:.");
+        }
+        const repeat = out.slice(loopStartIndex).map((item) => ({
+          ...item,
+          loopStart: false,
+          loopEnd: false,
+        }));
+        out.push(...repeat);
+        loopStartIndex = null;
+      }
+    }
+    if (loopStartIndex !== null) {
+      throw new Error("Marcador ||: sin cierre :||.");
+    }
+    return out;
+  };
+
   const parseProgression = (text, opts = {}) => {
     const { maxChordsPerBar = 4 } = opts;
     const raw = text.replace(/\r/g, "").trim();
     if (!raw) throw new Error("Escribe una progresión.");
-    const parts = raw.split("|").map((s) => s.trim()).filter(Boolean);
+    const parts = expandLoopBars(tokenizeBarsWithLoops(raw));
     if (!parts.length) throw new Error("Usa barras | |. Ej: | Bbmaj7 Gm9 | ...");
 
     const segments = [];
+    const bars = [];
     let startEighth = 0;
-    let lastBarChords = null;
+    let lastBarDef = null;
     const eighthsPerBar = getEighthsPerBar();
+
+    const addMuteBar = (muteType, source = "", barIndex = 0) => {
+      const token = muteType === "all" ? "-" : "/";
+      segments.push({
+        type: "mute",
+        muteType,
+        startEighth,
+        durEighth: eighthsPerBar,
+        barIndex,
+        barChordCount: 0,
+        barChordIndex: 0,
+        token,
+      });
+      bars.push({
+        barIndex,
+        muteType,
+        tokens: [{ text: token, isMute: true }],
+      });
+      startEighth += eighthsPerBar;
+      lastBarDef = { type: "mute", muteType };
+    };
 
     const addBar = (barChords, source = "", barIndex = 0) => {
       if (!barChords || !barChords.length) {
@@ -976,11 +1087,12 @@
 
       const chordCount = barChords.length;
       const durations = durationsForBar(chordCount, eighthsPerBar);
-      const stored = [];
+      const tokens = [];
 
       for (const [idx, c] of barChords.entries()) {
         const parsed = parseChordToken(c);
         segments.push({
+          type: "chord",
           ...parsed,
           startEighth,
           durEighth: durations[idx],
@@ -990,20 +1102,38 @@
           windowFromStart: chordCount === 4 || (chordCount === 3 && idx > 0),
         });
         startEighth += durations[idx];
-        stored.push(c);
+        tokens.push({ text: parsed.token || c, quality: parsed.quality, isMute: false });
       }
 
-      lastBarChords = stored;
+      bars.push({
+        barIndex,
+        muteType: null,
+        tokens,
+      });
+      lastBarDef = { type: "chord", chords: barChords };
     };
 
     for (const [barIndex, bar] of parts.entries()) {
-      if (bar === "%") {
-        if (!lastBarChords) throw new Error("El signo % solo se puede usar después del primer compás.");
-        addBar(lastBarChords, bar, barIndex);
+      const rawBar = bar.text || "";
+      if (rawBar === "%") {
+        if (!lastBarDef) throw new Error("El signo % solo se puede usar después del primer compás.");
+        if (lastBarDef.type === "mute") {
+          addMuteBar(lastBarDef.muteType, rawBar, barIndex);
+        } else {
+          addBar(lastBarDef.chords, rawBar, barIndex);
+        }
         continue;
       }
-      const chords = bar.split(/\s+/).map((s) => s.trim()).filter(Boolean);
-      addBar(chords, bar, barIndex);
+      if (rawBar === "/" || rawBar === "-") {
+        addMuteBar(rawBar === "-" ? "all" : "instruments", rawBar, barIndex);
+        continue;
+      }
+      const chords = rawBar.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+      if (chords.length === 1 && (chords[0] === "/" || chords[0] === "-")) {
+        addMuteBar(chords[0] === "-" ? "all" : "instruments", rawBar, barIndex);
+        continue;
+      }
+      addBar(chords, rawBar, barIndex);
     }
 
     applyClaveAnticipations(segments, eighthsPerBar, getClaveMode());
@@ -1019,20 +1149,26 @@
       }
     }
 
-    return { segments, totalEighth, totalBars: parts.length };
+    return { segments, totalEighth, totalBars: parts.length, bars };
   };
 
-  const repeatSegments = (segments, totalEighth, times) => {
+  const repeatSegments = (segments, bars, totalEighth, times) => {
     const t = Math.max(1, parseInt(times, 10) || 1);
-    if (t === 1) return { segments, totalEighth };
+    if (t === 1) return { segments, bars, totalEighth };
     const out = [];
+    const outBars = [];
+    const barCount = bars.length;
     for (let i = 0; i < t; i++) {
       const offset = i * totalEighth;
+      const barOffset = i * barCount;
       for (const s of segments) {
-        out.push({ ...s, startEighth: s.startEighth + offset });
+        out.push({ ...s, startEighth: s.startEighth + offset, barIndex: s.barIndex + barOffset });
+      }
+      for (const bar of bars) {
+        outBars.push({ ...bar, barIndex: bar.barIndex + barOffset });
       }
     }
-    return { segments: out, totalEighth: totalEighth * t };
+    return { segments: out, bars: outBars, totalEighth: totalEighth * t };
   };
 
   const getBarsPerFile = () => Math.max(1, parseInt(barsPerFileInput.value, 10) || 1);
@@ -1086,12 +1222,14 @@
 
     const byBar = new Map();
     for (const seg of segments) {
+      if (seg.type !== "chord") continue;
       if (!byBar.has(seg.barIndex)) byBar.set(seg.barIndex, []);
       byBar.get(seg.barIndex).push(seg);
     }
 
     const sortedBars = [...byBar.keys()].sort((a, b) => a - b);
     for (let i = 0; i < sortedBars.length - 1; i += 2) {
+      if (sortedBars[i + 1] !== sortedBars[i] + 1) continue;
       const barA = byBar.get(sortedBars[i]) || [];
       const barB = byBar.get(sortedBars[i + 1]) || [];
       if (barA.length === 1 && barB.length === 1) {
@@ -1237,11 +1375,8 @@
     }
     if (!parsed) return;
 
-    const bars = Array.from({ length: parsed.totalBars }, () => []);
-    for (const seg of parsed.segments) {
-      if (bars[seg.barIndex]) bars[seg.barIndex].push(seg);
-    }
-    bars.forEach((barSegs) => {
+    const bars = parsed.bars || [];
+    bars.forEach((barInfo) => {
       const barRow = document.createElement("div");
       barRow.className = "barRow";
       const barStart = document.createElement("span");
@@ -1249,11 +1384,13 @@
       barStart.textContent = "|";
       barRow.appendChild(barStart);
 
-      for (const seg of barSegs) {
+      for (const tokenInfo of barInfo.tokens || []) {
         const token = document.createElement("span");
         token.className = "chordToken";
-        token.textContent = seg.token || `${seg.root}${seg.quality}`;
-        if (missingSet && missingSet.has(seg.quality)) {
+        token.textContent = tokenInfo.text;
+        if (tokenInfo.isMute) {
+          token.classList.add("mute");
+        } else if (missingSet && missingSet.has(tokenInfo.quality)) {
           token.classList.add("bad");
         }
         barRow.appendChild(token);
@@ -1292,7 +1429,7 @@
     }
 
     try {
-      const qualities = new Set(parsed.segments.map((s) => s.quality));
+      const qualities = new Set(parsed.segments.filter((s) => s.type === "chord").map((s) => s.quality));
       const missing = [...qualities].filter((q) => !audioQualities.includes(q));
       const missingSet = new Set(missing);
       if (missing.length) {
@@ -1997,22 +2134,40 @@
 
   const buildAudioSegments = () => {
     const parsed = parseProgression(prog.value, { maxChordsPerBar: 4 });
-    const repeated = repeatSegments(parsed.segments, parsed.totalEighth, parseInt(repeatCount.value, 10) || 1);
-    return { segments: repeated.segments, totalEighth: repeated.totalEighth };
+    const repeated = repeatSegments(
+      parsed.segments,
+      parsed.bars,
+      parsed.totalEighth,
+      parseInt(repeatCount.value, 10) || 1,
+    );
+    return { segments: repeated.segments, bars: repeated.bars, totalEighth: repeated.totalEighth };
   };
 
-  const scheduleLoopLayer = ({ ctx, baseTime, totalEighth, secPerEighth, barSeconds, trackNodes, loopBufferSet, loopGain, panValue }) => {
+  const scheduleLoopLayer = ({
+    ctx,
+    baseTime,
+    totalEighth,
+    totalBars,
+    secPerEighth,
+    barSeconds,
+    trackNodes,
+    loopBufferSet,
+    loopGain,
+    panValue,
+    mutedBars = new Set(),
+  }) => {
     if (!loopEnabled || !loopBufferSet.length) return;
     const loopVolume = getLoopVolume();
     if (loopVolume <= 0) return;
     const effectiveLoopGain = loopVolume * Math.max(0, Math.min(1, loopGain ?? 1));
     if (effectiveLoopGain <= 0) return;
-    const totalBars = Math.ceil(totalEighth / getEighthsPerBar());
+    const barTotal = totalBars ?? Math.ceil(totalEighth / getEighthsPerBar());
     const loopBars = getLoopBars();
     const overlapSec = LOOP_CROSSFADE_SEC;
     for (const loop of loopBufferSet) {
       const duration = Math.max(loop.buffer.duration, 0.001);
-      for (let bar = 0; bar < totalBars; bar += 1) {
+      for (let bar = 0; bar < barTotal; bar += 1) {
+        if (mutedBars.has(bar)) continue;
         const startTime = baseTime + bar * barSeconds;
         const loopBarIndex = loopBars > 0 ? bar % loopBars : bar;
         const bufferOffset = (loopBarIndex * barSeconds) % duration;
@@ -2053,6 +2208,7 @@
     }
 
     const segments = parsed.segments;
+    const bars = parsed.bars || [];
     if (!segments.length) {
       log("No hay acordes para reproducir.", "ERROR");
       return;
@@ -2065,6 +2221,7 @@
     const tracks = audioTracks;
 
     for (const seg of segments) {
+      if (seg.type !== "chord") continue;
       if (!rootBarMap.has(seg.rootSemi)) {
         log(`Fundamental inválida para audio: ${seg.root}.`, "ERROR");
         return;
@@ -2072,6 +2229,7 @@
     }
     for (const track of tracks) {
       for (const seg of segments) {
+        if (seg.type !== "chord") continue;
         if (!track.buffersByQuality.has(seg.quality)) {
           log(`(${track.name}) No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
           return;
@@ -2087,23 +2245,31 @@
     const barSeconds = getRefBarSeconds();
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
     const loopAudible = loopEnabled && baseLoopBuffers.length && getLoopVolume() > 0;
-    const anyAudible = tracks.some((track) => getTrackEffectiveVolume(track) > 0) || loopAudible;
+    const hasChordSegments = segments.some((seg) => seg.type === "chord");
+    const anyTrackAudible = hasChordSegments && tracks.some((track) => getTrackEffectiveVolume(track) > 0);
+    const anyAudible = anyTrackAudible || loopAudible;
     if (!anyAudible) {
       log("Todos los instrumentos están en mute/solo silencioso.", "WARN");
       isAudioPlaying = false;
       return;
     }
 
+    const mutedBars = new Set(
+      (bars || []).filter((bar) => bar.muteType === "all").map((bar) => bar.barIndex),
+    );
+
     scheduleLoopLayer({
       ctx,
       baseTime,
       totalEighth: parsed.totalEighth,
+      totalBars: bars.length,
       secPerEighth,
       barSeconds,
       trackNodes: true,
       loopBufferSet: baseLoopBuffers,
       loopGain: 1,
       panValue: 0,
+      mutedBars,
     });
 
     for (const track of tracks) {
@@ -2111,6 +2277,7 @@
       if (trackGain <= 0) continue;
 
       for (const seg of segments) {
+        if (seg.type !== "chord") continue;
         const buffer = track.buffersByQuality.get(seg.quality);
         const rootBarStart = rootBarMap.get(seg.rootSemi);
         const offsetEighthInSegment = seg.startEighth % segmentEighths;
@@ -2212,6 +2379,7 @@
     }
 
     const segments = parsed.segments;
+    const bars = parsed.bars || [];
     if (!segments.length) {
       log("No hay acordes para exportar.", "ERROR");
       return;
@@ -2224,6 +2392,7 @@
     const tracks = audioTracks;
 
     for (const seg of segments) {
+      if (seg.type !== "chord") continue;
       if (!rootBarMap.has(seg.rootSemi)) {
         log(`Fundamental inválida para audio: ${seg.root}.`, "ERROR");
         return;
@@ -2232,6 +2401,7 @@
 
     for (const track of tracks) {
       for (const seg of segments) {
+        if (seg.type !== "chord") continue;
         if (!track.buffersByQuality.has(seg.quality)) {
           log(`(${track.name}) No tengo WAV para la calidad "${seg.quality}".`, "ERROR");
           return;
@@ -2252,22 +2422,30 @@
     const barSeconds = getRefBarSeconds();
 
     const loopAudible = loopEnabled && baseLoopBuffers.length && getLoopVolume() > 0;
-    const anyAudible = tracks.some((track) => getTrackEffectiveVolume(track) > 0) || loopAudible;
+    const hasChordSegments = segments.some((seg) => seg.type === "chord");
+    const anyTrackAudible = hasChordSegments && tracks.some((track) => getTrackEffectiveVolume(track) > 0);
+    const anyAudible = anyTrackAudible || loopAudible;
     if (!anyAudible) {
       log("Todos los instrumentos están en mute/solo silencioso.", "WARN");
       return;
     }
 
+    const mutedBars = new Set(
+      (bars || []).filter((bar) => bar.muteType === "all").map((bar) => bar.barIndex),
+    );
+
     scheduleLoopLayer({
       ctx: offlineCtx,
       baseTime: 0,
       totalEighth: parsed.totalEighth,
+      totalBars: bars.length,
       secPerEighth,
       barSeconds,
       trackNodes: false,
       loopBufferSet: baseLoopBuffers,
       loopGain: 1,
       panValue: 0,
+      mutedBars,
     });
 
     for (const track of tracks) {
@@ -2275,6 +2453,7 @@
       if (trackGain <= 0) continue;
 
       for (const seg of segments) {
+        if (seg.type !== "chord") continue;
         const buffer = track.buffersByQuality.get(seg.quality);
         const rootBarStart = rootBarMap.get(seg.rootSemi);
         const offsetEighthInSegment = seg.startEighth % segmentEighths;
