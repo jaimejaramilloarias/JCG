@@ -890,7 +890,15 @@
 
   const isLoopFileName = (fullName) => {
     const base = fullName.replace(/\.[^.]+$/, "");
-    return /loop_/i.test(base);
+    return /loop/i.test(base);
+  };
+
+  const parseLoopInstrumentName = (fullName) => {
+    if (!fullName) return "";
+    const base = fullName.replace(/\.[^.]+$/, "");
+    const parts = base.split(/__|_|\s+|-/).map((part) => part.trim()).filter(Boolean);
+    const filtered = parts.filter((part) => !/loop/i.test(part));
+    return filtered.join(" ").trim();
   };
 
   const scaleCurve = (curve, scale) => {
@@ -1430,6 +1438,40 @@
       sliderRow.appendChild(slider);
       sliderRow.appendChild(value);
 
+      const panRow = document.createElement("div");
+      panRow.className = "row";
+      panRow.style.gap = "8px";
+      panRow.style.alignItems = "center";
+
+      const panLabel = document.createElement("span");
+      panLabel.className = "trackValue";
+      panLabel.textContent = "Pan";
+
+      const panSlider = document.createElement("input");
+      panSlider.type = "range";
+      panSlider.min = "-1";
+      panSlider.max = "1";
+      panSlider.step = "0.01";
+      panSlider.value = String(track.pan ?? 0);
+
+      const panValue = document.createElement("span");
+      panValue.className = "trackValue";
+      const formatPanValue = (val) => {
+        if (Math.abs(val) < 0.01) return "C";
+        return val < 0 ? `L${Math.round(Math.abs(val) * 100)}%` : `R${Math.round(val * 100)}%`;
+      };
+      panValue.textContent = formatPanValue(track.pan ?? 0);
+
+      panSlider.addEventListener("input", () => {
+        const next = parseFloat(panSlider.value);
+        track.pan = Number.isFinite(next) ? Math.max(-1, Math.min(1, next)) : 0;
+        panValue.textContent = formatPanValue(track.pan);
+      });
+
+      panRow.appendChild(panLabel);
+      panRow.appendChild(panSlider);
+      panRow.appendChild(panValue);
+
       const buttons = document.createElement("div");
       buttons.className = "trackButtons";
 
@@ -1470,6 +1512,7 @@
 
       card.appendChild(title);
       card.appendChild(sliderRow);
+      card.appendChild(panRow);
       card.appendChild(buttons);
 
       mixerGrid.appendChild(card);
@@ -1659,6 +1702,7 @@
       const skipped = [];
       const dups = [];
       const loopSkipped = [];
+      const pendingLoops = [];
       const tracksByInstrument = new Map();
 
       for (const f of folder.files) {
@@ -1669,7 +1713,8 @@
           try {
             const buf = await f.arrayBuffer();
             const audioBuf = await ctx.decodeAudioData(buf.slice(0));
-            track.loopBuffers.push({ name: fullName, buffer: audioBuf });
+            const instrumentName = parseLoopInstrumentName(fullName);
+            pendingLoops.push({ name: fullName, buffer: audioBuf, instrumentName });
           } catch (err) {
             loopSkipped.push(fullName);
           }
@@ -1687,6 +1732,7 @@
             urlsByQuality: new Map(),
             loopBuffers: [],
             volume: 1,
+            pan: 0,
             mute: false,
             solo: false,
             qualities: [],
@@ -1713,6 +1759,26 @@
       newTracks = [...tracksByInstrument.values()];
       if (!newTracks.length) {
         throw new Error(`No encontré WAVs válidos en la carpeta "${folder.name}".`);
+      }
+
+      if (pendingLoops.length) {
+        const trackByName = new Map(
+          newTracks.map((track) => [track.name.toLowerCase(), track])
+        );
+        for (const loop of pendingLoops) {
+          let assigned = false;
+          const instrumentKey = loop.instrumentName.toLowerCase();
+          if (instrumentKey && trackByName.has(instrumentKey)) {
+            trackByName.get(instrumentKey).loopBuffers.push({ name: loop.name, buffer: loop.buffer });
+            assigned = true;
+          } else if (!instrumentKey && newTracks.length === 1) {
+            newTracks[0].loopBuffers.push({ name: loop.name, buffer: loop.buffer });
+            assigned = true;
+          }
+          if (!assigned) {
+            loopSkipped.push(loop.name);
+          }
+        }
       }
 
       const referenceQualities = audioQualities.length ? [...audioQualities] : null;
@@ -1768,7 +1834,7 @@
         log(`Duplicados: se usó el último WAV para: ${[...new Set(dups)].join(", ")}`, "WARN");
       }
       if (loopSkipped.length) {
-        log(`Loops ignorados (error al leer): ${loopSkipped.join(", ")}`, "WARN");
+        log(`Loops ignorados (sin instrumento o error al leer): ${loopSkipped.join(", ")}`, "WARN");
       }
 
       return createdTracks[createdTracks.length - 1] || null;
@@ -1867,6 +1933,7 @@
       try {
         node.source?.disconnect();
         node.gain?.disconnect();
+        node.panner?.disconnect();
       } catch (_) {}
     }
     audioNodes = [];
@@ -1880,6 +1947,7 @@
     bufferOffset,
     trackNodes = true,
     gainValue = 1,
+    panValue = 0,
     fadeInSec = null,
     fadeOutSec = null,
   }) => {
@@ -1889,7 +1957,14 @@
 
     const gain = ctx.createGain();
     gain.gain.value = 0;
-    source.connect(gain).connect(ctx.destination);
+    let panner = null;
+    if (typeof ctx.createStereoPanner === "function") {
+      panner = ctx.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, panValue));
+      source.connect(gain).connect(panner).connect(ctx.destination);
+    } else {
+      source.connect(gain).connect(ctx.destination);
+    }
 
     const duration = Math.max(0, endTime - startTime);
     const safeOffset = Math.max(0, Math.min(buffer.duration - 0.002, bufferOffset));
@@ -1926,7 +2001,7 @@
     source.stop(effectiveEnd + release + RELEASE_TAIL_SEC);
 
     if (trackNodes) {
-      audioNodes.push({ source, gain });
+      audioNodes.push({ source, gain, panner });
     }
   };
 
@@ -1936,7 +2011,7 @@
     return { segments: repeated.segments, totalEighth: repeated.totalEighth };
   };
 
-  const scheduleLoopLayer = ({ ctx, baseTime, totalEighth, secPerEighth, barSeconds, trackNodes, loopBufferSet, loopGain }) => {
+  const scheduleLoopLayer = ({ ctx, baseTime, totalEighth, secPerEighth, barSeconds, trackNodes, loopBufferSet, loopGain, panValue }) => {
     if (!loopEnabled || !loopBufferSet.length) return;
     const loopVolume = getLoopVolume();
     if (loopVolume <= 0) return;
@@ -1965,6 +2040,7 @@
           bufferOffset,
           trackNodes,
           gainValue: effectiveLoopGain,
+          panValue,
           fadeInSec,
           fadeOutSec,
         });
@@ -2040,6 +2116,7 @@
         trackNodes: true,
         loopBufferSet: track.loopBuffers,
         loopGain: trackGain,
+        panValue: track.pan ?? 0,
       });
 
       for (const seg of segments) {
@@ -2062,6 +2139,7 @@
           bufferOffset,
           trackNodes: true,
           gainValue: trackGain,
+          panValue: track.pan ?? 0,
         });
       }
     }
@@ -2201,6 +2279,7 @@
         trackNodes: false,
         loopBufferSet: track.loopBuffers,
         loopGain: trackGain,
+        panValue: track.pan ?? 0,
       });
 
       for (const seg of segments) {
@@ -2223,6 +2302,7 @@
           bufferOffset,
           trackNodes: false,
           gainValue: trackGain,
+          panValue: track.pan ?? 0,
         });
       }
     }
