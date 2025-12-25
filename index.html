@@ -1243,6 +1243,12 @@
     const bpm = getRefBpm();
     return (60 / bpm) / 2;
   };
+
+  const getClaveReferenceOffsetSeconds = (claveMode, barSeconds, barsPerChord) => {
+    if (claveMode !== "3-2") return 0;
+    if (barsPerChord < 2) return 0;
+    return barSeconds;
+  };
   const transposeRootLabel = (root, delta, preferFlat = false) => {
     const baseSemi = NOTE_TO_SEMI.get(root.toUpperCase());
     if (baseSemi == null) return root;
@@ -1282,16 +1288,25 @@
     return output;
   };
 
+  const transposeProgressionSegment = (segment, delta) => (
+    segment.replace(/\S+/g, (tok) => (tok === "%" ? tok : transposeChordTokenText(tok, delta)))
+  );
+
   const transposeProgressionText = (text, delta) => {
     if (!delta) return text;
-    const bars = text.replace(/\r/g, "").split("|");
-    const mapped = bars.map((bar) => {
-      const trimmed = bar.trim();
-      if (!trimmed) return "";
-      const tokens = trimmed.split(/\s+/).filter(Boolean).map((tok) => tok === "%" ? tok : transposeChordTokenText(tok, delta));
-      return tokens.length ? ` ${tokens.join(" ")} ` : "";
-    });
-    return mapped.join("|");
+    const raw = text.replace(/\r/g, "");
+    const re = /(\|\|:|:\|\||\|)/g;
+    let lastIndex = 0;
+    let out = "";
+    let match;
+    while ((match = re.exec(raw)) !== null) {
+      const segment = raw.slice(lastIndex, match.index);
+      out += transposeProgressionSegment(segment, delta);
+      out += match[1];
+      lastIndex = re.lastIndex;
+    }
+    out += transposeProgressionSegment(raw.slice(lastIndex), delta);
+    return out;
   };
 
   const clampGlobalTranspose = () => {
@@ -2264,7 +2279,7 @@
         const startFromBeginning = !!seg.windowFromStart;
         const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
         const baseOffset = startFromBeginning ? 0 : offsetSeconds;
-        const claveOffsetSeconds = claveMode === "3-2" ? barSeconds : 0;
+        const claveOffsetSeconds = getClaveReferenceOffsetSeconds(claveMode, barSeconds, barsPerChord);
         const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
         const bufferOffset = loopStart + shiftedOffset;
 
@@ -2445,7 +2460,7 @@
         const startFromBeginning = !!seg.windowFromStart;
         const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
         const baseOffset = startFromBeginning ? 0 : offsetSeconds;
-        const claveOffsetSeconds = claveMode === "3-2" ? barSeconds : 0;
+        const claveOffsetSeconds = getClaveReferenceOffsetSeconds(claveMode, barSeconds, barsPerChord);
         const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
         const bufferOffset = loopStart + shiftedOffset;
 
