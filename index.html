@@ -1324,12 +1324,14 @@
     if (isLoopFileName(fullName)) return null;
     const base = fullName.replace(/\.[^.]+$/, "");
     let separator = "__";
-    if (!base.includes(separator)) {
+    let splitIndex = base.lastIndexOf(separator);
+    if (splitIndex < 0) {
       separator = "_";
+      splitIndex = base.lastIndexOf(separator);
     }
-    if (!base.includes(separator)) return null;
-    const [qualityRaw, ...instrumentParts] = base.split(separator);
-    const instrument = instrumentParts.join(separator).trim();
+    if (splitIndex < 0) return null;
+    const qualityRaw = base.slice(0, splitIndex);
+    const instrument = base.slice(splitIndex + separator.length).trim();
     if (!instrument) return null;
     const qualityKey = normalizeQuality(qualityRaw.trim());
     if (!qualityKey) return null;
