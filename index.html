@@ -1465,7 +1465,32 @@
   };
 
   const loadFolderViaPicker = async ({ allowMultiple = false } = {}) => {
-    if (window.showDirectoryPicker) {
+    const pickViaFileInput = () => (
+      new Promise((resolve, reject) => {
+        const input = el("audioFolderFallback");
+        input.multiple = allowMultiple;
+        input.onchange = () => {
+          const list = [...input.files];
+          input.value = "";
+          if (!list.length) {
+            reject(new Error("No se encontraron archivos en esa carpeta."));
+            return;
+          }
+          const folders = collectFoldersFromFileList(list);
+          if (!folders.length) {
+            reject(new Error("No se encontraron archivos en esa carpeta."));
+            return;
+          }
+          if (!allowMultiple && folders.length > 1) {
+            log("Se detectaron múltiples carpetas. Se usará la primera.", "WARN");
+          }
+          resolve(allowMultiple ? folders : folders[0]);
+        };
+        input.click();
+      })
+    );
+
+    if (window.showDirectoryPicker && !allowMultiple) {
       let dir;
       try {
         dir = await window.showDirectoryPicker();
@@ -1485,31 +1510,10 @@
       const files = [];
       await collect(dir, files);
       const folder = { name: dir.name || "carpeta", files };
-      return allowMultiple ? [folder] : folder;
+      return folder;
     }
 
-    return await new Promise((resolve, reject) => {
-      const input = el("audioFolderFallback");
-      input.multiple = allowMultiple;
-      input.onchange = () => {
-        const list = [...input.files];
-        input.value = "";
-        if (!list.length) {
-          reject(new Error("No se encontraron archivos en esa carpeta."));
-          return;
-        }
-        const folders = collectFoldersFromFileList(list);
-        if (!folders.length) {
-          reject(new Error("No se encontraron archivos en esa carpeta."));
-          return;
-        }
-        if (!allowMultiple && folders.length > 1) {
-          log("Se detectaron múltiples carpetas. Se usará la primera.", "WARN");
-        }
-        resolve(allowMultiple ? folders : folders[0]);
-      };
-      input.click();
-    });
+    return await pickViaFileInput();
   };
 
   const updateReadyState = () => {
