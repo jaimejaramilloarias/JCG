@@ -550,18 +550,6 @@
               <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
             </div>
           </div>
-          <div class="label" style="margin-top:10px">Anticipaciones</div>
-          <div class="row">
-            <label class="pill">
-              <input id="clave23" type="checkbox" />
-              <span>Clave 2-3</span>
-            </label>
-            <label class="pill">
-              <input id="clave32" type="checkbox" />
-              <span>Clave 3-2</span>
-            </label>
-          </div>
-          <div class="hint">Controla la duración de cada acorde según el número de corcheas. En 4/4 se anticipan cambios de acordes según el preset elegido.</div>
         </div>
       </div>
 
@@ -593,7 +581,7 @@
       <ul>
         <li><b>1) Cargar referencias:</b> pulsa <span class="kbd">Cargar carpeta</span> y usa el formato <span class="kbd">calidad__instrumento.wav</span> o <span class="kbd">calidad_instrumento.wav</span> (ej: <span class="kbd">∆__guitarra.wav</span>).</li>
         <li><b>2) Ajustes:</b> define compases por archivo, compases por acorde, BPM fijo, crossfades y fundamental inicial.</li>
-        <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>. Usa <span class="kbd">|/|</span> para mutear instrumentos, <span class="kbd">|-|</span> para mutear todo, y <span class="kbd">||:</span> ... <span class="kbd">:||</span> para repetir.</li>
+        <li><b>3) Progresión:</b> escribe con barras. Ej: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>. Usa <span class="kbd">|/|</span> para mutear instrumentos, <span class="kbd">|-|</span> para mutear todo, y <span class="kbd">||:</span> ... <span class="kbd">:||</span> para repetir. Para aplicar clave, escribe <span class="kbd">2-3</span> o <span class="kbd">3-2</span> antes de la progresión.</li>
         <li><b>4) Calidades:</b> revisa el indicador de coincidencias para ver si falta algún acorde.</li>
         <li><b>5) Mezclador:</b> ajusta volumen, solo y mute por instrumento.</li>
         <li><b>6) Guardar:</b> usa <span class="kbd">Guardar</span>, <span class="kbd">Exportar</span> para llevarte todas y <span class="kbd">Cargar archivo</span> para reimportarlas.</li>
@@ -648,8 +636,6 @@
   const loopVolumeValue = el("loopVolumeValue");
   const btnLoopToggle = el("btnLoopToggle");
   const btnLoopProgression = el("btnLoopProgression");
-  const clave23Input = el("clave23");
-  const clave32Input = el("clave32");
 
   const NOTE_TO_SEMI = new Map([
     ["C",0], ["B#",0],
@@ -682,7 +668,6 @@
   let trackIdCounter = 0;
   let playbackLoopTimer = null;
   let referenceBpmFromFolder = null;
-  let referenceClaveMode = "none";
   const PLAYBACK_SCHEDULE_AHEAD_SEC = 0.08;
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
@@ -1043,9 +1028,19 @@
     return out;
   };
 
+  const extractClavePrefix = (text) => {
+    const match = (text || "").match(/^\s*(2-3|3-2)\s*/);
+    if (!match) return { claveMode: "none", strippedText: text || "" };
+    return {
+      claveMode: match[1],
+      strippedText: (text || "").slice(match[0].length),
+    };
+  };
+
   const parseProgression = (text, opts = {}) => {
     const { maxChordsPerBar = 4 } = opts;
-    const raw = text.replace(/\r/g, "").trim();
+    const { claveMode, strippedText } = extractClavePrefix(text.replace(/\r/g, ""));
+    const raw = strippedText.trim();
     if (!raw) throw new Error("Escribe una progresión.");
     const parts = expandLoopBars(tokenizeBarsWithLoops(raw));
     if (!parts.length) throw new Error("Usa barras | |. Ej: | Bbmaj7 Gm9 | ...");
@@ -1139,7 +1134,7 @@
       addBar(chords, rawBar, barIndex);
     }
 
-    applyClaveAnticipations(segments, eighthsPerBar, getClaveMode());
+    applyClaveAnticipations(segments, eighthsPerBar, claveMode);
 
     const totalEighth = parts.length * eighthsPerBar;
     if (segments.length >= 2) {
@@ -1152,14 +1147,18 @@
       }
     }
 
-    return { segments, totalEighth, totalBars: parts.length, bars };
+    return { segments, totalEighth, totalBars: parts.length, bars, claveMode };
   };
 
   const repeatProgressionText = (text, times) => {
     const t = Math.max(1, parseInt(times, 10) || 1);
     const base = (text || "").trim();
     if (t === 1 || !base) return text;
-    return Array.from({ length: t }, () => base).join(" ");
+    const { claveMode, strippedText } = extractClavePrefix(base);
+    const cleaned = strippedText.trim();
+    const repeated = Array.from({ length: t }, () => cleaned).join(" ");
+    if (claveMode === "none") return repeated;
+    return `${claveMode} ${repeated}`.trim();
   };
 
   const getBarsPerFile = () => Math.max(1, parseInt(barsPerFileInput.value, 10) || 1);
@@ -1168,11 +1167,6 @@
   const getCrossfadeSeconds = () => Math.max(0, parseInt(crossfadeMsInput.value, 10) || 0) / 1000;
   const getLoopBars = () => Math.max(1, parseInt(loopBarsInput?.value, 10) || 1);
   const getLoopRestartOffsetMs = () => parseInt(loopRestartOffsetInput?.value, 10) || 0;
-  const getClaveMode = () => {
-    if (clave23Input?.checked) return "2-3";
-    if (clave32Input?.checked) return "3-2";
-    return "none";
-  };
 
   const findBpmInFolderName = (name) => {
     if (!name) return null;
@@ -1192,24 +1186,11 @@
     log(`BPM fijo detectado en carpeta: ${clamped}.`, "OK");
   };
 
-  const findClaveInFolderName = (name) => {
-    if (!name) return "none";
-    if (name.includes("2-3")) return "2-3";
-    if (name.includes("3-2")) return "3-2";
-    return "none";
-  };
-
-  const applyFolderClave = (name) => {
-    const claveMode = findClaveInFolderName(name);
-    if (clave23Input) clave23Input.checked = claveMode === "2-3";
-    if (clave32Input) clave32Input.checked = claveMode === "3-2";
-  };
-
   const sameChord = (a, b) => a && b && a.rootSemi === b.rootSemi && a.quality === b.quality;
 
   const applyClaveAnticipations = (segments, eighthsPerBar, claveMode) => {
     if (!segments.length || eighthsPerBar !== 8) return segments;
-    if (claveMode !== "2-3" && claveMode !== "3-2") return segments;
+    if (claveMode !== "2-3") return segments;
 
     const byBar = new Map();
     for (const seg of segments) {
@@ -1225,18 +1206,12 @@
       const barB = byBar.get(sortedBars[i + 1]) || [];
       if (barA.length === 1 && barB.length === 1) {
         if (!sameChord(barA[0], barB[0])) {
-          const shift = claveMode === "2-3" ? 1 : 2;
-          barB[0].startEighth = Math.max(0, barB[0].startEighth - shift);
+          barB[0].startEighth = Math.max(0, barB[0].startEighth - 1);
         }
       } else if (barA.length === 2 && barB.length === 2) {
         barA[1].startEighth = Math.max(0, barA[1].startEighth - 1);
-        if (claveMode === "2-3") {
-          barB[0].startEighth = Math.max(0, barB[0].startEighth - 1);
-          barB[1].startEighth = Math.max(0, barB[1].startEighth - 2);
-        } else {
-          barB[0].startEighth = Math.max(0, barB[0].startEighth - 2);
-          barB[1].startEighth = Math.max(0, barB[1].startEighth - 1);
-        }
+        barB[0].startEighth = Math.max(0, barB[0].startEighth - 1);
+        barB[1].startEighth = Math.max(0, barB[1].startEighth - 2);
       }
     }
 
@@ -1784,7 +1759,6 @@
     baseLoopBuffers = [];
     audioQualities = [];
     referenceBpmFromFolder = null;
-    referenceClaveMode = "none";
     renderQualityChips();
     renderMixer();
   };
@@ -1798,7 +1772,6 @@
       }
 
       const folderBpm = findBpmInFolderName(folder.name);
-      const folderClave = findClaveInFolderName(folder.name);
       const hasExisting = audioTracks.length > 0;
 
       if (hasExisting) {
@@ -1813,24 +1786,10 @@
           throw new Error("Las carpetas cargadas no tenían BPM. Usa el mismo formato en todas.");
         }
 
-        if (referenceClaveMode !== "none") {
-          if (folderClave === "none") {
-            throw new Error("Las carpetas deben incluir la misma clave (2-3 o 3-2).");
-          }
-          if (folderClave !== referenceClaveMode) {
-            throw new Error("Las carpetas tienen clave distinta. Usa la misma clave en todas.");
-          }
-        } else if (folderClave !== "none") {
-          throw new Error("Las carpetas cargadas no tenían clave. Usa el mismo formato en todas.");
-        }
       } else {
         if (Number.isFinite(folderBpm)) {
           referenceBpmFromFolder = folderBpm;
           applyFolderBpm(folder.name);
-        }
-        if (folderClave !== "none") {
-          referenceClaveMode = folderClave;
-          applyFolderClave(folder.name);
         }
       }
 
@@ -2127,7 +2086,12 @@
   const buildAudioSegments = () => {
     const repeatedText = repeatProgressionText(prog.value, repeatCount.value);
     const parsed = parseProgression(repeatedText, { maxChordsPerBar: 4 });
-    return { segments: parsed.segments, bars: parsed.bars, totalEighth: parsed.totalEighth };
+    return {
+      segments: parsed.segments,
+      bars: parsed.bars,
+      totalEighth: parsed.totalEighth,
+      claveMode: parsed.claveMode,
+    };
   };
 
   const scheduleLoopLayer = ({
@@ -2142,6 +2106,7 @@
     loopGain,
     panValue,
     mutedBars = new Set(),
+    claveMode = "none",
   }) => {
     if (!loopEnabled || !loopBufferSet.length) return;
     const loopVolume = getLoopVolume();
@@ -2157,7 +2122,8 @@
         if (mutedBars.has(bar)) continue;
         const startTime = baseTime + bar * barSeconds;
         const loopBarIndex = loopBars > 0 ? bar % loopBars : bar;
-        const bufferOffset = (loopBarIndex * barSeconds) % duration;
+        const claveOffsetSeconds = claveMode === "3-2" ? barSeconds : 0;
+        const bufferOffset = (loopBarIndex * barSeconds + claveOffsetSeconds) % duration;
         const safeOffset = Math.max(0, Math.min(loop.buffer.duration - 0.002, bufferOffset));
         const maxPlayable = Math.max(0, loop.buffer.duration - safeOffset);
         const useOverlap = maxPlayable >= barSeconds + overlapSec;
@@ -2196,6 +2162,7 @@
 
     const segments = parsed.segments;
     const bars = parsed.bars || [];
+    const claveMode = parsed.claveMode;
     if (!segments.length) {
       log("No hay acordes para reproducir.", "ERROR");
       return;
@@ -2257,6 +2224,7 @@
       loopGain: 1,
       panValue: 0,
       mutedBars,
+      claveMode,
     });
 
     for (const track of tracks) {
@@ -2274,7 +2242,11 @@
         const startTime = baseTime + seg.startEighth * secPerEighth;
         const endTime = startTime + seg.durEighth * secPerEighth;
         const startFromBeginning = !!seg.windowFromStart;
-        const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
+        const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
+        const baseOffset = startFromBeginning ? 0 : offsetSeconds;
+        const claveOffsetSeconds = claveMode === "3-2" ? barSeconds : 0;
+        const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
+        const bufferOffset = loopStart + shiftedOffset;
 
         scheduleAudioChord({
           ctx,
@@ -2433,6 +2405,7 @@
       loopGain: 1,
       panValue: 0,
       mutedBars,
+      claveMode,
     });
 
     for (const track of tracks) {
@@ -2450,7 +2423,11 @@
         const startTime = seg.startEighth * secPerEighth;
         const endTime = startTime + seg.durEighth * secPerEighth;
         const startFromBeginning = !!seg.windowFromStart;
-        const bufferOffset = startFromBeginning ? loopStart : loopStart + offsetSeconds;
+        const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
+        const baseOffset = startFromBeginning ? 0 : offsetSeconds;
+        const claveOffsetSeconds = claveMode === "3-2" ? barSeconds : 0;
+        const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
+        const bufferOffset = loopStart + shiftedOffset;
 
         scheduleAudioChord({
           ctx: offlineCtx,
@@ -2545,15 +2522,6 @@
   loopRestartOffsetInput.addEventListener("input", updateQualityMismatch);
   startRootInput.addEventListener("change", updateQualityMismatch);
   globalTranspose.addEventListener("input", applyGlobalTranspose);
-  if (clave23Input && clave32Input) {
-    clave23Input.addEventListener("change", () => {
-      if (clave23Input.checked) clave32Input.checked = false;
-    });
-    clave32Input.addEventListener("change", () => {
-      if (clave32Input.checked) clave23Input.checked = false;
-    });
-  }
-
   window.addEventListener("keydown", (e) => {
     if (e.code !== "Space" && e.key !== " ") return;
     const ae = document.activeElement;
