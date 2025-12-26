@@ -659,6 +659,7 @@
   let audioCtx = null;
   let audioTracks = [];
   let baseLoopBuffers = [];
+  let altLoopBuffers = [];
   let audioQualities = [];
   let audioFolderLoaded = false;
   let isAudioPlaying = false;
@@ -881,10 +882,15 @@
     return s || null;
   };
 
-  const isLoopFileName = (fullName) => {
+  const getLoopVariant = (fullName) => {
+    if (!fullName) return null;
     const base = fullName.replace(/\.[^.]+$/, "");
-    return /loop/i.test(base);
+    if (!/loop/i.test(base)) return null;
+    if (/loop2/i.test(base)) return "alt";
+    return "base";
   };
+
+  const isLoopFileName = (fullName) => getLoopVariant(fullName) !== null;
 
   const parseLoopInstrumentName = (fullName) => {
     if (!fullName) return "";
@@ -950,6 +956,7 @@
     const bars = [];
     let current = "";
     let pendingLoopStart = false;
+    let pendingLoopSwitch = false;
     const flush = ({ loopEnd = false } = {}) => {
       const trimmed = current.trim();
       if (!trimmed) {
@@ -960,12 +967,14 @@
         text: trimmed,
         loopStart: pendingLoopStart,
         loopEnd,
+        loopSwitch: pendingLoopSwitch,
       });
       pendingLoopStart = false;
+      pendingLoopSwitch = false;
       current = "";
     };
 
-    const re = /(\|\|:|:\|\||\|)/g;
+    const re = /(\|\|:|:\|\||\|\||\|)/g;
     let lastIndex = 0;
     let match;
     while ((match = re.exec(raw)) !== null) {
@@ -984,6 +993,9 @@
         } else {
           throw new Error("Marcador :|| sin barra previa.");
         }
+      } else if (token === "||") {
+        flush();
+        pendingLoopSwitch = !pendingLoopSwitch;
       } else {
         flush();
       }
@@ -1052,7 +1064,7 @@
     let lastBarDef = null;
     const eighthsPerBar = getEighthsPerBar();
 
-    const addMuteBar = (muteType, source = "", barIndex = 0) => {
+    const addMuteBar = (muteType, source = "", barIndex = 0, loopSwitch = false) => {
       const token = muteType === "all" ? "-" : "/";
       segments.push({
         type: "mute",
@@ -1067,13 +1079,14 @@
       bars.push({
         barIndex,
         muteType,
+        loopSwitch,
         tokens: [{ text: token, isMute: true }],
       });
       startEighth += eighthsPerBar;
       lastBarDef = { type: "mute", muteType };
     };
 
-    const addBar = (barChords, source = "", barIndex = 0) => {
+    const addBar = (barChords, source = "", barIndex = 0, loopSwitch = false) => {
       if (!barChords || !barChords.length) {
         throw new Error(`Barra inválida: "${source || ""}". Solo 1 a ${maxChordsPerBar} acordes por compás.`);
       }
@@ -1106,6 +1119,7 @@
       bars.push({
         barIndex,
         muteType: null,
+        loopSwitch,
         tokens,
       });
       lastBarDef = { type: "chord", chords: barChords };
@@ -1113,25 +1127,26 @@
 
     for (const [barIndex, bar] of parts.entries()) {
       const rawBar = bar.text || "";
+      const loopSwitch = !!bar.loopSwitch;
       if (rawBar === "%") {
         if (!lastBarDef) throw new Error("El signo % solo se puede usar después del primer compás.");
         if (lastBarDef.type === "mute") {
-          addMuteBar(lastBarDef.muteType, rawBar, barIndex);
+          addMuteBar(lastBarDef.muteType, rawBar, barIndex, loopSwitch);
         } else {
-          addBar(lastBarDef.chords, rawBar, barIndex);
+          addBar(lastBarDef.chords, rawBar, barIndex, loopSwitch);
         }
         continue;
       }
       if (rawBar === "/" || rawBar === "-") {
-        addMuteBar(rawBar === "-" ? "all" : "instruments", rawBar, barIndex);
+        addMuteBar(rawBar === "-" ? "all" : "instruments", rawBar, barIndex, loopSwitch);
         continue;
       }
       const chords = rawBar.split(/\s+/).map((s) => s.trim()).filter(Boolean);
       if (chords.length === 1 && (chords[0] === "/" || chords[0] === "-")) {
-        addMuteBar(chords[0] === "-" ? "all" : "instruments", rawBar, barIndex);
+        addMuteBar(chords[0] === "-" ? "all" : "instruments", rawBar, barIndex, loopSwitch);
         continue;
       }
-      addBar(chords, rawBar, barIndex);
+      addBar(chords, rawBar, barIndex, loopSwitch);
     }
 
     if (applyClave) {
@@ -1160,6 +1175,21 @@
   const getRefBpm = () => Math.max(20, parseInt(refBpmInput.value, 10) || 90);
   const getCrossfadeSeconds = () => LOOP_CROSSFADE_SEC;
   const getLoopBars = () => Math.max(1, parseInt(loopBarsInput?.value, 10) || 1);
+  const buildLoopSetsForBars = (bars, baseSet, altSet) => {
+    const baseAvailable = baseSet?.length > 0;
+    const altAvailable = altSet?.length > 0;
+    let useAlt = !baseAvailable && altAvailable;
+    const resolved = [];
+    for (const bar of bars || []) {
+      if (bar?.loopSwitch) useAlt = !useAlt;
+      let selected = useAlt ? altSet : baseSet;
+      if (!selected?.length) {
+        selected = useAlt ? baseSet : altSet;
+      }
+      resolved.push(selected || []);
+    }
+    return resolved;
+  };
 
   const findBpmInFolderName = (name) => {
     if (!name) return null;
@@ -1559,7 +1589,9 @@
   };
 
   const updateLoopControls = () => {
-    const totalLoops = baseLoopBuffers.length;
+    const baseCount = baseLoopBuffers.length;
+    const altCount = altLoopBuffers.length;
+    const totalLoops = baseCount + altCount;
     if (loopVolumeValue) {
       loopVolumeValue.textContent = `${Math.round(getLoopVolume() * 100)}%`;
     }
@@ -1573,7 +1605,7 @@
       if (!totalLoops) {
         loopStatus.textContent = "Sin loop cargado.";
       } else {
-        loopStatus.textContent = `${totalLoops} loop(s) base cargado(s).`;
+        loopStatus.textContent = `Loop base: ${baseCount} · Loop2: ${altCount}.`;
       }
     }
   };
@@ -1809,15 +1841,15 @@
   };
 
   const updateReadyState = () => {
-    audioFolderLoaded = audioTracks.length > 0 || baseLoopBuffers.length > 0;
+    audioFolderLoaded = audioTracks.length > 0 || baseLoopBuffers.length > 0 || altLoopBuffers.length > 0;
     setReady(audioFolderLoaded, audioFolderLoaded ? "Listo" : "No listo");
   };
 
   const renderAudioFolderStatus = () => {
     if (!audioFolderStatus) return;
     if (!audioTracks.length) {
-      if (baseLoopBuffers.length) {
-        audioFolderStatus.textContent = `Sin instrumentos cargados. Loop base: ${baseLoopBuffers.length}.`;
+      if (baseLoopBuffers.length || altLoopBuffers.length) {
+        audioFolderStatus.textContent = `Sin instrumentos cargados. Loop base: ${baseLoopBuffers.length} · Loop2: ${altLoopBuffers.length}.`;
       } else {
         audioFolderStatus.textContent = "Sin instrumentos cargados.";
       }
@@ -1825,7 +1857,9 @@
       return;
     }
     const instrumentNames = audioTracks.map((track) => track.name);
-    const loopSuffix = baseLoopBuffers.length ? ` · Loop base: ${baseLoopBuffers.length}` : "";
+    const loopSuffix = (baseLoopBuffers.length || altLoopBuffers.length)
+      ? ` · Loop base: ${baseLoopBuffers.length} · Loop2: ${altLoopBuffers.length}`
+      : "";
     audioFolderStatus.textContent = `Instrumentos cargados: ${instrumentNames.length}.${loopSuffix}`;
     if (audioFolderList) {
       audioFolderList.innerHTML = "";
@@ -1853,6 +1887,7 @@
     }
     audioTracks = [];
     baseLoopBuffers = [];
+    altLoopBuffers = [];
     audioQualities = [];
     referenceBpmFromFolder = null;
     renderQualityChips();
@@ -1892,18 +1927,19 @@
       const skipped = [];
       const dups = [];
       const loopSkipped = [];
-      const pendingLoops = [];
+      const pendingLoops = { base: [], alt: [] };
       const tracksByInstrument = new Map();
 
       for (const f of folder.files) {
         const fullName = (f.name || "").trim();
         if (!fullName) { skipped.push("(sin nombre)"); continue; }
-        if (isLoopFileName(fullName)) {
+        const loopVariant = getLoopVariant(fullName);
+        if (loopVariant) {
           if (!/\.wav$/i.test(fullName)) { skipped.push(fullName); continue; }
           try {
             const buf = await f.arrayBuffer();
             const audioBuf = await ctx.decodeAudioData(buf.slice(0));
-            pendingLoops.push({ name: fullName, buffer: audioBuf });
+            pendingLoops[loopVariant].push({ name: fullName, buffer: audioBuf });
           } catch (err) {
             loopSkipped.push(fullName);
           }
@@ -1946,13 +1982,19 @@
       }
 
       newTracks = [...tracksByInstrument.values()];
-      if (!newTracks.length && !pendingLoops.length) {
+      const pendingLoopCount = pendingLoops.base.length + pendingLoops.alt.length;
+      if (!newTracks.length && !pendingLoopCount) {
         throw new Error(`No encontré WAVs válidos en la carpeta "${folder.name}".`);
       }
 
-      if (pendingLoops.length) {
-        for (const loop of pendingLoops) {
+      if (pendingLoops.base.length) {
+        for (const loop of pendingLoops.base) {
           baseLoopBuffers.push({ name: loop.name, buffer: loop.buffer });
+        }
+      }
+      if (pendingLoops.alt.length) {
+        for (const loop of pendingLoops.alt) {
+          altLoopBuffers.push({ name: loop.name, buffer: loop.buffer });
         }
       }
 
@@ -1998,8 +2040,8 @@
         createdTracks.push(track);
       }
 
-      if (pendingLoops.length) {
-        log(`Loops base cargados: ${pendingLoops.length}.`, "OK");
+      if (pendingLoopCount) {
+        log(`Loops base: ${pendingLoops.base.length} · Loop2: ${pendingLoops.alt.length}.`, "OK");
       }
       if (skipped.length) {
         log(`Archivos ignorados (no WAV / nombre inválido): ${skipped.join(", ")}`, "WARN");
@@ -2212,13 +2254,14 @@
     secPerEighth,
     barSeconds,
     trackNodes,
-    loopBufferSet,
+    loopBuffersByBar,
     loopGain,
     panValue,
     mutedBars = new Set(),
     claveMode = "none",
   }) => {
-    if (!loopEnabled || !loopBufferSet.length) return;
+    const hasAnyLoops = (loopBuffersByBar || []).some((set) => set && set.length);
+    if (!loopEnabled || !hasAnyLoops) return;
     const loopVolume = getLoopVolume();
     if (loopVolume <= 0) return;
     const effectiveLoopGain = loopVolume * Math.max(0, Math.min(1, loopGain ?? 1));
@@ -2226,13 +2269,15 @@
     const barTotal = totalBars ?? Math.ceil(totalEighth / getEighthsPerBar());
     const loopBars = getLoopBars();
     const overlapSec = LOOP_CROSSFADE_SEC;
-    for (const loop of loopBufferSet) {
-      const duration = Math.max(loop.buffer.duration, 0.001);
-      for (let bar = 0; bar < barTotal; bar += 1) {
-        if (mutedBars.has(bar)) continue;
-        const startTime = baseTime + bar * barSeconds;
-        const loopBarIndex = loopBars > 0 ? bar % loopBars : bar;
-        const claveOffsetSeconds = claveMode === "3-2" ? barSeconds : 0;
+    for (let bar = 0; bar < barTotal; bar += 1) {
+      if (mutedBars.has(bar)) continue;
+      const loopSet = loopBuffersByBar?.[bar] || [];
+      if (!loopSet.length) continue;
+      const startTime = baseTime + bar * barSeconds;
+      const loopBarIndex = loopBars > 0 ? bar % loopBars : bar;
+      const claveOffsetSeconds = claveMode === "3-2" ? barSeconds : 0;
+      for (const loop of loopSet) {
+        const duration = Math.max(loop.buffer.duration, 0.001);
         const bufferOffset = (loopBarIndex * barSeconds + claveOffsetSeconds) % duration;
         const safeOffset = Math.max(0, Math.min(loop.buffer.duration - 0.002, bufferOffset));
         const maxPlayable = Math.max(0, loop.buffer.duration - safeOffset);
@@ -2257,7 +2302,7 @@
   };
 
   const playAudio = async () => {
-    if (!audioTracks.length && !baseLoopBuffers.length) {
+    if (!audioTracks.length && !baseLoopBuffers.length && !altLoopBuffers.length) {
       log("Carga carpetas de WAVs para reproducir.", "ERROR");
       return;
     }
@@ -2309,7 +2354,7 @@
     const secPerEighth = getRefSecondsPerEighth();
     const barSeconds = getRefBarSeconds();
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
-    const loopAudible = loopEnabled && baseLoopBuffers.length && getLoopVolume() > 0;
+    const loopAudible = loopEnabled && (baseLoopBuffers.length || altLoopBuffers.length) && getLoopVolume() > 0;
     const hasChordSegments = segments.some((seg) => seg.type === "chord");
     const anyTrackAudible = hasChordSegments && tracks.some((track) => getTrackEffectiveVolume(track) > 0);
     const anyAudible = anyTrackAudible || loopAudible;
@@ -2323,6 +2368,7 @@
       (bars || []).filter((bar) => bar.muteType === "all").map((bar) => bar.barIndex),
     );
 
+    const loopBuffersByBar = buildLoopSetsForBars(bars, baseLoopBuffers, altLoopBuffers);
     scheduleLoopLayer({
       ctx,
       baseTime,
@@ -2331,7 +2377,7 @@
       secPerEighth,
       barSeconds,
       trackNodes: true,
-      loopBufferSet: baseLoopBuffers,
+      loopBuffersByBar,
       loopGain: 1,
       panValue: 0,
       mutedBars,
@@ -2431,7 +2477,7 @@
   };
 
   const exportAudio = async () => {
-    if (!audioTracks.length && !baseLoopBuffers.length) {
+    if (!audioTracks.length && !baseLoopBuffers.length && !altLoopBuffers.length) {
       log("Carga carpetas de WAVs para exportar audio.", "ERROR");
       return;
     }
@@ -2489,7 +2535,7 @@
 
     const barSeconds = getRefBarSeconds();
 
-    const loopAudible = loopEnabled && baseLoopBuffers.length && getLoopVolume() > 0;
+    const loopAudible = loopEnabled && (baseLoopBuffers.length || altLoopBuffers.length) && getLoopVolume() > 0;
     const hasChordSegments = segments.some((seg) => seg.type === "chord");
     const anyTrackAudible = hasChordSegments && tracks.some((track) => getTrackEffectiveVolume(track) > 0);
     const anyAudible = anyTrackAudible || loopAudible;
@@ -2502,6 +2548,7 @@
       (bars || []).filter((bar) => bar.muteType === "all").map((bar) => bar.barIndex),
     );
 
+    const loopBuffersByBar = buildLoopSetsForBars(bars, baseLoopBuffers, altLoopBuffers);
     scheduleLoopLayer({
       ctx: offlineCtx,
       baseTime: 0,
@@ -2510,7 +2557,7 @@
       secPerEighth,
       barSeconds,
       trackNodes: false,
-      loopBufferSet: baseLoopBuffers,
+      loopBuffersByBar,
       loopGain: 1,
       panValue: 0,
       mutedBars,
