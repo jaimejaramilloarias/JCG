@@ -669,12 +669,14 @@
         <li><b>1) Prepara tus WAVs (nomenclatura obligatoria):</b> cada archivo debe llamarse <span class="kbd">calidad__instrumento.wav</span> o <span class="kbd">calidad_instrumento.wav</span>. Ejemplos: <span class="kbd">maj7__piano.wav</span>, <span class="kbd">m7_guitarra.wav</span>, <span class="kbd">7alt__rhodes.wav</span>. El texto antes del separador es la <i>calidad</i> (maj7, m7, 7b9, ø7, sus4, etc.) y el texto después es el <i>instrumento</i> (piano, bajo, batería...).</li>
         <li><b>2) Carga carpetas de audio:</b> en <span class="kbd">Audio → Cargar carpeta</span> selecciona la carpeta con tus WAVs. Comprueba el indicador de <b>Calidades detectadas</b> y el estado <b>Listo / No listo</b> para confirmar que todo lo necesario está disponible.</li>
         <li><b>3) Valida calidades y referencias:</b> si aparece el aviso de <b>Calidades no coinciden</b>, revisa que tus archivos cubran todas las calidades que usas en la progresión. Cargar referencias de audio correctas hará que el estado pase a verde.</li>
+        <li><b>Referencias de audio:</b> los WAVs de referencia recorren cromáticamente de <span class="kbd">G</span> a <span class="kbd">F#</span>, con <b>dos compases por acorde</b>. Además, hay <b>dos loops base</b> (loop principal y loop alternativo) que sirven como base rítmica.</li>
         <li><b>4) Ajusta parámetros globales:</b> define <span class="kbd">Compases por archivo</span>, <span class="kbd">Compases por acorde</span>, el <span class="kbd">BPM fijo</span> y la <span class="kbd">Fundamental inicial</span>. Estos valores determinan cómo se recortan y sincronizan los audios con tu progresión.</li>
         <li><b>5) Escribe la progresión:</b> usa barras para separar compases. Ejemplo: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>. Puedes usar:
           <ul>
             <li><span class="kbd">|/|</span> para mutear instrumentos dentro de un compás.</li>
             <li><span class="kbd">|-|</span> para mutear todo el compás.</li>
             <li><span class="kbd">||:</span> … <span class="kbd">:||</span> para repetir secciones.</li>
+            <li><span class="kbd">||</span> para marcar una separación fuerte o fin de sección.</li>
             <li><span class="kbd">2-3</span> o <span class="kbd">3-2</span> al inicio para aplicar clave.</li>
           </ul>
         </li>
