@@ -1097,7 +1097,6 @@
           barChordCount: chordCount,
           barChordIndex: idx,
           barEighthOffset,
-          windowFromStart: chordCount === 4 || (chordCount === 3 && idx > 0),
         });
         startEighth += durations[idx];
         barEighthOffset += durations[idx];
@@ -2294,9 +2293,8 @@
 
         const startTime = baseTime + seg.startEighth * secPerEighth;
         const endTime = startTime + seg.durEighth * secPerEighth;
-        const startFromBeginning = !!seg.windowFromStart;
         const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
-        const baseOffset = startFromBeginning ? 0 : offsetSeconds;
+        const baseOffset = offsetSeconds;
         const claveOffsetSeconds = getClaveReferenceOffsetSeconds(claveMode, barSeconds, barsPerChord);
         const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
         const bufferOffset = loopStart + shiftedOffset;
@@ -2472,9 +2470,8 @@
 
         const startTime = seg.startEighth * secPerEighth;
         const endTime = startTime + seg.durEighth * secPerEighth;
-        const startFromBeginning = !!seg.windowFromStart;
         const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
-        const baseOffset = startFromBeginning ? 0 : offsetSeconds;
+        const baseOffset = offsetSeconds;
         const claveOffsetSeconds = getClaveReferenceOffsetSeconds(claveMode, barSeconds, barsPerChord);
         const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
         const bufferOffset = loopStart + shiftedOffset;
