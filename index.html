@@ -219,6 +219,54 @@
     .hint{color:var(--muted); font-size:12px; margin-top:10px; line-height:1.35}
     .hint code{color:#c7d2fe}
 
+    .menuBar{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 8px;
+      flex-wrap:wrap;
+      position:relative;
+      z-index:20;
+    }
+    .menuGroup{position:relative;}
+    .menuBtn{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      color:var(--txt);
+      padding:6px 10px;
+      border-radius:10px;
+      font-weight:700;
+      font-size:12px;
+      cursor:pointer;
+      letter-spacing:.2px;
+    }
+    .menuBtn:hover{border-color: rgba(47,129,247,.45)}
+    .menuBtn[aria-expanded="true"]{
+      border-color: rgba(47,129,247,.65);
+      box-shadow: 0 0 0 3px rgba(47,129,247,.18);
+    }
+    .menuPopup{
+      position:absolute;
+      top:calc(100% + 8px);
+      left:0;
+      min-width:260px;
+      max-width:min(520px, 92vw);
+      background: linear-gradient(180deg, rgba(22,30,44,.98), rgba(20,28,40,.98));
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      box-shadow: var(--shadow);
+      padding:10px;
+      display:none;
+      z-index:30;
+    }
+    .menuPopup.open{display:block;}
+    .menuSection{display:flex; flex-direction:column; gap:8px;}
+    .menuSection + .menuSection{margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08);}
+    .menuSectionTitle{font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:800;}
+    .menuRow{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+    .menuGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:8px;}
+    .menuFooter{font-size:11px; color:var(--muted);}
+
     .topActions{display:flex; gap:8px; align-items:center}
     .btn.ghost{background: rgba(91,59,206,.12); border-color: rgba(167,139,250,.55); color:var(--txt)}
     .btn.ghost:hover{background: rgba(167,139,250,.2)}
@@ -396,92 +444,76 @@
       <div class="sub">Escribe una progresión, controla tus referencias de audio y genera playback desde archivos WAV.</div>
       <div class="legal">Este código e interfaz no son de código abierto. Derechos reservados © Jaime Jaramillo Arias.</div>
     </div>
-    <div class="heroMeta">
-      <div class="kpi">
-        <div class="pill status" title="Estado de carga de referencias de audio">
-          <span class="dot bad" id="dotReady"></span>
-          <span id="readyText">No listo</span>
-        </div>
-      </div>
-      <div class="topActions">
-        <button class="btn ghost helpBtn" id="btnHelp" title="Abrir ayuda">
-          <span class="q">?</span><span>Ayuda</span>
-        </button>
-      </div>
-    </div>
   </header>
 
-  <div class="card megaCard">
-    <div class="hd megaHd">
-      <div class="title">Panel principal</div>
+  <div class="card menuBar" role="menubar" aria-label="Menú principal">
+    <div class="menuGroup">
+      <button class="menuBtn" type="button" data-menu-target="menuPlayback" aria-expanded="false" aria-haspopup="true">Reproducción</button>
+      <div class="menuPopup" id="menuPlayback" role="menu">
+        <div class="menuSection">
+          <div class="menuSectionTitle">Reproducción y export</div>
+          <div class="menuRow">
+            <button class="btn primary" id="btnPlay" title="Reproducir la progresión usando tus referencias de audio">Reproducir</button>
+            <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
+            <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado">Exportar audio</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="megaBd">
-      <div class="sectionGrid">
-        <div class="sectionCard">
-          <div class="sectionTitle">Progresión y calidades</div>
-          <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
-          <div class="chips" id="qualityChips"></div>
-          <div class="label" style="margin-top:8px">Progresión</div>
-          <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |. Usa |/|, |-|, ||: y :||." placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |. Usa |/|, |-|, ||: y :|| para loops." ></textarea>
-          <div class="label" style="margin-top:8px">Guardar progresiones</div>
-          <div class="savedRow">
+
+    <div class="menuGroup">
+      <button class="menuBtn" type="button" data-menu-target="menuProgressions" aria-expanded="false" aria-haspopup="true">Progresiones</button>
+      <div class="menuPopup" id="menuProgressions" role="menu">
+        <div class="menuSection">
+          <div class="menuSectionTitle">Guardar progresiones</div>
+          <div class="menuGrid">
             <div>
               <div class="label">Nombre de progresión</div>
               <input id="progName" type="text" placeholder="Ej: Blues en F, Turnaround" />
             </div>
-            <div>
+            <div class="row" style="align-items:end;">
               <button class="btn primary" id="btnSaveProg" title="Guardar la progresión actual">Guardar</button>
             </div>
           </div>
-          <div class="savedRow">
+        </div>
+        <div class="menuSection">
+          <div class="menuSectionTitle">Administrar</div>
+          <div class="menuGrid">
             <div>
               <div class="label">Progresiones guardadas</div>
               <select id="savedProgSelect"></select>
             </div>
-            <div class="row" style="gap:8px">
+            <div class="menuRow">
               <button class="btn" id="btnLoadProg" title="Cargar la progresión seleccionada">Cargar</button>
               <button class="btn bad" id="btnDeleteProg" title="Eliminar la progresión seleccionada">Eliminar</button>
               <button class="btn ghost" id="btnExportProgs" title="Exportar todas las progresiones guardadas">Exportar</button>
               <button class="btn ghost" id="btnImportProgs" title="Cargar el archivo con progresiones exportadas">Cargar archivo</button>
             </div>
           </div>
-          <div class="savedMeta">
+          <div class="menuRow">
             <span class="badge" id="savedCount">0 guardadas</span>
             <input id="importProgFile" type="file" accept=".json,application/json" style="display:none" />
           </div>
-          <div class="pillRow" style="margin-top:8px">
-            <div class="pill status" id="qualityMismatch" title="Estado de coincidencia de calidades">
-              <span class="dot bad" id="qualityMismatchDot"></span>
-              <span id="qualityMismatchText">Carga referencias de audio para validar calidades.</span>
-            </div>
-          </div>
         </div>
       </div>
+    </div>
 
-      <div class="controlBar" data-draggable-container>
-        <div class="controlCluster draggable" data-draggable-item>
-          <div class="clusterTitle">Reproducción y export</div>
-          <div class="clusterActions">
-            <button class="btn primary" id="btnPlay" title="Reproducir la progresión usando tus referencias de audio">Reproducir</button>
-            <button class="btn bad" id="btnStop" title="Detener reproducción">Stop</button>
-            <button class="btn purple" id="btnExportAudio" title="Exportar el audio generado">Exportar audio</button>
-          </div>
-        </div>
-
-        <div class="controlCluster draggable" data-draggable-item>
-          <div class="clusterTitle">Carpetas de audio</div>
-          <div class="clusterActions">
+    <div class="menuGroup">
+      <button class="menuBtn" type="button" data-menu-target="menuAudio" aria-expanded="false" aria-haspopup="true">Audio</button>
+      <div class="menuPopup" id="menuAudio" role="menu">
+        <div class="menuSection">
+          <div class="menuSectionTitle">Carpetas de audio</div>
+          <div class="menuRow">
             <button class="btn" id="btnPickAudioFolder" title="Cargar una o más carpetas con archivos WAV de referencia">Cargar carpeta</button>
             <button class="btn ghost" id="btnAddAudioFolder" title="Agregar otra carpeta de instrumentos">+</button>
             <input id="audioFolderFallback" type="file" webkitdirectory style="display:none" />
           </div>
-          <div class="mini" id="audioFolderStatus" style="margin-top:8px">Sin instrumentos cargados.</div>
-          <div class="chips" id="audioFolderList" style="margin-top:6px"></div>
+          <div class="mini" id="audioFolderStatus">Sin instrumentos cargados.</div>
+          <div class="chips" id="audioFolderList"></div>
         </div>
-
-        <div class="controlCluster draggable" data-draggable-item>
-          <div class="clusterTitle">Loop base</div>
-          <div class="clusterActions">
+        <div class="menuSection">
+          <div class="menuSectionTitle">Loop base</div>
+          <div class="menuRow">
             <button class="btn ghost" id="btnLoopToggle" title="Activar o silenciar el loop base">Loop base: ON</button>
           </div>
           <div class="label">Volumen loop</div>
@@ -489,12 +521,17 @@
             <input id="loopVolume" type="range" min="0" max="1" step="0.01" value="0.6" />
             <span class="mini" id="loopVolumeValue">60%</span>
           </div>
-          <div class="mini" id="loopStatus" style="margin-top:6px">Sin loop cargado.</div>
+          <div class="mini" id="loopStatus">Sin loop cargado.</div>
         </div>
+      </div>
+    </div>
 
-        <div class="controlCluster draggable" data-draggable-item>
-          <div class="clusterTitle">Ajustes</div>
-          <div class="split">
+    <div class="menuGroup">
+      <button class="menuBtn" type="button" data-menu-target="menuSettings" aria-expanded="false" aria-haspopup="true">Ajustes</button>
+      <div class="menuPopup" id="menuSettings" role="menu">
+        <div class="menuSection">
+          <div class="menuSectionTitle">Parámetros globales</div>
+          <div class="menuGrid">
             <div>
               <div class="label">Compases por archivo</div>
               <input id="barsPerFile" type="number" min="1" max="256" value="24" />
@@ -548,6 +585,57 @@
               <input id="globalTranspose" type="number" min="-24" max="24" value="0" class="inputNumber" title="Sube o baja las fundamentales del cifrado por semitonos" />
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="menuGroup">
+      <button class="menuBtn" type="button" data-menu-target="menuStatus" aria-expanded="false" aria-haspopup="true">Estado</button>
+      <div class="menuPopup" id="menuStatus" role="menu">
+        <div class="menuSection">
+          <div class="menuSectionTitle">Referencias</div>
+          <div class="menuRow">
+            <div class="pill status" title="Estado de carga de referencias de audio">
+              <span class="dot bad" id="dotReady"></span>
+              <span id="readyText">No listo</span>
+            </div>
+            <div class="pill status" id="qualityMismatch" title="Estado de coincidencia de calidades">
+              <span class="dot bad" id="qualityMismatchDot"></span>
+              <span id="qualityMismatchText">Carga referencias de audio para validar calidades.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="menuGroup">
+      <button class="menuBtn" type="button" data-menu-target="menuHelp" aria-expanded="false" aria-haspopup="true">Ayuda</button>
+      <div class="menuPopup" id="menuHelp" role="menu">
+        <div class="menuSection">
+          <div class="menuSectionTitle">Soporte rápido</div>
+          <div class="menuRow">
+            <button class="btn ghost helpBtn" id="btnHelp" title="Abrir ayuda">
+              <span class="q">?</span><span>Ayuda</span>
+            </button>
+          </div>
+          <div class="menuFooter">Accede a la guía paso a paso y atajos.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card megaCard">
+    <div class="hd megaHd">
+      <div class="title">Panel principal</div>
+    </div>
+    <div class="megaBd">
+      <div class="sectionGrid">
+        <div class="sectionCard">
+          <div class="sectionTitle">Progresión y calidades</div>
+          <div class="label">Cifrados disponibles (calidades) <span class="mini">(clic para insertar)</span></div>
+          <div class="chips" id="qualityChips"></div>
+          <div class="label" style="margin-top:8px">Progresión</div>
+          <textarea id="prog" spellcheck="false" title="Escribe la progresión usando barras: | Cmaj7 | o | Dm7 G7 |. Usa |/|, |-|, ||: y :||." placeholder="Escribe una progresión con barras. Ej: | Cmaj7 | o | Dm7 G7 |. Usa |/|, |-|, ||: y :|| para loops." ></textarea>
         </div>
       </div>
 
@@ -2622,6 +2710,8 @@
   const btnHelp = el("btnHelp");
   const btnHelpClose = el("btnHelpClose");
   const helpModal = el("helpModal");
+  const menuButtons = [...document.querySelectorAll("[data-menu-target]")];
+  const menuGroups = [...document.querySelectorAll(".menuGroup")];
 
   const getDragInsertTarget = (container, x, y) => {
     const items = [...container.querySelectorAll(":scope > [data-draggable-item]:not(.dragging)")];
@@ -2699,6 +2789,44 @@
   btnHelpClose.addEventListener("click", closeHelp);
   helpModal.addEventListener("click", (e) => { if (e.target === helpModal) closeHelp(); });
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelp(); });
+
+  const closeMenus = (exceptId = "") => {
+    menuGroups.forEach((group) => {
+      const button = group.querySelector("[data-menu-target]");
+      const popupId = button?.getAttribute("data-menu-target") || "";
+      const popup = popupId ? document.getElementById(popupId) : null;
+      if (!popup || popupId === exceptId) return;
+      popup.classList.remove("open");
+      if (button) button.setAttribute("aria-expanded", "false");
+    });
+  };
+
+  menuButtons.forEach((button) => {
+    const popupId = button.getAttribute("data-menu-target");
+    const popup = popupId ? document.getElementById(popupId) : null;
+    if (!popup) return;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const isOpen = popup.classList.contains("open");
+      closeMenus();
+      if (!isOpen) {
+        popup.classList.add("open");
+        button.setAttribute("aria-expanded", "true");
+      } else {
+        popup.classList.remove("open");
+        button.setAttribute("aria-expanded", "false");
+      }
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".menuGroup")) return;
+    closeMenus();
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeMenus();
+  });
 
   el("btnPickAudioFolder").addEventListener("click", () => loadAudioFolder({ reset: true, allowMultiple: true }));
   el("btnAddAudioFolder").addEventListener("click", () => loadAudioFolder({ reset: false, allowMultiple: true }));
