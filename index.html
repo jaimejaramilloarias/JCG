@@ -87,6 +87,9 @@
     .heroMeta{display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:flex-end;}
     .controlBar{display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; align-items:stretch;}
     .controlCluster{border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:8px 10px; background: linear-gradient(180deg, rgba(19,26,38,.98), rgba(15,22,34,.98)); display:flex; flex-direction:column; gap:6px; box-shadow: 0 12px 24px rgba(0,0,0,.4); position:relative; overflow:hidden;}
+    .controlCluster.draggable{cursor:grab;}
+    .controlCluster.dragging{opacity:.6; transform:scale(.99); cursor:grabbing;}
+    .controlCluster.drag-target{outline:2px dashed rgba(47,129,247,.6); outline-offset:3px;}
     .controlCluster::before{content:""; position:absolute; inset:0; background: linear-gradient(135deg, rgba(47,129,247,.12), rgba(45,57,78,.18) 55%, transparent 90%); opacity:.8; pointer-events:none;}
     .controlCluster > *{position:relative;}
     .clusterTitle{font-size:11px; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; font-weight:800;}
@@ -455,8 +458,8 @@
         </div>
       </div>
 
-      <div class="controlBar">
-        <div class="controlCluster">
+      <div class="controlBar" data-draggable-container>
+        <div class="controlCluster draggable" data-draggable-item>
           <div class="clusterTitle">Reproducción y export</div>
           <div class="clusterActions">
             <button class="btn primary" id="btnPlay" title="Reproducir la progresión usando tus referencias de audio">Reproducir</button>
@@ -465,7 +468,7 @@
           </div>
         </div>
 
-        <div class="controlCluster">
+        <div class="controlCluster draggable" data-draggable-item>
           <div class="clusterTitle">Carpetas de audio</div>
           <div class="clusterActions">
             <button class="btn" id="btnPickAudioFolder" title="Cargar una o más carpetas con archivos WAV de referencia">Cargar carpeta</button>
@@ -476,7 +479,7 @@
           <div class="chips" id="audioFolderList" style="margin-top:6px"></div>
         </div>
 
-        <div class="controlCluster">
+        <div class="controlCluster draggable" data-draggable-item>
           <div class="clusterTitle">Loop base</div>
           <div class="clusterActions">
             <button class="btn ghost" id="btnLoopToggle" title="Activar o silenciar el loop base">Loop base: ON</button>
@@ -489,7 +492,7 @@
           <div class="mini" id="loopStatus" style="margin-top:6px">Sin loop cargado.</div>
         </div>
 
-        <div class="controlCluster">
+        <div class="controlCluster draggable" data-draggable-item>
           <div class="clusterTitle">Ajustes</div>
           <div class="split">
             <div>
@@ -1398,6 +1401,7 @@
     if (!parsed) return;
 
     const bars = parsed.bars || [];
+    const claveMode = parsed.claveMode;
     bars.forEach((barInfo) => {
       const barRow = document.createElement("div");
       barRow.className = "barRow";
@@ -2384,6 +2388,7 @@
 
     const segments = parsed.segments;
     const bars = parsed.bars || [];
+    const claveMode = parsed.claveMode;
     if (!segments.length) {
       log("No hay acordes para exportar.", "ERROR");
       return;
@@ -2511,6 +2516,71 @@
   const btnHelp = el("btnHelp");
   const btnHelpClose = el("btnHelpClose");
   const helpModal = el("helpModal");
+
+  const getDragInsertTarget = (container, x, y) => {
+    const items = [...container.querySelectorAll(":scope > [data-draggable-item]:not(.dragging)")];
+    if (!items.length) return null;
+    let closest = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const distance = Math.hypot(x - centerX, y - centerY);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closest = item;
+      }
+    }
+    if (!closest) return null;
+    const rect = closest.getBoundingClientRect();
+    const midpointY = rect.top + rect.height / 2;
+    const midpointX = rect.left + rect.width / 2;
+    const before = y < midpointY || (Math.abs(y - midpointY) < rect.height / 5 && x < midpointX);
+    return before ? closest : closest.nextElementSibling;
+  };
+
+  const initDraggableContainers = () => {
+    document.querySelectorAll("[data-draggable-container]").forEach((container) => {
+      const getItems = () => [...container.querySelectorAll(":scope > [data-draggable-item]")];
+      getItems().forEach((item) => {
+        item.setAttribute("draggable", "true");
+        item.addEventListener("dragstart", (event) => {
+          item.classList.add("dragging");
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", "");
+        });
+        item.addEventListener("dragend", () => {
+          item.classList.remove("dragging");
+          getItems().forEach((panel) => panel.classList.remove("drag-target"));
+        });
+        item.addEventListener("dragenter", () => {
+          if (!item.classList.contains("dragging")) {
+            item.classList.add("drag-target");
+          }
+        });
+        item.addEventListener("dragleave", () => {
+          item.classList.remove("drag-target");
+        });
+      });
+      container.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        const dragging = container.querySelector(":scope > .dragging");
+        if (!dragging) return;
+        const insertBefore = getDragInsertTarget(container, event.clientX, event.clientY);
+        if (!insertBefore) {
+          container.appendChild(dragging);
+        } else {
+          container.insertBefore(dragging, insertBefore);
+        }
+      });
+      container.addEventListener("drop", (event) => {
+        event.preventDefault();
+        getItems().forEach((panel) => panel.classList.remove("drag-target"));
+      });
+    });
+  };
+
   const openHelp = () => {
     helpModal.classList.add("open");
     helpModal.setAttribute("aria-hidden", "false");
@@ -2573,6 +2643,7 @@
   });
 
   prog.value = "";
+  initDraggableContainers();
   renderQualityChips();
   renderMixer();
   renderSavedProgressions(getSavedProgressions());
