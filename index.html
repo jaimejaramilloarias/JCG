@@ -664,12 +664,13 @@
       </div>
     </div>
     <div class="modalBd">
-      <p><b>Guía amigable paso a paso</b></p>
+      <p><b>Guía completa y específica del flujo</b></p>
       <ul>
-        <li><b>1) Prepara tus WAVs:</b> cada archivo debe nombrarse como <span class="kbd">calidad__instrumento.wav</span> o <span class="kbd">calidad_instrumento.wav</span>. Ejemplos: <span class="kbd">maj7__piano.wav</span>, <span class="kbd">m7_guitarra.wav</span>, <span class="kbd">7alt__rhodes.wav</span>. El texto antes del separador es la <i>calidad</i> (maj7, m7, 7b9, ø7, etc.).</li>
-        <li><b>2) Carga tu carpeta:</b> pulsa <span class="kbd">Cargar carpeta</span>. Al cargar, revisa el indicador de <b>Calidades detectadas</b> para confirmar que el sistema reconoce todo lo que necesitas.</li>
-        <li><b>3) Ajusta la base:</b> define <span class="kbd">Compases por archivo</span>, <span class="kbd">Compases por acorde</span>, el <span class="kbd">BPM fijo</span> de referencia y la <span class="kbd">Fundamental inicial</span>. Estos parámetros determinan cómo se alinean los audios con tu progresión.</li>
-        <li><b>4) Escribe la progresión:</b> usa barras para separar compases. Ejemplo: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>. Puedes usar:
+        <li><b>1) Prepara tus WAVs (nomenclatura obligatoria):</b> cada archivo debe llamarse <span class="kbd">calidad__instrumento.wav</span> o <span class="kbd">calidad_instrumento.wav</span>. Ejemplos: <span class="kbd">maj7__piano.wav</span>, <span class="kbd">m7_guitarra.wav</span>, <span class="kbd">7alt__rhodes.wav</span>. El texto antes del separador es la <i>calidad</i> (maj7, m7, 7b9, ø7, sus4, etc.) y el texto después es el <i>instrumento</i> (piano, bajo, batería...).</li>
+        <li><b>2) Carga carpetas de audio:</b> en <span class="kbd">Audio → Cargar carpeta</span> selecciona la carpeta con tus WAVs. Comprueba el indicador de <b>Calidades detectadas</b> y el estado <b>Listo / No listo</b> para confirmar que todo lo necesario está disponible.</li>
+        <li><b>3) Valida calidades y referencias:</b> si aparece el aviso de <b>Calidades no coinciden</b>, revisa que tus archivos cubran todas las calidades que usas en la progresión. Cargar referencias de audio correctas hará que el estado pase a verde.</li>
+        <li><b>4) Ajusta parámetros globales:</b> define <span class="kbd">Compases por archivo</span>, <span class="kbd">Compases por acorde</span>, el <span class="kbd">BPM fijo</span> y la <span class="kbd">Fundamental inicial</span>. Estos valores determinan cómo se recortan y sincronizan los audios con tu progresión.</li>
+        <li><b>5) Escribe la progresión:</b> usa barras para separar compases. Ejemplo: <span class="kbd">| Dm7 G7 | Cmaj7 |</span>. Puedes usar:
           <ul>
             <li><span class="kbd">|/|</span> para mutear instrumentos dentro de un compás.</li>
             <li><span class="kbd">|-|</span> para mutear todo el compás.</li>
@@ -677,12 +678,18 @@
             <li><span class="kbd">2-3</span> o <span class="kbd">3-2</span> al inicio para aplicar clave.</li>
           </ul>
         </li>
-        <li><b>5) Transposición:</b> el control <span class="kbd">Transposición</span> sube o baja las <b>fundamentales</b> de los acordes en semitonos <i>sin alterar sus calidades</i>. Ejemplo: si subes +2, <span class="kbd">Dm7</span> pasa a <span class="kbd">Em7</span> y <span class="kbd">G7</span> pasa a <span class="kbd">A7</span>.</li>
-        <li><b>6) Mezclador:</b> ajusta volumen, mute y solo por instrumento para construir tu balance. El resumen del mezclador te indica cuántos instrumentos están activos.</li>
-        <li><b>7) Guardar y recuperar:</b> usa <span class="kbd">Guardar</span> para registrar una progresión, <span class="kbd">Exportar</span> para descargar todas, y <span class="kbd">Cargar archivo</span> para reimportarlas más tarde.</li>
-        <li><b>8) Escuchar y exportar:</b> pulsa <span class="kbd">Reproducir</span> para escuchar, <span class="kbd">Stop</span> para detener y <span class="kbd">Exportar audio</span> para generar un WAV final.</li>
+        <li><b>6) Transposición global:</b> el control <span class="kbd">Transposición</span> mueve las <b>fundamentales</b> en semitonos sin cambiar las calidades. Ejemplo: si subes +2, <span class="kbd">Dm7</span> → <span class="kbd">Em7</span> y <span class="kbd">G7</span> → <span class="kbd">A7</span>.</li>
+        <li><b>7) Mezclador por instrumento:</b> ajusta volumen, mute y solo. El resumen del mezclador indica cuántos instrumentos están activos; si aparece “0 instrumentos”, vuelve a cargar la carpeta.</li>
+        <li><b>8) Guardar, cargar y exportar progresiones:</b> usa <span class="kbd">Guardar</span> para registrar una progresión con nombre, <span class="kbd">Exportar</span> para descargar todas, y <span class="kbd">Cargar archivo</span> para importar un respaldo.</li>
+        <li><b>9) Reproducir y exportar audio:</b> pulsa <span class="kbd">Reproducir</span> para escuchar, <span class="kbd">Stop</span> para detener y <span class="kbd">Exportar audio</span> para generar un WAV final con la mezcla actual.</li>
       </ul>
-      <p class="mini">Atajo: <span class="kbd">Espacio</span> alterna Reproducir / Stop (cuando no estás escribiendo en un campo de texto).</p>
+      <p><b>Atajos y tips útiles</b></p>
+      <ul>
+        <li><span class="kbd">Espacio</span> alterna Reproducir / Stop (cuando no estás escribiendo en un campo de texto).</li>
+        <li>Si no oyes nada, revisa: <b>Listo</b> en verde, calidades detectadas y que no estés en <b>Solo</b> con un instrumento silenciado.</li>
+        <li>Si el tempo suena mal, confirma que el <b>BPM fijo</b> coincide con el tempo original de tus WAVs.</li>
+      </ul>
+      <p class="mini">Consejo: nombra siempre con el mismo separador (<span class="kbd">__</span> o <span class="kbd">_</span>) para evitar calidades duplicadas.</p>
 
     </div>
   </div>
