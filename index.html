@@ -1039,7 +1039,7 @@
   };
 
   const parseProgression = (text, opts = {}) => {
-    const { maxChordsPerBar = 4 } = opts;
+    const { maxChordsPerBar = 4, applyClaveAnticipations: applyClave = true } = opts;
     const { claveMode, strippedText } = extractClavePrefix(text.replace(/\r/g, ""));
     const raw = strippedText.trim();
     if (!raw) throw new Error("Escribe una progresión.");
@@ -1134,18 +1134,12 @@
       addBar(chords, rawBar, barIndex);
     }
 
-    applyClaveAnticipations(segments, eighthsPerBar, claveMode);
+    if (applyClave) {
+      applyClaveAnticipations(segments, eighthsPerBar, claveMode);
+    }
 
     const totalEighth = parts.length * eighthsPerBar;
-    if (segments.length >= 2) {
-      for (let i = 0; i < segments.length - 1; i++) {
-        segments[i].durEighth = segments[i + 1].startEighth - segments[i].startEighth;
-      }
-      segments[segments.length - 1].durEighth = totalEighth - segments[segments.length - 1].startEighth;
-      for (const s of segments) {
-        s.durEighth = Math.max(1, s.durEighth);
-      }
-    }
+    normalizeSegmentDurations(segments, totalEighth);
 
     return { segments, totalEighth, totalBars: parts.length, bars, claveMode };
   };
@@ -1237,6 +1231,54 @@
         } else {
           applyThreeSideShifts(barB);
         }
+      }
+    }
+
+    return segments;
+  };
+
+  const normalizeSegmentDurations = (segments, totalEighth) => {
+    if (segments.length >= 2) {
+      for (let i = 0; i < segments.length - 1; i++) {
+        segments[i].durEighth = segments[i + 1].startEighth - segments[i].startEighth;
+      }
+      segments[segments.length - 1].durEighth = totalEighth - segments[segments.length - 1].startEighth;
+      for (const s of segments) {
+        s.durEighth = Math.max(1, s.durEighth);
+      }
+    }
+  };
+
+  const applyBassClaveAnticipations = (segments, eighthsPerBar, claveMode) => {
+    if (!segments.length || eighthsPerBar !== 8) return segments;
+    if (claveMode !== "2-3" && claveMode !== "3-2") return segments;
+
+    const byBar = new Map();
+    for (const seg of segments) {
+      if (seg.type !== "chord") continue;
+      if (!byBar.has(seg.barIndex)) byBar.set(seg.barIndex, []);
+      byBar.get(seg.barIndex).push(seg);
+    }
+
+    const sortedBars = [...byBar.keys()].sort((a, b) => a - b);
+    const applyShift = (segment, shift) => {
+      segment.startEighth = Math.max(0, segment.startEighth - shift);
+    };
+
+    for (const barIndex of sortedBars) {
+      const bar = byBar.get(barIndex) || [];
+      if (bar.length !== 2 || bar[0].barChordCount !== 2) continue;
+
+      const secondChord = bar.find((seg) => seg.barChordIndex === 1) || bar[1];
+      if (secondChord) {
+        applyShift(secondChord, 1);
+      }
+
+      const nextBar = byBar.get(barIndex + 1);
+      if (!nextBar || !nextBar.length) continue;
+      const firstChord = nextBar.find((seg) => seg.barChordIndex === 0) || nextBar[0];
+      if (firstChord) {
+        applyShift(firstChord, 2);
       }
     }
 
@@ -1543,6 +1585,8 @@
     if (getAnySolo() && !track.solo) return 0;
     return Math.max(0, Math.min(1, track.volume));
   };
+
+  const isBassInstrumentName = (name) => /contrabajo|bajo|bass/i.test(name || "");
 
   const updateMixerSummary = () => {
     if (!mixerSummary) return;
@@ -2138,8 +2182,22 @@
   const buildAudioSegments = () => {
     const repeatedText = repeatProgressionText(prog.value, repeatCount.value);
     const parsed = parseProgression(repeatedText, { maxChordsPerBar: 4 });
+    let bassSegments = parsed.segments;
+    if (parsed.claveMode === "2-3" || parsed.claveMode === "3-2") {
+      const baseParsed = parseProgression(repeatedText, {
+        maxChordsPerBar: 4,
+        applyClaveAnticipations: false,
+      });
+      bassSegments = applyBassClaveAnticipations(
+        baseParsed.segments,
+        getEighthsPerBar(),
+        baseParsed.claveMode,
+      );
+      normalizeSegmentDurations(bassSegments, baseParsed.totalEighth);
+    }
     return {
       segments: parsed.segments,
+      bassSegments,
       bars: parsed.bars,
       totalEighth: parsed.totalEighth,
       claveMode: parsed.claveMode,
@@ -2213,6 +2271,7 @@
     }
 
     const segments = parsed.segments;
+    const bassSegments = parsed.bassSegments || segments;
     const bars = parsed.bars || [];
     const claveMode = parsed.claveMode;
     if (!segments.length) {
@@ -2283,7 +2342,8 @@
       const trackGain = getTrackEffectiveVolume(track);
       if (trackGain <= 0) continue;
 
-      for (const seg of segments) {
+      const trackSegments = isBassInstrumentName(track.name) ? bassSegments : segments;
+      for (const seg of trackSegments) {
         if (seg.type !== "chord") continue;
         const buffer = track.buffersByQuality.get(seg.quality);
         const rootBarStart = rootBarMap.get(seg.rootSemi);
@@ -2385,6 +2445,7 @@
     }
 
     const segments = parsed.segments;
+    const bassSegments = parsed.bassSegments || segments;
     const bars = parsed.bars || [];
     const claveMode = parsed.claveMode;
     if (!segments.length) {
@@ -2460,7 +2521,8 @@
       const trackGain = getTrackEffectiveVolume(track);
       if (trackGain <= 0) continue;
 
-      for (const seg of segments) {
+      const trackSegments = isBassInstrumentName(track.name) ? bassSegments : segments;
+      for (const seg of trackSegments) {
         if (seg.type !== "chord") continue;
         const buffer = track.buffersByQuality.get(seg.quality);
         const rootBarStart = rootBarMap.get(seg.rootSemi);
