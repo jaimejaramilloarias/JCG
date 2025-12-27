@@ -1046,6 +1046,11 @@
     return Math.max(1, eighths);
   };
 
+  const getEighthsPerBeat = () => {
+    const { den } = getTimeSignature();
+    return Math.max(1, 8 / den);
+  };
+
   const durationsForBar = (chordCount, eighthsPerBar) => {
     if (eighthsPerBar === 8) {
       if (chordCount === 1) return [8];
@@ -1444,6 +1449,11 @@
     return (60 / bpm) * num;
   };
 
+  const getRefSecondsPerBeat = () => {
+    const bpm = getRefBpm();
+    return 60 / bpm;
+  };
+
   const getRefSecondsPerEighth = () => {
     const { den } = getTimeSignature();
     const bpm = getRefBpm();
@@ -1736,8 +1746,10 @@
     const barParts = cleaned ? cleaned.split("|").map((part) => part.trim()).filter(Boolean) : [];
     const bars = [];
     for (const bar of barParts) {
-      const matches = bar.match(/-?\d+/g) || [];
-      const values = matches.map((val) => parseInt(val, 10)).filter(Number.isFinite);
+      const matches = bar.match(/-?\d+(?:[.,]\d+)?/g) || [];
+      const values = matches
+        .map((val) => parseFloat(val.replace(",", ".")))
+        .filter(Number.isFinite);
       bars.push(values.length ? values : [0]);
     }
     while (bars.length < ANTICIPATION_BARS) bars.push([0]);
@@ -1745,7 +1757,16 @@
     return bars;
   };
 
-  const formatAnticipationPattern = (bars) => `|${bars.map((bar) => bar.join(" ")).join("|")}|`;
+  const formatAnticipationValue = (value) => {
+    if (!Number.isFinite(value)) return "0";
+    const rounded = Math.round(value * 100) / 100;
+    if (Number.isInteger(rounded)) return String(rounded);
+    return String(rounded).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+  };
+
+  const formatAnticipationPattern = (bars) => (
+    `|${bars.map((bar) => bar.map(formatAnticipationValue).join(" ")).join("|")}|`
+  );
 
   const buildClaveBasePattern = (claveMode, useBass) => {
     if (!claveMode || claveMode === "none") return null;
@@ -1760,13 +1781,14 @@
       applyClaveAnticipations(shifted, eighthsPerBar, claveMode);
     }
     const shiftsByBar = Array.from({ length: ANTICIPATION_BARS }, () => []);
+    const eighthsPerBeat = getEighthsPerBeat();
     for (const baseSeg of baseSegments) {
       if (baseSeg.barIndex >= ANTICIPATION_BARS) continue;
       const shiftedSeg = shifted.find(
         (seg) => seg.barIndex === baseSeg.barIndex && seg.barChordIndex === baseSeg.barChordIndex
       );
       if (!shiftedSeg) continue;
-      const delta = Math.round(shiftedSeg.startEighth - baseSeg.startEighth);
+      const delta = (shiftedSeg.startEighth - baseSeg.startEighth) / eighthsPerBeat;
       shiftsByBar[baseSeg.barIndex][baseSeg.barChordIndex] = delta;
     }
     for (const bar of shiftsByBar) {
@@ -2607,6 +2629,8 @@
 
     const ctx = ensureAudioContext();
     const secPerEighth = getRefSecondsPerEighth();
+    const secPerBeat = getRefSecondsPerBeat();
+    const secPerBeat = getRefSecondsPerBeat();
     const barSeconds = getRefBarSeconds();
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
     const loopAudible = loopEnabled && (baseLoopBuffers.length || altLoopBuffers.length) && getLoopVolume() > 0;
@@ -2652,8 +2676,8 @@
         const offsetSeconds = offsetEighthInSegment * secPerEighth;
         const loopStart = rootBarStart * barSeconds;
 
-        const anticipationEighths = getTrackAnticipationShift(track, seg);
-        const anticipationSeconds = anticipationEighths * secPerEighth;
+        const anticipationBeats = getTrackAnticipationShift(track, seg);
+        const anticipationSeconds = anticipationBeats * secPerBeat;
         const startTime = baseTime + seg.startEighth * secPerEighth + anticipationSeconds;
         const endTime = startTime + seg.durEighth * secPerEighth;
         const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
@@ -2834,8 +2858,8 @@
         const offsetSeconds = offsetEighthInSegment * secPerEighth;
         const loopStart = rootBarStart * barSeconds;
 
-        const anticipationEighths = getTrackAnticipationShift(track, seg);
-        const anticipationSeconds = anticipationEighths * secPerEighth;
+        const anticipationBeats = getTrackAnticipationShift(track, seg);
+        const anticipationSeconds = anticipationBeats * secPerBeat;
         const desiredStart = seg.startEighth * secPerEighth + anticipationSeconds;
         const desiredEnd = desiredStart + seg.durEighth * secPerEighth;
         const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
