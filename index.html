@@ -1741,12 +1741,58 @@
     }
     while (bars.length < ANTICIPATION_BARS) bars.push([0]);
     if (bars.length > ANTICIPATION_BARS) bars.length = ANTICIPATION_BARS;
-    const normalized = `|${bars.map((bar) => bar.join(" ")).join("|")}|`;
-    return { bars, normalized };
+    return bars;
+  };
+
+  const formatAnticipationPattern = (bars) => `|${bars.map((bar) => bar.join(" ")).join("|")}|`;
+
+  const buildClaveBasePattern = (claveMode, useBass) => {
+    if (!claveMode || claveMode === "none") return null;
+    const eighthsPerBar = getEighthsPerBar();
+    if (eighthsPerBar !== 8) return null;
+    const baseParsed = parseProgression("|Cmaj7 Dm7|G7 Cmaj7|", { applyClaveAnticipations: false });
+    const baseSegments = baseParsed.segments.filter((seg) => seg.type === "chord");
+    const shifted = baseSegments.map((seg) => ({ ...seg }));
+    if (useBass) {
+      applyBassClaveAnticipations(shifted, eighthsPerBar, claveMode);
+    } else {
+      applyClaveAnticipations(shifted, eighthsPerBar, claveMode);
+    }
+    const shiftsByBar = Array.from({ length: ANTICIPATION_BARS }, () => []);
+    for (const baseSeg of baseSegments) {
+      if (baseSeg.barIndex >= ANTICIPATION_BARS) continue;
+      const shiftedSeg = shifted.find(
+        (seg) => seg.barIndex === baseSeg.barIndex && seg.barChordIndex === baseSeg.barChordIndex
+      );
+      if (!shiftedSeg) continue;
+      const delta = Math.round(shiftedSeg.startEighth - baseSeg.startEighth);
+      shiftsByBar[baseSeg.barIndex][baseSeg.barChordIndex] = delta;
+    }
+    for (const bar of shiftsByBar) {
+      if (!bar.length) bar.push(0);
+    }
+    return shiftsByBar;
+  };
+
+  const combineAnticipationPatterns = (base, overlay, op = "add") => {
+    const result = [];
+    for (let bar = 0; bar < ANTICIPATION_BARS; bar += 1) {
+      const baseBar = base?.[bar] || [];
+      const overlayBar = overlay?.[bar] || [];
+      const maxLen = Math.max(baseBar.length, overlayBar.length, 1);
+      const combinedBar = [];
+      for (let idx = 0; idx < maxLen; idx += 1) {
+        const baseVal = baseBar[idx] ?? baseBar[baseBar.length - 1] ?? 0;
+        const overlayVal = overlayBar[idx] ?? overlayBar[overlayBar.length - 1] ?? 0;
+        combinedBar.push(op === "subtract" ? baseVal - overlayVal : baseVal + overlayVal);
+      }
+      result.push(combinedBar);
+    }
+    return result;
   };
 
   const getTrackAnticipationShift = (track, seg) => {
-    const pattern = track?.anticipationPattern;
+    const pattern = track?.anticipationUserPattern;
     if (!pattern || !pattern.length) return 0;
     const barIndex = seg.barIndex % ANTICIPATION_BARS;
     const barPattern = pattern[barIndex] || [];
@@ -1773,8 +1819,16 @@
       instrumentAnticipations.appendChild(empty);
       return;
     }
+    const { claveMode } = extractClavePrefix((prog?.value || "").trim());
 
     for (const track of audioTracks) {
+      if (!track.anticipationUserPattern) {
+        if (track.anticipationPattern) {
+          track.anticipationUserPattern = track.anticipationPattern;
+        } else {
+          track.anticipationUserPattern = parseAnticipationPattern(DEFAULT_ANTICIPATION_PATTERN);
+        }
+      }
       const row = document.createElement("div");
       row.className = "anticipationRow";
 
@@ -1786,29 +1840,36 @@
       input.type = "text";
       input.className = "mono";
       input.placeholder = DEFAULT_ANTICIPATION_PATTERN;
-
-      if (!track.anticipationText) {
-        const parsed = parseAnticipationPattern(DEFAULT_ANTICIPATION_PATTERN);
-        track.anticipationText = parsed.normalized;
-        track.anticipationPattern = parsed.bars;
-      } else if (!track.anticipationPattern) {
-        const parsed = parseAnticipationPattern(track.anticipationText);
-        track.anticipationPattern = parsed.bars;
-      }
-
-      input.value = track.anticipationText || DEFAULT_ANTICIPATION_PATTERN;
+      const clavePattern = buildClaveBasePattern(claveMode, isBassInstrumentName(track.name)) || null;
+      const combinedPattern = combineAnticipationPatterns(
+        track.anticipationUserPattern,
+        clavePattern,
+        "add"
+      );
+      input.value = formatAnticipationPattern(combinedPattern);
 
       input.addEventListener("input", () => {
         const parsed = parseAnticipationPattern(input.value);
-        track.anticipationPattern = parsed.bars;
-        track.anticipationText = input.value;
+        track.anticipationUserPattern = combineAnticipationPatterns(
+          parsed,
+          clavePattern,
+          "subtract"
+        );
       });
 
       input.addEventListener("blur", () => {
         const parsed = parseAnticipationPattern(input.value);
-        track.anticipationPattern = parsed.bars;
-        track.anticipationText = parsed.normalized;
-        input.value = parsed.normalized;
+        track.anticipationUserPattern = combineAnticipationPatterns(
+          parsed,
+          clavePattern,
+          "subtract"
+        );
+        const nextCombined = combineAnticipationPatterns(
+          track.anticipationUserPattern,
+          clavePattern,
+          "add"
+        );
+        input.value = formatAnticipationPattern(nextCombined);
       });
 
       row.appendChild(label);
@@ -2153,8 +2214,7 @@
             mute: false,
             solo: false,
             qualities: [],
-            anticipationText: DEFAULT_ANTICIPATION_PATTERN,
-            anticipationPattern: parseAnticipationPattern(DEFAULT_ANTICIPATION_PATTERN).bars,
+            anticipationUserPattern: parseAnticipationPattern(DEFAULT_ANTICIPATION_PATTERN),
           });
         }
         const track = tracksByInstrument.get(instrument);
@@ -2971,7 +3031,10 @@
     if (btnDeleteProg) btnDeleteProg.disabled = !savedProgSelect.value;
   });
 
-  prog.addEventListener("input", updateQualityMismatch);
+  prog.addEventListener("input", () => {
+    updateQualityMismatch();
+    renderInstrumentAnticipations();
+  });
   repeatCount.addEventListener("input", updateQualityMismatch);
   barsPerFileInput.addEventListener("input", updateQualityMismatch);
   barsPerChordInput.addEventListener("input", updateQualityMismatch);
