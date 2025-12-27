@@ -1439,14 +1439,15 @@
   };
 
   const getRefBarSeconds = () => {
-    const { num, den } = getTimeSignature();
+    const { num } = getTimeSignature();
     const bpm = getRefBpm();
-    return (60 / bpm) * num * (4 / den);
+    return (60 / bpm) * num;
   };
 
   const getRefSecondsPerEighth = () => {
+    const { den } = getTimeSignature();
     const bpm = getRefBpm();
-    return (60 / bpm) / 2;
+    return (60 / bpm) * (den / 8);
   };
 
   const getClaveReferenceOffsetSeconds = (claveMode, barSeconds, barsPerChord) => {
