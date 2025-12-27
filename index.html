@@ -2630,7 +2630,6 @@
     const ctx = ensureAudioContext();
     const secPerEighth = getRefSecondsPerEighth();
     const secPerBeat = getRefSecondsPerBeat();
-    const secPerBeat = getRefSecondsPerBeat();
     const barSeconds = getRefBarSeconds();
     const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
     const loopAudible = loopEnabled && (baseLoopBuffers.length || altLoopBuffers.length) && getLoopVolume() > 0;
