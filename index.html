@@ -267,6 +267,9 @@
     .menuRow{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
     .menuGrid{display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:8px;}
     .menuFooter{font-size:11px; color:var(--muted);}
+    .anticipationList{display:flex; flex-direction:column; gap:8px;}
+    .anticipationRow{display:grid; grid-template-columns: minmax(140px, 1fr) minmax(220px, 2fr); gap:8px; align-items:center;}
+    .anticipationRow input[type="text"]{width:100%;}
 
     .topActions{display:flex; gap:8px; align-items:center}
     .btn.ghost{background: rgba(91,59,206,.12); border-color: rgba(167,139,250,.55); color:var(--txt)}
@@ -587,6 +590,11 @@
             </div>
           </div>
         </div>
+        <div class="menuSection">
+          <div class="menuSectionTitle">Anticipaciones por instrumento</div>
+          <div class="mini">Escribe dos compases con números (0 = sin anticipar, negativos = anticipar). Ej: <span class="kbd">|0 -1|-2 -1|</span></div>
+          <div class="anticipationList" id="instrumentAnticipations"></div>
+        </div>
       </div>
     </div>
 
@@ -714,6 +722,7 @@
   const mixerGrid = el("mixerGrid");
   const mixerEmpty = el("mixerEmpty");
   const mixerSummary = el("mixerSummary");
+  const instrumentAnticipations = el("instrumentAnticipations");
 
   const prog = el("prog");
   const progName = el("progName");
@@ -735,6 +744,9 @@
   const startRootInput = el("startRoot");
   const loopVolumeInput = el("loopVolume");
   const loopVolumeValue = el("loopVolumeValue");
+
+  const DEFAULT_ANTICIPATION_PATTERN = "|0 0|0 0|";
+  const ANTICIPATION_BARS = 2;
   const btnLoopToggle = el("btnLoopToggle");
 
   const NOTE_TO_SEMI = new Map([
@@ -1718,11 +1730,91 @@
 
   const isBassInstrumentName = (name) => /contrabajo|bajo|bass/i.test(name || "");
 
+  const parseAnticipationPattern = (text) => {
+    const cleaned = (text || "").trim();
+    const barParts = cleaned ? cleaned.split("|").map((part) => part.trim()).filter(Boolean) : [];
+    const bars = [];
+    for (const bar of barParts) {
+      const matches = bar.match(/-?\d+/g) || [];
+      const values = matches.map((val) => parseInt(val, 10)).filter(Number.isFinite);
+      bars.push(values.length ? values : [0]);
+    }
+    while (bars.length < ANTICIPATION_BARS) bars.push([0]);
+    if (bars.length > ANTICIPATION_BARS) bars.length = ANTICIPATION_BARS;
+    const normalized = `|${bars.map((bar) => bar.join(" ")).join("|")}|`;
+    return { bars, normalized };
+  };
+
+  const getTrackAnticipationShift = (track, seg) => {
+    const pattern = track?.anticipationPattern;
+    if (!pattern || !pattern.length) return 0;
+    const barIndex = seg.barIndex % ANTICIPATION_BARS;
+    const barPattern = pattern[barIndex] || [];
+    if (!barPattern.length) return 0;
+    const fallback = barPattern[barPattern.length - 1] ?? 0;
+    const value = barPattern[seg.barChordIndex] ?? fallback;
+    return Number.isFinite(value) ? value : 0;
+  };
+
   const updateMixerSummary = () => {
     if (!mixerSummary) return;
     const count = audioTracks.length;
     const soloActive = getAnySolo();
     mixerSummary.textContent = `${count} instrumento${count === 1 ? "" : "s"}${soloActive ? " · Solo activo" : ""}`;
+  };
+
+  const renderInstrumentAnticipations = () => {
+    if (!instrumentAnticipations) return;
+    instrumentAnticipations.innerHTML = "";
+    if (!audioTracks.length) {
+      const empty = document.createElement("div");
+      empty.className = "mini";
+      empty.textContent = "Carga instrumentos para editar anticipaciones.";
+      instrumentAnticipations.appendChild(empty);
+      return;
+    }
+
+    for (const track of audioTracks) {
+      const row = document.createElement("div");
+      row.className = "anticipationRow";
+
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = track.name;
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "mono";
+      input.placeholder = DEFAULT_ANTICIPATION_PATTERN;
+
+      if (!track.anticipationText) {
+        const parsed = parseAnticipationPattern(DEFAULT_ANTICIPATION_PATTERN);
+        track.anticipationText = parsed.normalized;
+        track.anticipationPattern = parsed.bars;
+      } else if (!track.anticipationPattern) {
+        const parsed = parseAnticipationPattern(track.anticipationText);
+        track.anticipationPattern = parsed.bars;
+      }
+
+      input.value = track.anticipationText || DEFAULT_ANTICIPATION_PATTERN;
+
+      input.addEventListener("input", () => {
+        const parsed = parseAnticipationPattern(input.value);
+        track.anticipationPattern = parsed.bars;
+        track.anticipationText = input.value;
+      });
+
+      input.addEventListener("blur", () => {
+        const parsed = parseAnticipationPattern(input.value);
+        track.anticipationPattern = parsed.bars;
+        track.anticipationText = parsed.normalized;
+        input.value = parsed.normalized;
+      });
+
+      row.appendChild(label);
+      row.appendChild(input);
+      instrumentAnticipations.appendChild(row);
+    }
   };
 
   const renderMixer = () => {
@@ -1732,6 +1824,7 @@
     mixerEmpty.style.display = hasTracks ? "none" : "block";
     if (!hasTracks) {
       updateMixerSummary();
+      renderInstrumentAnticipations();
       return;
     }
 
@@ -1849,6 +1942,7 @@
     }
 
     updateMixerSummary();
+    renderInstrumentAnticipations();
   };
 
   const collectFoldersFromFileList = (list) => {
@@ -2059,6 +2153,8 @@
             mute: false,
             solo: false,
             qualities: [],
+            anticipationText: DEFAULT_ANTICIPATION_PATTERN,
+            anticipationPattern: parseAnticipationPattern(DEFAULT_ANTICIPATION_PATTERN).bars,
           });
         }
         const track = tracksByInstrument.get(instrument);
@@ -2495,7 +2591,9 @@
         const offsetSeconds = offsetEighthInSegment * secPerEighth;
         const loopStart = rootBarStart * barSeconds;
 
-        const startTime = baseTime + seg.startEighth * secPerEighth;
+        const anticipationEighths = getTrackAnticipationShift(track, seg);
+        const anticipationSeconds = anticipationEighths * secPerEighth;
+        const startTime = baseTime + seg.startEighth * secPerEighth + anticipationSeconds;
         const endTime = startTime + seg.durEighth * secPerEighth;
         const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
         const baseOffset = offsetSeconds;
@@ -2675,13 +2773,22 @@
         const offsetSeconds = offsetEighthInSegment * secPerEighth;
         const loopStart = rootBarStart * barSeconds;
 
-        const startTime = seg.startEighth * secPerEighth;
-        const endTime = startTime + seg.durEighth * secPerEighth;
+        const anticipationEighths = getTrackAnticipationShift(track, seg);
+        const anticipationSeconds = anticipationEighths * secPerEighth;
+        const desiredStart = seg.startEighth * secPerEighth + anticipationSeconds;
+        const desiredEnd = desiredStart + seg.durEighth * secPerEighth;
         const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
         const baseOffset = offsetSeconds;
         const claveOffsetSeconds = getClaveReferenceOffsetSeconds(claveMode, barSeconds, barsPerChord);
         const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
-        const bufferOffset = loopStart + shiftedOffset;
+        let bufferOffset = loopStart + shiftedOffset;
+        let startTime = desiredStart;
+        let endTime = desiredEnd;
+        if (startTime < 0) {
+          bufferOffset = Math.max(0, bufferOffset - startTime);
+          startTime = 0;
+        }
+        if (endTime <= startTime) continue;
 
         scheduleAudioChord({
           ctx: offlineCtx,
