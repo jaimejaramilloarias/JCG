@@ -780,6 +780,7 @@
   let trackIdCounter = 0;
   let playbackLoopTimer = null;
   let referenceBpmFromFolder = null;
+  let referenceTimeSignatureFromFolder = null;
   const PLAYBACK_SCHEDULE_AHEAD_SEC = 0.08;
   const RELEASE_TAIL_SEC = 0.05;
   const MIN_FADE_SEC = 0.005;
@@ -1315,6 +1316,16 @@
     return parsed;
   };
 
+  const findTimeSignatureInFolderName = (name) => {
+    if (!name) return null;
+    const match = name.match(/(\d+)\s*\/\s*(\d+)/);
+    if (!match) return null;
+    const num = Math.max(1, parseInt(match[1], 10) || 1);
+    const den = Math.max(1, parseInt(match[2], 10) || 1);
+    if (!Number.isFinite(num) || !Number.isFinite(den)) return null;
+    return { num, den };
+  };
+
   const applyFolderBpm = (name) => {
     if (!refBpmInput) return;
     const parsed = findBpmInFolderName(name);
@@ -1322,6 +1333,15 @@
     const clamped = Math.min(300, Math.max(20, parsed));
     refBpmInput.value = String(clamped);
     log(`BPM fijo detectado en carpeta: ${clamped}.`, "OK");
+  };
+
+  const applyFolderTimeSignature = (name) => {
+    if (!timeSignatureInput) return;
+    const parsed = findTimeSignatureInFolderName(name);
+    if (!parsed) return;
+    timeSignatureInput.value = `${parsed.num}/${parsed.den}`;
+    log(`Compás detectado en carpeta: ${parsed.num}/${parsed.den}.`, "OK");
+    updateQualityMismatch();
   };
 
   const sameChord = (a, b) => a && b && a.rootSemi === b.rootSemi && a.quality === b.quality;
@@ -2166,6 +2186,7 @@
     altLoopBuffers = [];
     audioQualities = [];
     referenceBpmFromFolder = null;
+    referenceTimeSignatureFromFolder = null;
     renderQualityChips();
     renderMixer();
   };
@@ -2179,6 +2200,7 @@
       }
 
       const folderBpm = findBpmInFolderName(folder.name);
+      const folderTimeSignature = findTimeSignatureInFolderName(folder.name);
       const hasExisting = audioTracks.length > 0;
 
       if (hasExisting) {
@@ -2192,11 +2214,28 @@
         } else if (Number.isFinite(folderBpm)) {
           throw new Error("Las carpetas cargadas no tenían BPM. Usa el mismo formato en todas.");
         }
+        if (referenceTimeSignatureFromFolder) {
+          if (!folderTimeSignature) {
+            throw new Error("Todas las carpetas deben incluir el compás en el nombre.");
+          }
+          if (
+            folderTimeSignature.num !== referenceTimeSignatureFromFolder.num
+            || folderTimeSignature.den !== referenceTimeSignatureFromFolder.den
+          ) {
+            throw new Error("Las carpetas tienen compases distintos. Usa el mismo compás en todas.");
+          }
+        } else if (folderTimeSignature) {
+          throw new Error("Las carpetas cargadas no tenían compás. Usa el mismo formato en todas.");
+        }
 
       } else {
         if (Number.isFinite(folderBpm)) {
           referenceBpmFromFolder = folderBpm;
           applyFolderBpm(folder.name);
+        }
+        if (folderTimeSignature) {
+          referenceTimeSignatureFromFolder = folderTimeSignature;
+          applyFolderTimeSignature(folder.name);
         }
       }
 
@@ -2578,6 +2617,26 @@
     }
   };
 
+  const scheduleCountInClicks = ({ ctx, startTime, numBeats, secPerBeat }) => {
+    const beats = Math.max(1, numBeats);
+    const clickDuration = 0.05;
+    const gainValue = 0.6;
+    for (let i = 0; i < beats; i += 1) {
+      const clickTime = startTime + i * secPerBeat;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = i === 0 ? 1200 : 900;
+      gain.gain.setValueAtTime(0, clickTime);
+      gain.gain.linearRampToValueAtTime(gainValue, clickTime + 0.005);
+      gain.gain.linearRampToValueAtTime(0, clickTime + clickDuration);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(clickTime);
+      osc.stop(clickTime + clickDuration + 0.02);
+      audioNodes.push({ source: osc, gain, panner: null });
+    }
+  };
+
   const playAudio = async () => {
     if (!audioTracks.length && !baseLoopBuffers.length && !altLoopBuffers.length) {
       log("Carga carpetas de WAVs para reproducir.", "ERROR");
@@ -2631,7 +2690,8 @@
     const secPerEighth = getRefSecondsPerEighth();
     const secPerBeat = getRefSecondsPerBeat();
     const barSeconds = getRefBarSeconds();
-    const baseTime = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
+    const { num: beatsPerBar } = getTimeSignature();
+    const countInStart = ctx.currentTime + PLAYBACK_SCHEDULE_AHEAD_SEC;
     const loopAudible = loopEnabled && (baseLoopBuffers.length || altLoopBuffers.length) && getLoopVolume() > 0;
     const hasChordSegments = segments.some((seg) => seg.type === "chord");
     const anyTrackAudible = hasChordSegments && tracks.some((track) => getTrackEffectiveVolume(track) > 0);
@@ -2641,6 +2701,31 @@
       isAudioPlaying = false;
       return;
     }
+
+    let minAnticipationSeconds = 0;
+    for (const track of tracks) {
+      const trackGain = getTrackEffectiveVolume(track);
+      if (trackGain <= 0) continue;
+      const trackSegments = isBassInstrumentName(track.name) ? bassSegments : segments;
+      for (const seg of trackSegments) {
+        if (seg.type !== "chord") continue;
+        const anticipationBeats = getTrackAnticipationShift(track, seg);
+        const anticipationSeconds = anticipationBeats * secPerBeat;
+        if (anticipationSeconds < minAnticipationSeconds) {
+          minAnticipationSeconds = anticipationSeconds;
+        }
+      }
+    }
+
+    const countInDelay = barSeconds + Math.max(0, -minAnticipationSeconds);
+    const baseTime = countInStart + countInDelay;
+
+    scheduleCountInClicks({
+      ctx,
+      startTime: countInStart,
+      numBeats: beatsPerBar,
+      secPerBeat,
+    });
 
     const mutedBars = new Set(
       (bars || []).filter((bar) => bar.muteType === "all").map((bar) => bar.barIndex),
@@ -2701,11 +2786,18 @@
     const playbackDurationSec = parsed.totalEighth * secPerEighth;
     const doneTimer = setTimeout(() => {
       isAudioPlaying = false;
-    }, playbackDurationSec * 1000);
+    }, (countInDelay + playbackDurationSec) * 1000);
     audioTimers.push(doneTimer);
     playbackLoopTimer = null;
     log("Playback iniciado.", "OK");
   };
+
+  const slugifyFileName = (name) => (
+    (name || "audio")
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/[^\w\-]+/g, "")
+  );
 
   const encodeWavFromBuffer = (buffer) => {
     const numChannels = buffer.numberOfChannels;
@@ -2803,18 +2895,6 @@
       }
     }
 
-    const allBuffers = tracks.flatMap((track) => [...track.buffersByQuality.values()]);
-    const sampleRate = allBuffers[0]?.sampleRate || 44100;
-    const numChannels = Math.max(1, ...allBuffers.map((buf) => buf.numberOfChannels || 1));
-    const secPerEighth = getRefSecondsPerEighth();
-    const totalDuration = parsed.totalEighth * secPerEighth;
-    const renderLength = Math.ceil((totalDuration + 0.4) * sampleRate);
-    const offlineCtx = new OfflineAudioContext(numChannels, renderLength, sampleRate);
-
-    log("Renderizando audio en segundo plano…", "OK");
-
-    const barSeconds = getRefBarSeconds();
-
     const loopAudible = loopEnabled && (baseLoopBuffers.length || altLoopBuffers.length) && getLoopVolume() > 0;
     const hasChordSegments = segments.some((seg) => seg.type === "chord");
     const anyTrackAudible = hasChordSegments && tracks.some((track) => getTrackEffectiveVolume(track) > 0);
@@ -2824,88 +2904,140 @@
       return;
     }
 
+    const exportSeparated = window.confirm(
+      "¿Exportar instrumentos por separado y loop de base por separado?\nAceptar: separados\nCancelar: todo en bloque."
+    );
+
     const mutedBars = new Set(
       (bars || []).filter((bar) => bar.muteType === "all").map((bar) => bar.barIndex),
     );
 
-    const loopBuffersByBar = buildLoopSetsForBars(bars, baseLoopBuffers, altLoopBuffers);
-    scheduleLoopLayer({
-      ctx: offlineCtx,
-      baseTime: 0,
-      totalEighth: parsed.totalEighth,
-      totalBars: bars.length,
-      secPerEighth,
-      barSeconds,
-      trackNodes: false,
-      loopBuffersByBar,
-      loopGain: 1,
-      panValue: 0,
-      mutedBars,
-      claveMode,
-    });
+    const renderAndDownload = async ({ label, renderTracks, includeLoops }) => {
+      const loopBuffers = includeLoops ? [...baseLoopBuffers, ...altLoopBuffers] : [];
+      const trackBuffers = renderTracks.flatMap((track) => [...track.buffersByQuality.values()]);
+      const allBuffers = [...trackBuffers, ...loopBuffers.map((loop) => loop.buffer)];
+      if (!allBuffers.length) {
+        log(`Sin audio para exportar "${label}".`, "WARN");
+        return false;
+      }
 
-    for (const track of tracks) {
-      const trackGain = getTrackEffectiveVolume(track);
-      if (trackGain <= 0) continue;
+      const sampleRate = allBuffers[0]?.sampleRate || 44100;
+      const numChannels = Math.max(1, ...allBuffers.map((buf) => buf.numberOfChannels || 1));
+      const secPerEighth = getRefSecondsPerEighth();
+      const secPerBeat = getRefSecondsPerBeat();
+      const totalDuration = parsed.totalEighth * secPerEighth;
+      const renderLength = Math.ceil((totalDuration + 0.4) * sampleRate);
+      const offlineCtx = new OfflineAudioContext(numChannels, renderLength, sampleRate);
+      const barSeconds = getRefBarSeconds();
 
-      const trackSegments = isBassInstrumentName(track.name) ? bassSegments : segments;
-      for (const seg of trackSegments) {
-        if (seg.type !== "chord") continue;
-        const buffer = track.buffersByQuality.get(seg.quality);
-        const rootBarStart = rootBarMap.get(seg.rootSemi);
-        const offsetEighthInSegment = ((seg.barIndex % barsPerChord) * eighthsPerBar) + (seg.barEighthOffset || 0);
-        const offsetSeconds = offsetEighthInSegment * secPerEighth;
-        const loopStart = rootBarStart * barSeconds;
-
-        const anticipationBeats = getTrackAnticipationShift(track, seg);
-        const anticipationSeconds = anticipationBeats * secPerBeat;
-        const desiredStart = seg.startEighth * secPerEighth + anticipationSeconds;
-        const desiredEnd = desiredStart + seg.durEighth * secPerEighth;
-        const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
-        const baseOffset = offsetSeconds;
-        const claveOffsetSeconds = getClaveReferenceOffsetSeconds(claveMode, barSeconds, barsPerChord);
-        const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
-        let bufferOffset = loopStart + shiftedOffset;
-        let startTime = desiredStart;
-        let endTime = desiredEnd;
-        if (startTime < 0) {
-          bufferOffset = Math.max(0, bufferOffset - startTime);
-          startTime = 0;
-        }
-        if (endTime <= startTime) continue;
-
-        scheduleAudioChord({
+      if (includeLoops) {
+        const loopBuffersByBar = buildLoopSetsForBars(bars, baseLoopBuffers, altLoopBuffers);
+        scheduleLoopLayer({
           ctx: offlineCtx,
-          buffer,
-          startTime,
-          endTime,
-          bufferOffset,
+          baseTime: 0,
+          totalEighth: parsed.totalEighth,
+          totalBars: bars.length,
+          secPerEighth,
+          barSeconds,
           trackNodes: false,
-          gainValue: trackGain,
-          panValue: track.pan ?? 0,
+          loopBuffersByBar,
+          loopGain: 1,
+          panValue: 0,
+          mutedBars,
+          claveMode,
         });
       }
-    }
 
-    let rendered;
-    try {
-      rendered = await offlineCtx.startRendering();
-    } catch (err) {
-      log(`Error al renderizar WAV: ${String(err?.message || err)}`, "ERROR");
-      return;
-    }
+      for (const track of renderTracks) {
+        const trackGain = getTrackEffectiveVolume(track);
+        if (trackGain <= 0) continue;
 
-    const wavBuffer = encodeWavFromBuffer(rendered);
-    const blob = new Blob([wavBuffer], { type: "audio/wav" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `referencia_${getRefBpm()}bpm.wav`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-    log(`Exportado audio: ${anchor.download}`, "OK");
+        const trackSegments = isBassInstrumentName(track.name) ? bassSegments : segments;
+        for (const seg of trackSegments) {
+          if (seg.type !== "chord") continue;
+          const buffer = track.buffersByQuality.get(seg.quality);
+          const rootBarStart = rootBarMap.get(seg.rootSemi);
+          const offsetEighthInSegment = ((seg.barIndex % barsPerChord) * eighthsPerBar) + (seg.barEighthOffset || 0);
+          const offsetSeconds = offsetEighthInSegment * secPerEighth;
+          const loopStart = rootBarStart * barSeconds;
+
+          const anticipationBeats = getTrackAnticipationShift(track, seg);
+          const anticipationSeconds = anticipationBeats * secPerBeat;
+          const desiredStart = seg.startEighth * secPerEighth + anticipationSeconds;
+          const desiredEnd = desiredStart + seg.durEighth * secPerEighth;
+          const chordDurationSeconds = Math.max(barSeconds * barsPerChord, 0.001);
+          const baseOffset = offsetSeconds;
+          const claveOffsetSeconds = getClaveReferenceOffsetSeconds(claveMode, barSeconds, barsPerChord);
+          const shiftedOffset = (baseOffset + claveOffsetSeconds) % chordDurationSeconds;
+          let bufferOffset = loopStart + shiftedOffset;
+          let startTime = desiredStart;
+          let endTime = desiredEnd;
+          if (startTime < 0) {
+            bufferOffset = Math.max(0, bufferOffset - startTime);
+            startTime = 0;
+          }
+          if (endTime <= startTime) continue;
+
+          scheduleAudioChord({
+            ctx: offlineCtx,
+            buffer,
+            startTime,
+            endTime,
+            bufferOffset,
+            trackNodes: false,
+            gainValue: trackGain,
+            panValue: track.pan ?? 0,
+          });
+        }
+      }
+
+      let rendered;
+      try {
+        rendered = await offlineCtx.startRendering();
+      } catch (err) {
+        log(`Error al renderizar WAV (${label}): ${String(err?.message || err)}`, "ERROR");
+        return false;
+      }
+
+      const wavBuffer = encodeWavFromBuffer(rendered);
+      const blob = new Blob([wavBuffer], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = label;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      log(`Exportado audio: ${anchor.download}`, "OK");
+      return true;
+    };
+
+    log("Renderizando audio en segundo plano…", "OK");
+
+    if (exportSeparated) {
+      for (const track of tracks) {
+        const safeName = slugifyFileName(track.name);
+        await renderAndDownload({
+          label: `instrumento_${safeName}_${getRefBpm()}bpm.wav`,
+          renderTracks: [track],
+          includeLoops: false,
+        });
+      }
+      if (loopAudible) {
+        await renderAndDownload({
+          label: `loop_base_${getRefBpm()}bpm.wav`,
+          renderTracks: [],
+          includeLoops: true,
+        });
+      }
+    } else {
+      await renderAndDownload({
+        label: `referencia_${getRefBpm()}bpm.wav`,
+        renderTracks: tracks,
+        includeLoops: true,
+      });
+    }
   };
 
   const btnHelp = el("btnHelp");
